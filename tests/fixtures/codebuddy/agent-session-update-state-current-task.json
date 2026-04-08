@@ -1,0 +1,9 @@
+{
+  "source": "codebuddy",
+  "hook_event_name": "AgentSessionUpdate",
+  "session_id": "cb-session-001",
+  "state": "waiting",
+  "current_task": "review diff",
+  "timestamp": 1710000000001,
+  "cwd": "/workspace/demo"
+}

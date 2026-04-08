@@ -1,0 +1,10 @@
+{
+  "hook_event_name": "PostToolUse",
+  "session_id": "cursor-fixture-104",
+  "tool_name": "Edit",
+  "response": {
+    "result": {
+      "output": "Updated src/renderer/components/HoverDetails.tsx"
+    }
+  }
+}

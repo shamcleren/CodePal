@@ -1,0 +1,23 @@
+{
+  "hook_event_name": "StatusChange",
+  "source": "cursor",
+  "tool": "cursor",
+  "session_id": "cursor-usage-1",
+  "status": "running",
+  "task": "Summarizing usage",
+  "timestamp": 123,
+  "usage": {
+    "input_tokens": 1200,
+    "output_tokens": 200,
+    "total_tokens": 1400
+  },
+  "context_window": 32000,
+  "rate_limits": {
+    "primary": {
+      "used_percent": 12.5,
+      "window_minutes": 60,
+      "resets_at": 999
+    },
+    "plan_type": "pro"
+  }
+}

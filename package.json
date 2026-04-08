@@ -1,0 +1,54 @@
+{
+  "name": "codepal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "out/main/main.js",
+  "description": "Friendly desktop companion for monitoring IDE and AI coding tasks.",
+  "license": "MIT",
+  "author": "shamcleren",
+  "homepage": "https://github.com/shamcleren/CodePal",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shamcleren/CodePal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shamcleren/CodePal/issues"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "dist:mac": "npm run build && electron-builder --mac zip dmg --publish never",
+    "preview": "electron-vite preview",
+    "test": "vitest run",
+    "test:e2e": "npm run build && playwright test -c playwright.e2e.config.ts",
+    "test:watch": "vitest",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.27",
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "eslint": "^9.39.4",
+    "playwright": "^1.58.2",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0",
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4"
+  }
+}

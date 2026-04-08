@@ -1,0 +1,9 @@
+{
+  "session_id": "cb-session-102",
+  "transcript_path": "/Users/demo/.codebuddy/projects/demo/transcript.jsonl",
+  "cwd": "/workspace/demo",
+  "permission_mode": "default",
+  "hook_event_name": "Notification",
+  "message": "CodeBuddy needs your permission to use Bash",
+  "notification_type": "permission_prompt"
+}

@@ -1,0 +1,9 @@
+{
+  "tool": "codebuddy",
+  "hook_event_name": "AgentSessionUpdate",
+  "sessionId": "cb-session-002",
+  "status": "running",
+  "message": "index workspace",
+  "ts": 1710000000002,
+  "cwd": "/workspace/demo"
+}

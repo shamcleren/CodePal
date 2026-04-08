@@ -1,0 +1,8 @@
+{
+  "hook_event_name": "afterMCPExecution",
+  "session_id": "cursor-fixture-103",
+  "tool_name": "fetch_docs",
+  "response": {
+    "stderr": "read_timeout while fetching docs"
+  }
+}

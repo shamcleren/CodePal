@@ -1,0 +1,13 @@
+{
+  "session_id": "cb-session-108",
+  "transcript_path": "/Users/demo/.codebuddy/projects/demo/transcript.jsonl",
+  "cwd": "/workspace/demo",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Write",
+  "response": {
+    "result": {
+      "output": "Updated /workspace/demo/src/session.ts"
+    }
+  }
+}

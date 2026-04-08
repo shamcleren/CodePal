@@ -1,0 +1,18 @@
+version: 1
+display:
+  showInStatusBar: true
+  hiddenAgents: []
+  density: detailed
+codebuddy:
+  code:
+    enabled: true
+    label: CodeBuddy Code
+    loginUrl:
+    quotaEndpoint:
+    cookieNames:
+  enterprise:
+    enabled: false
+    label: CodeBuddy Enterprise
+    loginUrl:
+    quotaEndpoint:
+    cookieNames:

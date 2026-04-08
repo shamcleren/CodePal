@@ -1,0 +1,19 @@
+{
+  "timestamp": "2026-04-02T08:13:11.500Z",
+  "type": "response_item",
+  "payload": {
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "output_text",
+        "content": [
+          {
+            "type": "text",
+            "text": "我先补 adapter，再回头清理 renderer。"
+          }
+        ]
+      }
+    ]
+  }
+}

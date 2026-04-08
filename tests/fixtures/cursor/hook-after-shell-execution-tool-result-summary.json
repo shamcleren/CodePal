@@ -1,0 +1,8 @@
+{
+  "hook_event_name": "afterShellExecution",
+  "session_id": "cursor-fixture-106",
+  "tool_name": "Bash",
+  "tool_result": {
+    "summary": "16 files changed, 2 insertions(+), 5087 deletions(-)"
+  }
+}
