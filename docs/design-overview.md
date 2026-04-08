@@ -197,7 +197,7 @@ The intent is to make multi-agent operations more trustworthy by showing whether
 - session-log driven monitoring
 - timeline normalization
 - notify hook groundwork in settings, but not a completed live approval loop
-- first-pass usage visibility only
+- usage visibility in the shared monitoring surface
 
 ### CodeBuddy
 
@@ -209,7 +209,7 @@ The intent is to make multi-agent operations more trustworthy by showing whether
 ### GoLand / PyCharm
 
 - shared JetBrains watcher path through the CodeBuddy plugin framework
-- dashboard monitoring only within the current calibrated scope
+- shared monitoring and usage visibility within the current calibrated scope
 
 ## UI Principles
 

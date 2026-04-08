@@ -3,13 +3,13 @@
   <span valign="middle">CodePal</span>
 </h1>
 
-<p align="center"><strong>一个面向 AI 编码代理的悬浮监控面板。</strong></p>
-<p align="center">把 Cursor、Claude Code、Codex、CodeBuddy 的状态放到一个窗口里，不再在 IDE、终端和网页之间来回切换。</p>
+<p align="center"><strong>一个面板监控所有 AI 编码代理 — 会话、审批、配额、活动，一目了然。</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
-  <img src="https://img.shields.io/badge/version-1.0.0-green" alt="version 1.0.0" />
+  <img src="https://img.shields.io/github/v/release/shamcleren/CodePal?label=version&color=green" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="license MIT" />
+  <img src="https://img.shields.io/github/stars/shamcleren/CodePal?style=flat&label=stars" alt="GitHub stars" />
   <br/>
   <a href="https://github.com/shamcleren/CodePal/releases"><strong>前往 Releases 下载</strong></a>
   ·
@@ -47,11 +47,13 @@ CodePal 的目标，就是把这些状态收拢成一个可持续挂在桌面的
 |:---|:---:|:---:|
 | **Cursor** | ✅ | ✅ |
 | **Claude Code** | ✅ | ✅ |
-| **Codex** | ✅ | ⚠️ |
+| **Codex** | ✅ | ✅ |
 | **CodeBuddy** | ✅ | ✅ |
-| **GoLand / PyCharm** | ✅ | — |
+| **GoLand / PyCharm*** | ✅ | ✅ |
 
-不同来源的 usage 覆盖深度仍有差异；真正还需要关心的边界放在下方说明和 release notes 里。
+\* GoLand 和 PyCharm 当前走共享的 CodeBuddy JetBrains 插件路径，也包含用量可见性。
+
+不同来源在上游信号来源上仍有差异，但上表这层 `session / 用量` 基线目前都已经支持。
 
 ## 安装
 
@@ -64,53 +66,54 @@ CodePal 的目标，就是把这些状态收拢成一个可持续挂在桌面的
 
 ## 适合谁
 
-- 同时运行多个 code agent 的开发者
-- 想把审批状态、最近活动、配额压力放到一个窗口里的人
-- 不想频繁在 IDE、终端、网页之间切换的人
+- 同时运行多个 AI 编码代理、需要一个统一状态面板的开发者
+- 关注审批状态、最近活动和配额压力的用户
 
 ## 当前版本边界
 
-CodePal v1 刻意保持 monitoring-first。
+CodePal v1 刻意保持**监控优先**：统一的会话 / 活动 / 配额可见性，双语桌面 UI（`system` / `en` / `zh-CN`），以及有限的审批回路。
 
-当前重点是：
-
-- 统一监控
-- session / activity 可见性
-- quota / usage 可见性
-- 双语桌面 UI（`system` / `en` / `zh-CN`）
-- 应用内已经支持的有限审批 / 结构化选择回路
-
-在更干净的 1.0.0 发布标准下，当前主要剩余工作是：
-
-- macOS 签名与 notarization
-- 在现有绿色构建基础上完成最终发布可信度收口
-
-当前仍不打算做成：
-
-- 一个通用的 agent 聊天入口
-- 一个深度 IDE 导航层
-- 一个深度终端控制台
-- 一个已经签名 / 公证完成的正式 macOS 发行版
+当前不打算做成通用聊天入口、深度 IDE 导航层或终端控制台。
 
 ## 接下来
 
-近期优先级主要是：
-
-- 完成 macOS 签名 / 公证并降低安装摩擦
-- 在当前仍不完整的数据源上继续补 usage / quota 可见性
-- 扩大已支持 agent 的真实 payload 校准范围
-- 继续打磨 diagnostics、空状态和降级状态表达
+- 完成 macOS 签名与公证，降低安装摩擦
+- 补全上游数据源尚不完整的用量 / 配额可见性
+- 扩大已支持 Agent 的真实 payload 校准范围
+- 继续打磨诊断页、空状态和降级状态表达
 
 更完整的规划方向见 [docs/roadmap-next.zh-CN.md](docs/roadmap-next.zh-CN.md)。
 
+## 快速开始（开发）
+
+```bash
+git clone https://github.com/shamcleren/CodePal.git
+cd CodePal
+npm install
+npm run dev        # 开发模式启动
+npm run test       # 运行单元测试
+npm run dist:mac   # 构建 .dmg / .zip
+```
+
+## 常见问题
+
+**macOS 首次启动被拦截**
+打开 **系统设置 → 隐私与安全性**，滚动到底部，点击 CodePal 旁边的 **仍要打开**。
+
+**看不到 Session**
+确认对应的 Agent（Cursor / Claude Code / Codex / CodeBuddy）确实有正在运行的会话。可以使用应用内诊断页检查集成路径是否正常。
+
 ## 给开发者
 
-如果你是来继续开发，而不是直接使用：
+<details>
+<summary>贡献者文档入口</summary>
 
-- 先读 [AGENTS.md](AGENTS.md)
-- 再读 [docs/design-overview.md](docs/design-overview.md)
-- 再读 [docs/context/current-status.md](docs/context/current-status.md)
-- 用 [docs/README.md](docs/README.md) 作为文档索引
+- [AGENTS.md](AGENTS.md) — Agent 编码约定
+- [docs/design-overview.md](docs/design-overview.md) — 架构概览
+- [docs/context/current-status.md](docs/context/current-status.md) — 当前状态
+- [docs/README.md](docs/README.md) — 文档索引
+
+</details>
 
 ## License
 

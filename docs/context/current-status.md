@@ -36,14 +36,14 @@
 - Main UI prioritizes session/activity/usage visibility, not control-loop visibility
 - Existing pending-action/control code remains in-repo, but is no longer the primary user-facing path
 - Cursor remains available in-repo and continues to calibrate usage plus dashboard connection flow
-- GoLand and PyCharm now feed the shared monitoring/dashboard path through the shared CodeBuddy JetBrains plugin watcher/framework; other JetBrains IDEs may reuse the same framework later, but they are outside the current V1 calibrated / accepted scope
+- GoLand and PyCharm now feed the shared monitoring/dashboard path through the shared CodeBuddy JetBrains plugin watcher/framework, including usage visibility; other JetBrains IDEs may reuse the same framework later, but they are outside the current V1 calibrated / accepted scope
 
 ### Current Adapters
 
 - Codex session-log adapter now reads `~/.codex/sessions/**/*.jsonl` and maps recent active session files into the shared session model
 - Cursor normalizer plus executable hook bridge remain in-repo for ongoing calibration
 - CodeBuddy now has both hook normalization and local transcript watching under `~/.codebuddy/projects/**/*.jsonl`, so assistant replies and tool activity can enter the shared dashboard timeline
-- GoLand and PyCharm integrate through the shared CodeBuddy JetBrains plugin watcher/framework rather than separate adapters; other JetBrains IDEs may reuse the same framework, but they are not part of the current V1 calibrated / accepted scope
+- GoLand and PyCharm integrate through the shared CodeBuddy JetBrains plugin watcher/framework rather than separate adapters, and they now participate in the same usage-visible baseline; other JetBrains IDEs may reuse the same framework, but they are not part of the current V1 calibrated / accepted scope
 - Cursor and Codex activity flow now normalize into shared `ActivityItem[]` session activity records before render
 - Claude Code now also feeds the shared monitoring model by reading `~/.claude/projects/**/*.jsonl`, including user/assistant/tool activity plus first-pass token usage
 - CodeBuddy transcript watching now also feeds the shared monitoring model by reading `~/.codebuddy/projects/**/*.jsonl`, including user / assistant / tool activity for the first confirmed transcript shape
@@ -160,7 +160,7 @@ npm run dist:mac
 - Main app shell, tray, floating panel, separate settings window, and local packaging flow are already usable
 - Shared session model plus `ActivityItem[]` timeline model are already the renderer-facing baseline
 - Cursor and Codex both feed the shared monitoring surface; Cursor does so through hook ingress, Codex currently does so through session-log watching
-- GoLand and PyCharm session presence now also feed the shared monitoring surface through the shared CodeBuddy JetBrains plugin watcher/framework
+- GoLand and PyCharm session presence and usage visibility now also feed the shared monitoring surface through the shared CodeBuddy JetBrains plugin watcher/framework
 - Supported in-app structured actions remain in the codebase, but are no longer the primary UI path:
   - `approval`
   - `single_choice`

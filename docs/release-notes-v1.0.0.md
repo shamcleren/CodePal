@@ -6,10 +6,10 @@ It gives you one floating desktop panel for keeping multiple AI coding agents vi
 
 ## Highlights
 
-- One floating panel for Cursor, Claude Code, Codex, CodeBuddy, and the currently calibrated GoLand / PyCharm path
+- One floating panel for Cursor, Claude Code, Codex, CodeBuddy, and the current GoLand / PyCharm path through the shared CodeBuddy JetBrains plugin
 - Flat, time-sorted session monitoring with clearer `running`, `waiting`, `completed`, and `error` states
 - Unified activity timeline for assistant, tool, and system events with lower-noise rendering
-- Usage visibility across supported sources
+- Usage visibility across all currently supported sources
 - In-app integration diagnostics and repair, plus login-state reset for Cursor and CodeBuddy
 - Bilingual desktop UI with `system` / `en` / `zh-CN`
 
@@ -32,7 +32,7 @@ The main remaining release blocker is final macOS signing / notarization.
 - Claude does not yet have an authoritative live quota/reset source. Current behavior is token-first, with last-known quota retained locally when statusline data is available.
 - Cursor payload coverage is still expanding beyond the currently normalized subset.
 - CodeBuddy payload and transcript-shape calibration is still expanding beyond the currently confirmed subset.
-- GoLand / PyCharm support currently stays within the shared CodeBuddy JetBrains watcher path and calibrated scope.
+- GoLand / PyCharm currently stay on the shared CodeBuddy JetBrains plugin path rather than separate native adapters.
 - CodePal is still monitoring-first, not a full cross-agent control console.
 
 ## Not In This Release

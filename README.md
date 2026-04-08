@@ -3,13 +3,13 @@
   <span valign="middle">CodePal</span>
 </h1>
 
-<p align="center"><strong>One floating monitoring surface for your AI coding agents.</strong></p>
-<p align="center">Keep Cursor, Claude Code, Codex, and CodeBuddy visible in one place instead of hopping between IDEs, terminals, and dashboards.</p>
+<p align="center"><strong>Monitor all your AI coding agents in one floating panel — sessions, approvals, quotas, activity.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
-  <img src="https://img.shields.io/badge/version-1.0.0-green" alt="version 1.0.0" />
+  <img src="https://img.shields.io/github/v/release/shamcleren/CodePal?label=version&color=green" alt="version" />
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="license MIT" />
+  <img src="https://img.shields.io/github/stars/shamcleren/CodePal?style=flat&label=stars" alt="GitHub stars" />
   <br/>
   <a href="https://github.com/shamcleren/CodePal/releases"><strong>Download from Releases</strong></a>
   ·
@@ -47,11 +47,13 @@ CodePal turns that into one compact desktop panel.
 |:---|:---:|:---:|
 | **Cursor** | ✅ | ✅ |
 | **Claude Code** | ✅ | ✅ |
-| **Codex** | ✅ | ⚠️ |
+| **Codex** | ✅ | ✅ |
 | **CodeBuddy** | ✅ | ✅ |
-| **GoLand / PyCharm** | ✅ | — |
+| **GoLand / PyCharm*** | ✅ | ✅ |
 
-Usage coverage depth still differs by source. See the current scope and release notes for the boundaries that still matter.
+\* GoLand and PyCharm currently flow through the shared CodeBuddy JetBrains plugin path, including usage visibility.
+
+Coverage still differs in how upstream signals are sourced, but the session / usage baseline above is currently supported across these paths.
 
 ## Install
 
@@ -64,53 +66,54 @@ Current builds still need final macOS signing / notarization before the polished
 
 ## Best For
 
-- people who run multiple code agents at once
-- developers who want one glanceable status panel instead of multiple tool surfaces
-- users who care about approval state, recent activity, and quota pressure
+- developers juggling multiple AI coding agents who want one glanceable status panel
+- anyone who cares about approval state, recent activity, and quota pressure across tools
 
 ## Current Scope
 
-CodePal v1 is intentionally monitoring-first.
+CodePal v1 is intentionally **monitoring-first**: unified session / activity / quota visibility with a bilingual desktop UI (`system` / `en` / `zh-CN`) and bounded approval handling.
 
-It is built for:
-
-- unified monitoring
-- session and activity visibility
-- quota and usage awareness
-- bilingual desktop UI (`system` / `en` / `zh-CN`)
-- bounded approval / structured-choice handling already supported by the app
-
-What still remains before the clean 1.0.0 release bar is primarily:
-
-- macOS signing and notarization
-- the final release packaging / trust pass on top of the already-green app build
-
-It is still not trying to be:
-
-- a general chat console for talking to every agent
-- a full IDE navigation layer
-- a deep terminal controller
-- a signed / notarized production macOS distribution yet
+It is not trying to be a general chat console, a full IDE navigation layer, or a deep terminal controller.
 
 ## What's Next
 
-Near-term priorities are:
+- Finish macOS signing & notarization to lower install friction
+- Improve usage / quota coverage where upstream sources are still partial
+- Expand real-world payload calibration across supported agents
+- Polish diagnostics, empty states, and degraded-state messaging
 
-- finish signed / notarized macOS distribution
-- keep improving usage coverage where current sources are still partial
-- continue real-world payload calibration across supported agents
-- keep polishing diagnostics, empty states, and degraded-state messaging
+See [docs/roadmap-next.md](docs/roadmap-next.md) for the full planning direction.
 
-See [docs/roadmap-next.md](docs/roadmap-next.md) for the current planning direction.
+## Quick Start (Development)
+
+```bash
+git clone https://github.com/shamcleren/CodePal.git
+cd CodePal
+npm install
+npm run dev        # launch in dev mode
+npm run test       # run unit tests
+npm run dist:mac   # build .dmg / .zip
+```
+
+## Troubleshooting
+
+**macOS blocks the app on first launch**
+Open **System Settings → Privacy & Security**, scroll to the bottom, and click **Open Anyway** next to the CodePal warning.
+
+**Sessions not showing up**
+Make sure the corresponding agent (Cursor / Claude Code / Codex / CodeBuddy) is actually running a session. Use the in-app diagnostics page to verify the integration path is healthy.
 
 ## Contributors
 
-If you want to work on the project rather than use it:
+<details>
+<summary>Project docs for contributors</summary>
 
-- read [AGENTS.md](AGENTS.md)
-- read [docs/design-overview.md](docs/design-overview.md)
-- read [docs/context/current-status.md](docs/context/current-status.md)
-- use [docs/README.md](docs/README.md) as the doc map
+- [AGENTS.md](AGENTS.md) — agent coding conventions
+- [docs/design-overview.md](docs/design-overview.md) — architecture overview
+- [docs/context/current-status.md](docs/context/current-status.md) — current status
+- [docs/README.md](docs/README.md) — doc map
+
+</details>
 
 ## License
 
