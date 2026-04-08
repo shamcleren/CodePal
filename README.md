@@ -1,15 +1,10 @@
-<table align="center">
-  <tr>
-    <td align="center" valign="middle">
-      <img src="docs/icon.png" width="84" alt="CodePal icon" />
-    </td>
-    <td align="left" valign="middle">
-      <h1>CodePal</h1>
-      <p><strong>One floating monitoring surface for your AI coding agents.</strong></p>
-      <p>Keep Cursor, Claude Code, Codex, and CodeBuddy visible in one place instead of hopping between IDEs, terminals, and dashboards.</p>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/icon.png" width="56" alt="CodePal icon" valign="middle" />
+  <span valign="middle"><strong><font size="7">CodePal</font></strong></span>
+</p>
+
+<p align="center"><strong>One floating monitoring surface for your AI coding agents.</strong></p>
+<p align="center">Keep Cursor, Claude Code, Codex, and CodeBuddy visible in one place instead of hopping between IDEs, terminals, and dashboards.</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />

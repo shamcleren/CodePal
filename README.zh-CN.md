@@ -1,15 +1,10 @@
-<table align="center">
-  <tr>
-    <td align="center" valign="middle">
-      <img src="docs/icon.png" width="84" alt="CodePal icon" />
-    </td>
-    <td align="left" valign="middle">
-      <h1>CodePal</h1>
-      <p><strong>一个面向 AI 编码代理的悬浮监控面板。</strong></p>
-      <p>把 Cursor、Claude Code、Codex、CodeBuddy 的状态放到一个窗口里，不再在 IDE、终端和网页之间来回切换。</p>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/icon.png" width="56" alt="CodePal icon" valign="middle" />
+  <span valign="middle"><strong><font size="7">CodePal</font></strong></span>
+</p>
+
+<p align="center"><strong>一个面向 AI 编码代理的悬浮监控面板。</strong></p>
+<p align="center">把 Cursor、Claude Code、Codex、CodeBuddy 的状态放到一个窗口里，不再在 IDE、终端和网页之间来回切换。</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
