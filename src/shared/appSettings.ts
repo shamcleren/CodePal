@@ -1,3 +1,5 @@
+import type { AppLocale } from "./i18nTypes";
+
 export type UsageAgentId = "claude" | "codex" | "cursor" | "codebuddy";
 
 export type UsageDisplaySettings = {
@@ -16,6 +18,7 @@ export type CodeBuddyEndpointSettings = {
 
 export type AppSettings = {
   version: 1;
+  locale: AppLocale;
   display: UsageDisplaySettings;
   codebuddy: {
     code: CodeBuddyEndpointSettings;
@@ -43,6 +46,7 @@ export const defaultUsageDisplaySettings: UsageDisplaySettings = {
 
 export const defaultAppSettings: AppSettings = {
   version: 1,
+  locale: "system",
   display: defaultUsageDisplaySettings,
   codebuddy: {
     code: {
@@ -68,6 +72,13 @@ function isUsageAgentId(value: unknown): value is UsageAgentId {
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function normalizeLocale(value: unknown): AppLocale {
+  if (value === "en" || value === "zh-CN" || value === "system") {
+    return value;
+  }
+  return defaultAppSettings.locale;
 }
 
 function normalizeHttpsUrl(value: unknown): string {
@@ -154,6 +165,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
 
   return {
     version: 1,
+    locale: normalizeLocale(candidate.locale),
     display,
     codebuddy: {
       code: normalizeCodeBuddyEndpointSettings(codebuddy?.code, defaultAppSettings.codebuddy.code),

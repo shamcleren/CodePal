@@ -1,4 +1,5 @@
 import type { SessionRecord } from "../shared/sessionTypes";
+import type { ResolvedLocale } from "../shared/i18nTypes";
 import type { MonitorSessionRow } from "./monitorSession";
 import { sessionRecordToRow } from "./sessionRows";
 
@@ -14,8 +15,11 @@ export function compareMonitorSessionRows(a: MonitorSessionRow, b: MonitorSessio
   return a.id.localeCompare(b.id);
 }
 
-export function rowsFromSessions(sessions: SessionRecord[]): MonitorSessionRow[] {
-  return sessions.map(sessionRecordToRow).sort(compareMonitorSessionRows);
+export function rowsFromSessions(
+  sessions: SessionRecord[],
+  locale: ResolvedLocale = "en",
+): MonitorSessionRow[] {
+  return sessions.map((session) => sessionRecordToRow(session, locale)).sort(compareMonitorSessionRows);
 }
 
 function sameStringArray(a: string[] | undefined, b: string[] | undefined): boolean {
@@ -115,6 +119,7 @@ function sessionMatchesRow(row: MonitorSessionRow, session: SessionRecord): bool
 export function reconcileRows(
   currentRows: MonitorSessionRow[],
   sessions: SessionRecord[],
+  locale: ResolvedLocale = "en",
 ): MonitorSessionRow[] {
   const currentById = new Map(currentRows.map((row) => [row.id, row]));
   return sessions
@@ -122,7 +127,7 @@ export function reconcileRows(
       const existing = currentById.get(session.id);
       return existing && sessionMatchesRow(existing, session)
         ? existing
-        : sessionRecordToRow(session);
+        : sessionRecordToRow(session, locale);
     })
     .sort(compareMonitorSessionRows);
 }
@@ -130,6 +135,7 @@ export function reconcileRows(
 export function hydrateRowsIfEmpty(
   currentRows: MonitorSessionRow[],
   sessions: SessionRecord[],
+  locale: ResolvedLocale = "en",
 ): MonitorSessionRow[] {
-  return currentRows.length === 0 ? rowsFromSessions(sessions) : currentRows;
+  return currentRows.length === 0 ? rowsFromSessions(sessions, locale) : currentRows;
 }

@@ -2,10 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UsageOverview } from "../../shared/usageTypes";
 import type { UsageDisplaySettings } from "../usageDisplaySettings";
+import { I18nProvider } from "../i18n";
 import { UsageStatusStrip } from "./UsageStatusStrip";
 
-function formatResetTime(resetAt: number): string {
-  return new Date(resetAt * 1000).toLocaleString("zh-CN", {
+function formatResetTime(resetAt: number, locale: "en" | "zh-CN"): string {
+  return new Date(resetAt * 1000).toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -77,7 +78,9 @@ const defaultSettings: UsageDisplaySettings = {
 describe("UsageStatusStrip", () => {
   it("renders compact per-agent usage in the status bar", () => {
     const html = renderToStaticMarkup(
-      <UsageStatusStrip overview={overview} settings={defaultSettings} />,
+      <I18nProvider locale="zh-CN">
+        <UsageStatusStrip overview={overview} settings={defaultSettings} />
+      </I18nProvider>,
     );
 
     expect(html).toContain("usage-strip");
@@ -102,14 +105,16 @@ describe("UsageStatusStrip", () => {
   });
 
   it("renders reset times inline in detailed mode and keeps hover hints", () => {
-    const shortReset = formatResetTime(1775200500);
-    const longReset = formatResetTime(1775635200);
-    const codeReset = formatResetTime(1777564800);
+    const shortReset = formatResetTime(1775200500, "en");
+    const longReset = formatResetTime(1775635200, "en");
+    const codeReset = formatResetTime(1777564800, "en");
     const html = renderToStaticMarkup(
-      <UsageStatusStrip
-        overview={overview}
-        settings={{ showInStatusBar: true, hiddenAgents: [], density: "detailed" }}
-      />,
+      <I18nProvider locale="en">
+        <UsageStatusStrip
+          overview={overview}
+          settings={{ showInStatusBar: true, hiddenAgents: [], density: "detailed" }}
+        />
+      </I18nProvider>,
     );
 
     expect(html).toContain("usage-strip__value--primary\">5h 68%</span>");
@@ -121,20 +126,22 @@ describe("UsageStatusStrip", () => {
     expect(html).toContain("usage-strip__value--primary\">7d 37%</span>");
     expect(html).toContain(`usage-strip__value--secondary">${longReset}</span>`);
     expect(html).toContain("usage-strip__value--primary\">Code 99%</span>");
-    expect(html).toContain("usage-strip__value--primary\">内网 98%</span>");
+    expect(html).toContain("usage-strip__value--primary\">internal 98%</span>");
     expect(html).toContain(`usage-strip__value--secondary">${codeReset}</span>`);
     expect(html).toContain("usage-strip__value--primary\">60%</span>");
     expect(html).toContain(`title="5h reset ${shortReset} | 7d reset ${longReset}"`);
-    expect(html).toContain(`title="Code reset ${codeReset} | Code remaining 99% | 内网 remaining 98%"`);
+    expect(html).toContain(`title="Code reset ${codeReset} | Code remaining 99% | internal remaining 98%"`);
     expect(html).toContain("usage-strip__value--secondary");
   });
 
   it("hides agents disabled in settings", () => {
     const html = renderToStaticMarkup(
-      <UsageStatusStrip
-        overview={overview}
-        settings={{ showInStatusBar: true, hiddenAgents: ["claude", "cursor", "codebuddy"], density: "compact" }}
-      />,
+      <I18nProvider locale="zh-CN">
+        <UsageStatusStrip
+          overview={overview}
+          settings={{ showInStatusBar: true, hiddenAgents: ["claude", "cursor", "codebuddy"], density: "compact" }}
+        />
+      </I18nProvider>,
     );
 
     expect(html).toContain("Codex");
@@ -145,10 +152,12 @@ describe("UsageStatusStrip", () => {
 
   it("renders nothing when the strip is disabled", () => {
     const html = renderToStaticMarkup(
-      <UsageStatusStrip
-        overview={overview}
-        settings={{ showInStatusBar: false, hiddenAgents: [], density: "compact" }}
-      />,
+      <I18nProvider locale="zh-CN">
+        <UsageStatusStrip
+          overview={overview}
+          settings={{ showInStatusBar: false, hiddenAgents: [], density: "compact" }}
+        />
+      </I18nProvider>,
     );
 
     expect(html).toBe("");

@@ -15,6 +15,7 @@ describe("cursorDashboardService", () => {
     expect(diagnostics).toEqual({
       state: "connected",
       message: "已连接 Cursor Dashboard",
+      messageKey: "cursor.message.connected",
       teamId: "14634113",
     });
   });
@@ -25,6 +26,7 @@ describe("cursorDashboardService", () => {
     expect(diagnostics).toEqual({
       state: "not_connected",
       message: "未连接 Cursor Dashboard",
+      messageKey: "cursor.message.not_connected",
       teamId: "14634113",
     });
   });
@@ -105,6 +107,7 @@ describe("cursorDashboardService", () => {
       diagnostics: {
         state: "expired",
         message: "Cursor 登录已过期，请重新登录",
+        messageKey: "cursor.message.expired",
         teamId: "14634113",
       },
       synced: false,
@@ -127,6 +130,7 @@ describe("cursorDashboardService", () => {
     await expect(service.clearAuth()).resolves.toEqual({
       state: "not_connected",
       message: "未连接 Cursor Dashboard",
+      messageKey: "cursor.message.not_connected",
     });
     expect(clearStorageData).toHaveBeenCalledOnce();
     expect(clearCache).toHaveBeenCalledOnce();

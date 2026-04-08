@@ -7,6 +7,7 @@ import jetbrainsAppIcon from "../assets/jetbrains-app-icon.png";
 import pycharmAppIcon from "../assets/pycharm-app-icon.png";
 import type { SessionStatus } from "../../shared/sessionTypes";
 import type { PendingAction } from "../../shared/sessionTypes";
+import { useI18n } from "../i18n";
 import type { MonitorSessionRow } from "../monitorSession";
 import { HoverDetails } from "./HoverDetails";
 
@@ -102,22 +103,28 @@ function normalizeComparableText(text: string): string {
     .trim();
 }
 
-function pendingEyebrow(type: string): string {
+function pendingEyebrow(
+  type: string,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
   switch (type) {
     case "approval":
-      return "Awaiting decision";
+      return t("session.pending.approval");
     case "single_choice":
-      return "Awaiting selection";
+      return t("session.pending.single_choice");
     case "multi_choice":
-      return "Awaiting selections";
+      return t("session.pending.multi_choice");
     default:
-      return "Awaiting input";
+      return t("session.pending.default");
   }
 }
 
-function actionDisplayOptions(action: PendingAction): string[] {
+function actionDisplayOptions(
+  action: PendingAction,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string[] {
   if (action.type === "approval") {
-    return ["Allow", "Deny"];
+    return [t("session.action.allow"), t("session.action.deny")];
   }
   return action.options;
 }
@@ -137,6 +144,7 @@ export const SessionRow = memo(function SessionRow({
   onToggleExpanded,
   onRespond,
 }: SessionRowProps) {
+  const i18n = useI18n();
   const detailsRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const lastExpandedRef = useRef(false);
@@ -206,7 +214,9 @@ export const SessionRow = memo(function SessionRow({
               <span className="session-row__summary-text">{session.collapsedSummary}</span>
             ) : null}
             {session.pendingCount > 0 ? (
-              <span className="session-row__pending">{session.pendingCount} pending</span>
+              <span className="session-row__pending">
+                {i18n.t("session.pending", { count: session.pendingCount })}
+              </span>
             ) : null}
             <span className="session-row__meta-item">{session.durationLabel}</span>
             <span className="session-row__meta-item">#{session.shortId}</span>
@@ -220,13 +230,13 @@ export const SessionRow = memo(function SessionRow({
           onScroll={handleDetailsScroll}
         >
           {showLoadingPanel ? (
-            <div className="session-row__loading" aria-label="正在读取">
+            <div className="session-row__loading" aria-label={i18n.t("session.loading")}>
               <div className="session-stream__item session-stream__item--message session-stream__item--message-assistant session-row__loading-bubble">
                 <div className="session-stream__header">
                   <span className="session-stream__label session-row__loading-label">Assistant</span>
                 </div>
                 <div className="session-stream__body session-row__loading-body">
-                  <span className="session-row__loading-text">正在整理回复</span>
+                  <span className="session-row__loading-text">{i18n.t("session.typing")}</span>
                   <span className="session-row__loading-dots" aria-hidden="true" />
                 </div>
               </div>
@@ -246,11 +256,13 @@ export const SessionRow = memo(function SessionRow({
               {pendingActions.map((action) => (
                 <div key={action.id} className="pending-action" aria-label={action.title}>
                   <div className="pending-action__eyebrow">
-                    <span className="pending-action__kicker">{pendingEyebrow(action.type)}</span>
+                    <span className="pending-action__kicker">
+                      {pendingEyebrow(action.type, i18n.t)}
+                    </span>
                   </div>
                   <div className="pending-action__title">{action.title}</div>
                   <div className="pending-action__actions">
-                    {actionDisplayOptions(action).map((option) => (
+                    {actionDisplayOptions(action, i18n.t).map((option) => (
                       <button
                         key={`${action.id}:${option}`}
                         type="button"

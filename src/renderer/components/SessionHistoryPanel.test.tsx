@@ -1,11 +1,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "../i18n";
 import { SessionHistoryPanel } from "./SessionHistoryPanel";
 
 describe("SessionHistoryPanel", () => {
   it("renders a clear-history action for trimming old session rows", () => {
     const html = renderToStaticMarkup(
-      <SessionHistoryPanel loading={false} onClearHistory={vi.fn()} />,
+      <I18nProvider locale="zh-CN">
+        <SessionHistoryPanel loading={false} onClearHistory={vi.fn()} />
+      </I18nProvider>,
     );
 
     expect(html).toContain("Session 历史");

@@ -1,4 +1,5 @@
 import type { CursorDashboardDiagnostics } from "../../shared/cursorDashboardTypes";
+import { useI18n } from "../i18n";
 
 type CursorDashboardPanelProps = {
   diagnostics: CursorDashboardDiagnostics | null;
@@ -8,11 +9,14 @@ type CursorDashboardPanelProps = {
   onClearAuth: () => void;
 };
 
-function lastSyncLabel(diagnostics: CursorDashboardDiagnostics | null): string {
+function lastSyncLabel(
+  diagnostics: CursorDashboardDiagnostics | null,
+  locale: ReturnType<typeof useI18n>,
+): string {
   if (!diagnostics?.lastSyncAt) {
-    return "尚未同步";
+    return locale.t("cursor.notSynced");
   }
-  return new Date(diagnostics.lastSyncAt).toLocaleString("zh-CN", {
+  return locale.formatDateTime(diagnostics.lastSyncAt, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -27,33 +31,32 @@ export function CursorDashboardPanel({
   onRefresh,
   onClearAuth,
 }: CursorDashboardPanelProps) {
+  const i18n = useI18n();
   const connected = diagnostics?.state === "connected";
   const reconnectRequired = diagnostics?.state === "expired";
   const actionLabel = connected
     ? loading
-      ? "刷新中…"
-      : "刷新"
+      ? i18n.t("cursor.refreshing")
+      : i18n.t("cursor.refresh")
     : reconnectRequired
       ? loading
-        ? "重新登录中…"
-        : "重新登录 Cursor"
+        ? i18n.t("cursor.reloggingIn")
+        : i18n.t("cursor.relogin")
       : loading
-        ? "登录中…"
-        : "登录 Cursor";
+        ? i18n.t("cursor.loggingIn")
+        : i18n.t("cursor.login");
 
   return (
-    <div className="display-panel__subsection-block" aria-label="Cursor 用量">
+    <div className="display-panel__subsection-block" aria-label={i18n.t("cursor.title")}>
       <div className="display-panel__header">
-        <div className="display-panel__title">Cursor 用量</div>
-        <div className="display-panel__subtitle">
-          登录 Cursor 网页后，CodePal 会读取当前会话 cookie 并拉取 team spend。
-        </div>
+        <div className="display-panel__title">{i18n.t("cursor.title")}</div>
+        <div className="display-panel__subtitle">{i18n.t("cursor.subtitle")}</div>
       </div>
 
       <div className="display-panel__summary">
-        <span>{diagnostics?.message ?? "未连接 Cursor Dashboard"}</span>
+        <span>{i18n.translateMessage(diagnostics?.message ?? i18n.t("cursor.notConnected"), diagnostics?.messageKey, diagnostics?.messageParams)}</span>
         {diagnostics?.teamId ? <span>{`Team ${diagnostics.teamId}`}</span> : null}
-        <span>{lastSyncLabel(diagnostics)}</span>
+        <span>{lastSyncLabel(diagnostics, i18n)}</span>
       </div>
 
       <div className="display-panel__actions">
@@ -72,7 +75,7 @@ export function CursorDashboardPanel({
             disabled={loading}
             onClick={onClearAuth}
           >
-            删除登录态
+            {i18n.t("cursor.clearAuth")}
           </button>
         ) : null}
       </div>

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { I18nProvider } from "../i18n";
 import { SessionRow } from "./SessionRow";
 import type { MonitorSessionRow } from "../monitorSession";
 
@@ -23,12 +24,24 @@ function baseRow(overrides: Partial<MonitorSessionRow> = {}): MonitorSessionRow 
   };
 }
 
+function renderRow(row: MonitorSessionRow, options?: { expanded?: boolean; showExperimentalControls?: boolean }) {
+  return renderToStaticMarkup(
+    <I18nProvider locale="en">
+      <SessionRow
+        session={row}
+        expanded={options?.expanded ?? false}
+        showExperimentalControls={options?.showExperimentalControls}
+        onToggleExpanded={vi.fn()}
+        onRespond={vi.fn()}
+      />
+    </I18nProvider>,
+  );
+}
+
 describe("SessionRow pending action", () => {
   it("renders option buttons when pendingActions has one item", () => {
-    const onRespond = vi.fn();
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({
+    const html = renderRow(
+      baseRow({
           pendingActions: [
             {
               id: "a1",
@@ -37,12 +50,8 @@ describe("SessionRow pending action", () => {
               options: ["Approve", "Reject"],
             },
           ],
-        })}
-        expanded
-        showExperimentalControls
-        onToggleExpanded={vi.fn()}
-        onRespond={onRespond}
-      />,
+        }),
+      { expanded: true, showExperimentalControls: true },
     );
     expect(html).toContain("Proceed?");
     expect(html).toContain("Awaiting decision");
@@ -51,9 +60,8 @@ describe("SessionRow pending action", () => {
   });
 
   it("renders two pending action cards with buttons when pendingActions has two items", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({
+    const html = renderRow(
+      baseRow({
           pendingActions: [
             {
               id: "a1",
@@ -68,12 +76,8 @@ describe("SessionRow pending action", () => {
               options: ["A", "B"],
             },
           ],
-        })}
-        expanded
-        showExperimentalControls
-        onToggleExpanded={vi.fn()}
-        onRespond={vi.fn()}
-      />,
+        }),
+      { expanded: true, showExperimentalControls: true },
     );
     expect(html).toContain("First decision");
     expect(html).toContain("Second decision");
@@ -86,30 +90,20 @@ describe("SessionRow pending action", () => {
   });
 
   it("omits pending action UI when pendingActions is absent", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow session={baseRow()} expanded={false} onToggleExpanded={vi.fn()} onRespond={vi.fn()} />,
-    );
+    const html = renderRow(baseRow());
     expect(html).not.toContain("pending-action__title");
     expect(html).not.toContain("session-row__interaction");
   });
 
   it("omits pending action UI when pendingActions is empty", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({ pendingActions: [] })}
-        expanded={false}
-        onToggleExpanded={vi.fn()}
-        onRespond={vi.fn()}
-      />,
-    );
+    const html = renderRow(baseRow({ pendingActions: [] }));
     expect(html).not.toContain("pending-action__title");
     expect(html).not.toContain("session-row__interaction");
   });
 
   it("renders latest and recent activity sections in the expanded details panel", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({
+    const html = renderRow(
+      baseRow({
           timelineItems: [
             {
               id: "1",
@@ -133,12 +127,8 @@ describe("SessionRow pending action", () => {
             },
           ],
           hoverSummary: "scan repo",
-        })}
-        expanded
-        showExperimentalControls
-        onToggleExpanded={vi.fn()}
-        onRespond={vi.fn()}
-      />,
+        }),
+      { expanded: true, showExperimentalControls: true },
     );
 
     expect(html).toContain("session-stream");
@@ -152,9 +142,8 @@ describe("SessionRow pending action", () => {
   });
 
   it("renders the collapsed summary line", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({
+    const html = renderRow(
+      baseRow({
           titleLabel: "Codex · review diff",
           tool: "codex",
           collapsedSummary: "最后需要你确认是否继续合并？",
@@ -162,11 +151,7 @@ describe("SessionRow pending action", () => {
           durationLabel: "14m",
           shortId: "9af3",
           updatedLabel: "04-02 16:01",
-        })}
-        expanded={false}
-        onToggleExpanded={vi.fn()}
-        onRespond={vi.fn()}
-      />,
+        }),
     );
 
     expect(html).toContain("Codex · review diff");
@@ -178,32 +163,22 @@ describe("SessionRow pending action", () => {
   });
 
   it("omits the collapsed summary line when it duplicates the title text", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({
+    const html = renderRow(
+      baseRow({
           titleLabel: "这轮已经把 expanded 区从旧的 `event-first` 改成了 `message-first`。",
           collapsedSummary: "Completed: 这轮已经把 expanded 区从旧的 `event-first` 改成了 `message-first`。",
-        })}
-        expanded={false}
-        onToggleExpanded={vi.fn()}
-        onRespond={vi.fn()}
-      />,
+        }),
     );
 
     expect(html).not.toContain("session-row__summary-text");
   });
 
   it("does not duplicate tool name inside the title line", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({
+    const html = renderRow(
+      baseRow({
           tool: "codex",
           titleLabel: "已经重新拉起来了。",
-        })}
-        expanded={false}
-        onToggleExpanded={vi.fn()}
-        onRespond={vi.fn()}
-      />,
+        }),
     );
 
     expect(html).toContain(">Codex<");
@@ -212,9 +187,8 @@ describe("SessionRow pending action", () => {
   });
 
   it("renders pending actions inside the expanded details container", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({
+    const html = renderRow(
+      baseRow({
           timelineItems: [
             {
               id: "1",
@@ -234,12 +208,8 @@ describe("SessionRow pending action", () => {
               options: ["Yes", "No"],
             },
           ],
-        })}
-        expanded
-        showExperimentalControls
-        onToggleExpanded={vi.fn()}
-        onRespond={vi.fn()}
-      />,
+        }),
+      { expanded: true, showExperimentalControls: true },
     );
 
     expect(html).toContain("session-row__details");
@@ -247,9 +217,8 @@ describe("SessionRow pending action", () => {
   });
 
   it("hides pending action UI in dashboard mode even when pending actions exist", () => {
-    const html = renderToStaticMarkup(
-      <SessionRow
-        session={baseRow({
+    const html = renderRow(
+      baseRow({
           pendingActions: [
             {
               id: "a1",
@@ -258,12 +227,8 @@ describe("SessionRow pending action", () => {
               options: ["Approve", "Reject"],
             },
           ],
-        })}
-        expanded
-        showExperimentalControls={false}
-        onToggleExpanded={vi.fn()}
-        onRespond={vi.fn()}
-      />,
+        }),
+      { expanded: true, showExperimentalControls: false },
     );
 
     expect(html).not.toContain("Awaiting decision");
@@ -360,9 +325,9 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("已提交并推送到");
     expect(html).toContain("session-stream__directive-chips");
     expect(html).toContain("session-stream__directive-chip");
-    expect(html).toContain("已暂存");
-    expect(html).toContain("已提交");
-    expect(html).toContain("已推送 main");
+    expect(html).toContain("Staged");
+    expect(html).toContain("Committed");
+    expect(html).toContain("Pushed main");
     expect(html).not.toContain("::git-stage");
     expect(html).not.toContain("::git-commit");
     expect(html).not.toContain("::git-push");
@@ -392,8 +357,8 @@ describe("SessionRow pending action", () => {
     );
 
     expect(html).toContain("session-stream__directive-chips");
-    expect(html).toContain("已暂存");
-    expect(html).toContain("已推送 main");
+    expect(html).toContain("Staged");
+    expect(html).toContain("Pushed main");
     expect(html).not.toContain("<p></p>");
   });
 
@@ -448,10 +413,10 @@ describe("SessionRow pending action", () => {
       />,
     );
 
-    expect(html).toContain("已创建分支 codex/directive-ui");
-    expect(html).toContain("已创建 PR");
-    expect(html).toContain("已添加评论");
-    expect(html).toContain("已归档");
+    expect(html).toContain("Created branch codex/directive-ui");
+    expect(html).toContain("Created PR");
+    expect(html).toContain("Added comment");
+    expect(html).toContain("Archived");
   });
 
   it("renders automation-update directives with mode-aware labels", () => {
@@ -477,9 +442,9 @@ describe("SessionRow pending action", () => {
       />,
     );
 
-    expect(html).toContain("建议自动化");
-    expect(html).toContain("建议更新自动化");
-    expect(html).toContain("查看自动化");
+    expect(html).toContain("Suggested automation");
+    expect(html).toContain("Suggested automation update");
+    expect(html).toContain("View automation");
   });
 
   it("shows a typing indicator as the last inline message while a running session already has visible content", () => {
@@ -507,7 +472,7 @@ describe("SessionRow pending action", () => {
 
     expect(html).toContain("session-stream__typing-indicator");
     expect(html).toContain("session-stream__typing-dots");
-    expect(html).toContain("正在整理回复");
+    expect(html).toContain("Drafting a reply");
     expect(html).not.toContain("session-stream__section--footer");
   });
 
@@ -653,7 +618,7 @@ describe("SessionRow pending action", () => {
     );
 
     expect(html).toContain("session-stream__artifact-toggle");
-    expect(html).toContain("展开");
+    expect(html).toContain("Expand");
     expect(html).toContain("session-stream__artifact-body-shell");
     expect(html).toContain("session-stream__artifact-summary");
     expect(html).not.toContain("session-stream__plaintext");
@@ -911,7 +876,7 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("session-row__loading-bubble");
     expect(html).toContain("session-row__loading-label");
     expect(html).toContain("session-row__loading-dots");
-    expect(html).toContain("正在整理回复");
+    expect(html).toContain("Drafting a reply");
     expect(html).not.toContain("Working");
   });
 });

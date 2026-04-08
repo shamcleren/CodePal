@@ -31,6 +31,8 @@ describe("codebuddyInternalQuotaService", () => {
       label: "CodeBuddy Enterprise",
       state: "not_connected",
       message: "请先在设置中配置 CodeBuddy Enterprise 的登录地址和额度地址",
+      messageKey: "codebuddy.message.not_configured",
+      messageParams: { label: "CodeBuddy Enterprise", fields: "登录地址和额度地址" },
       endpoint: "",
       loginUrl: "",
     });
@@ -47,6 +49,8 @@ describe("codebuddyInternalQuotaService", () => {
       label: "CodeBuddy Enterprise",
       state: "connected",
       message: "已连接 CodeBuddy Enterprise 用量",
+      messageKey: "codebuddy.message.connected",
+      messageParams: { label: "CodeBuddy Enterprise" },
       endpoint: config.quotaEndpoint,
       loginUrl: config.loginUrl,
     });
@@ -63,6 +67,8 @@ describe("codebuddyInternalQuotaService", () => {
       label: "CodeBuddy Enterprise",
       state: "connected",
       message: "已连接 CodeBuddy Enterprise 用量",
+      messageKey: "codebuddy.message.connected",
+      messageParams: { label: "CodeBuddy Enterprise" },
       endpoint: config.quotaEndpoint,
       loginUrl: config.loginUrl,
     });
@@ -122,6 +128,8 @@ describe("codebuddyInternalQuotaService", () => {
         label: "CodeBuddy Enterprise",
         state: "connected",
         message: "已连接 CodeBuddy Enterprise 用量",
+        messageKey: "codebuddy.message.connected",
+        messageParams: { label: "CodeBuddy Enterprise" },
         endpoint: config.quotaEndpoint,
         loginUrl: config.loginUrl,
         lastSyncAt: 1_775_000_000_000,
@@ -170,6 +178,8 @@ describe("codebuddyInternalQuotaService", () => {
         state: "error",
         message:
           "CodeBuddy Enterprise 未检测到登录态，请确认登录已完成，或检查 settings.yaml 中的 loginUrl 是否正确",
+        messageKey: "codebuddy.message.login_not_established",
+        messageParams: { label: "CodeBuddy Enterprise" },
         endpoint: config.quotaEndpoint,
         loginUrl: config.loginUrl,
       },
@@ -196,6 +206,8 @@ describe("codebuddyInternalQuotaService", () => {
       label: "CodeBuddy Enterprise",
       state: "not_connected",
       message: "未连接 CodeBuddy Enterprise 用量，请在 CodePal 弹出的登录窗口内完成登录",
+      messageKey: "codebuddy.message.not_connected",
+      messageParams: { label: "CodeBuddy Enterprise" },
       endpoint: config.quotaEndpoint,
       loginUrl: config.loginUrl,
     });

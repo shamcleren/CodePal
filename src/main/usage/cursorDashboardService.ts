@@ -82,6 +82,7 @@ export function buildCursorUsageDiagnostics(
     return {
       state: "connected",
       message: "已连接 Cursor Dashboard",
+      messageKey: "cursor.message.connected",
       teamId,
       ...(lastSyncAt ? { lastSyncAt } : {}),
     };
@@ -90,6 +91,7 @@ export function buildCursorUsageDiagnostics(
   return {
     state: "not_connected",
     message: "未连接 Cursor Dashboard",
+    messageKey: "cursor.message.not_connected",
     ...(teamId ? { teamId } : {}),
     ...(lastSyncAt ? { lastSyncAt } : {}),
   };
@@ -267,6 +269,7 @@ export function createCursorDashboardService(options: CursorDashboardServiceOpti
           diagnostics: {
             state: "expired",
             message: "Cursor 登录已过期，请重新登录",
+            messageKey: "cursor.message.expired",
             teamId: diagnostics.teamId,
             ...(lastSyncAt ? { lastSyncAt } : {}),
           },
@@ -291,6 +294,7 @@ export function createCursorDashboardService(options: CursorDashboardServiceOpti
         diagnostics: {
           state: "error",
           message: "Cursor spend 响应缺少可用额度维度",
+          messageKey: "cursor.message.missingQuota",
           teamId: diagnostics.teamId,
           ...(lastSyncAt ? { lastSyncAt } : {}),
         },
@@ -304,6 +308,7 @@ export function createCursorDashboardService(options: CursorDashboardServiceOpti
       diagnostics: {
         state: "connected",
         message: "已连接 Cursor Dashboard",
+        messageKey: "cursor.message.connected",
         teamId: diagnostics.teamId,
         lastSyncAt,
       },
@@ -324,6 +329,7 @@ export function createCursorDashboardService(options: CursorDashboardServiceOpti
     return {
       state: "not_connected",
       message: "未连接 Cursor Dashboard",
+      messageKey: "cursor.message.not_connected",
     };
   }
 

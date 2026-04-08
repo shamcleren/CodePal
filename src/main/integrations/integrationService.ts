@@ -48,17 +48,39 @@ function defaultNow() {
 function labelsForHealth(health: IntegrationHealth): {
   healthLabel: string;
   actionLabel: string;
+  healthLabelKey: string;
+  actionLabelKey: string;
 } {
   switch (health) {
     case "active":
-      return { healthLabel: "正常", actionLabel: "修复" };
+      return {
+        healthLabel: "正常",
+        actionLabel: "修复",
+        healthLabelKey: "integration.health.active",
+        actionLabelKey: "integration.action.repair",
+      };
     case "legacy_path":
-      return { healthLabel: "待迁移", actionLabel: "迁移" };
+      return {
+        healthLabel: "待迁移",
+        actionLabel: "迁移",
+        healthLabelKey: "integration.health.legacy_path",
+        actionLabelKey: "integration.action.migrate",
+      };
     case "repair_needed":
-      return { healthLabel: "需修复", actionLabel: "修复" };
+      return {
+        healthLabel: "需修复",
+        actionLabel: "修复",
+        healthLabelKey: "integration.health.repair_needed",
+        actionLabelKey: "integration.action.repair",
+      };
     case "not_configured":
     default:
-      return { healthLabel: "未配置", actionLabel: "启用" };
+      return {
+        healthLabel: "未配置",
+        actionLabel: "启用",
+        healthLabelKey: "integration.health.not_configured",
+        actionLabelKey: "integration.action.enable",
+      };
   }
 }
 
@@ -351,6 +373,9 @@ function inspectCodexConfig(
   let statusMessage = sessionsExist
     ? "已接入 Codex 监控（基于 session 日志）"
     : "未检测到 Codex session 日志或 hooks";
+  let statusMessageKey = sessionsExist
+    ? "integration.message.codex.monitoring"
+    : undefined;
   let displayPath = sessionsExist ? sessionsPath : hooksPath;
 
   if (hooksConfig.error) {
@@ -397,14 +422,21 @@ function inspectCodexConfig(
         statusMessage = hasCodePalHooks
           ? "已接入 Codex"
           : "已检测到 Codex 接入";
+        statusMessageKey = hasCodePalHooks
+          ? "integration.message.codex.active"
+          : "integration.message.codex.detected";
         if (sessionsExist) {
           statusMessage += "，并持续同步会话记录";
+          statusMessageKey = hasCodePalHooks
+            ? "integration.message.codex.activeWithSessions"
+            : "integration.message.codex.detected";
         }
         displayPath = hooksPath;
       }
     } else {
       health = "repair_needed";
       statusMessage = "Codex hooks.json 结构不兼容";
+      statusMessageKey = "integration.message.codex.invalidHooks";
       displayPath = hooksPath;
     }
   }
@@ -425,6 +457,9 @@ function inspectCodexConfig(
       statusMessage = sessionsExist
         ? "已增强 Codex 接入，并持续同步会话记录"
         : "已增强 Codex 接入";
+      statusMessageKey = sessionsExist
+        ? "integration.message.codex.enhancedWithSessions"
+        : "integration.message.codex.enhanced";
       displayPath = configPath;
     } else if (sessionsExist) {
       health = "active";
@@ -433,7 +468,7 @@ function inspectCodexConfig(
     health = "active";
   }
 
-  const { healthLabel } = labelsForHealth(health);
+  const { healthLabel, healthLabelKey } = labelsForHealth(health);
 
   return {
     id: "codex",
@@ -446,8 +481,10 @@ function inspectCodexConfig(
     hookInstalled,
     health,
     healthLabel,
+    healthLabelKey,
     actionLabel: "",
     statusMessage,
+    statusMessageKey,
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
 }
@@ -475,6 +512,7 @@ function inspectCursorConfig(
   let health: IntegrationHealth = "not_configured";
   let hookInstalled = false;
   let statusMessage = "未配置 CodePal Cursor hooks";
+  let statusMessageKey = "integration.message.cursor.notConfigured";
 
   if (config.error) {
     health = "repair_needed";
@@ -508,23 +546,27 @@ function inspectCursorConfig(
         health = "active";
         hookInstalled = true;
         statusMessage = "已配置用户级 Cursor hooks";
+        statusMessageKey = "integration.message.cursor.active";
       } else if (hasLegacy) {
         health = "legacy_path";
         hookInstalled = true;
         statusMessage = "检测到旧版 CodePal Cursor hook 命令，建议迁移";
+        statusMessageKey = "integration.message.cursor.legacy";
       } else if (!hooksAreEmpty) {
         health = "repair_needed";
         statusMessage = "Cursor hooks.json 与当前 CodePal 要求不一致";
+        statusMessageKey = "integration.message.cursor.mismatch";
       } else {
         health = "not_configured";
       }
     } else {
       health = "repair_needed";
       statusMessage = "Cursor hooks.json 结构不兼容";
+      statusMessageKey = "integration.message.cursor.invalid";
     }
   }
 
-  const { healthLabel, actionLabel } = labelsForHealth(health);
+  const { healthLabel, actionLabel, healthLabelKey, actionLabelKey } = labelsForHealth(health);
 
   return {
     id: "cursor",
@@ -537,8 +579,11 @@ function inspectCursorConfig(
     hookInstalled,
     health,
     healthLabel,
+    healthLabelKey,
     actionLabel,
+    actionLabelKey,
     statusMessage,
+    statusMessageKey,
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
 }
@@ -748,6 +793,7 @@ function inspectClaudeConfig(
   let health: IntegrationHealth = "not_configured";
   let hookInstalled = false;
   let statusMessage = "未配置 CodePal Claude hooks";
+  let statusMessageKey = "integration.message.claude.notConfigured";
 
   if (config.error) {
     health = "repair_needed";
@@ -763,28 +809,36 @@ function inspectClaudeConfig(
         health = "active";
         hookInstalled = true;
         statusMessage = "已配置用户级 Claude hooks 与 statusLine";
+        statusMessageKey = "integration.message.claude.active";
       } else if (claudeHooksMatch(hooks, required)) {
         health = "repair_needed";
         statusMessage = "Claude hooks 已配置，但缺少 CodePal statusLine";
+        statusMessageKey = "integration.message.claude.missingStatusLine";
       } else if (!claudeHooksEmpty(hooks)) {
         health = "repair_needed";
         statusMessage = "Claude settings.json hooks 与当前 CodePal 要求不一致";
+        statusMessageKey = "integration.message.claude.mismatch";
       } else if (hasStatusLine) {
         health = "repair_needed";
         statusMessage = "Claude statusLine 已配置，但 hooks 未完成";
+        statusMessageKey = "integration.message.claude.statusLineOnly";
       }
     } else if (!("hooks" in config.parsed)) {
       health = hasStatusLine ? "repair_needed" : "not_configured";
       statusMessage = hasStatusLine
         ? "Claude statusLine 已配置，但 hooks 未完成"
         : statusMessage;
+      statusMessageKey = hasStatusLine
+        ? "integration.message.claude.statusLineOnly"
+        : "integration.message.claude.notConfigured";
     } else {
       health = "repair_needed";
       statusMessage = "Claude settings.json hooks 结构不兼容";
+      statusMessageKey = "integration.message.claude.invalid";
     }
   }
 
-  const { healthLabel, actionLabel } = labelsForHealth(health);
+  const { healthLabel, actionLabel, healthLabelKey, actionLabelKey } = labelsForHealth(health);
   return {
     id: "claude",
     label: AGENT_LABELS.claude,
@@ -796,8 +850,11 @@ function inspectClaudeConfig(
     hookInstalled,
     health,
     healthLabel,
+    healthLabelKey,
     actionLabel,
+    actionLabelKey,
     statusMessage,
+    statusMessageKey,
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
 }
@@ -818,6 +875,7 @@ function inspectCodeBuddyConfig(
   let health: IntegrationHealth = "not_configured";
   let hookInstalled = false;
   let statusMessage = "未配置 CodePal CodeBuddy hooks";
+  let statusMessageKey = "integration.message.codebuddy.notConfigured";
 
   if (config.error) {
     health = "repair_needed";
@@ -839,26 +897,31 @@ function inspectCodeBuddyConfig(
         health = "active";
         hookInstalled = true;
         statusMessage = "已配置用户级 CodeBuddy hooks";
+        statusMessageKey = "integration.message.codebuddy.active";
       } else if (hasLegacy) {
         health = "legacy_path";
         hookInstalled = true;
         statusMessage = "检测到旧版 CodePal CodeBuddy hook 命令，建议迁移";
+        statusMessageKey = "integration.message.codebuddy.legacy";
       } else if (!hooksAreEmpty) {
         health = "repair_needed";
         statusMessage = "CodeBuddy settings.json hooks 与当前 CodePal 要求不一致";
+        statusMessageKey = "integration.message.codebuddy.mismatch";
       } else {
         health = "not_configured";
       }
     } else if (!("hooks" in config.parsed)) {
       health = "not_configured";
       statusMessage = "未配置 CodePal CodeBuddy hooks";
+      statusMessageKey = "integration.message.codebuddy.notConfigured";
     } else {
       health = "repair_needed";
       statusMessage = "CodeBuddy settings.json hooks 结构不兼容";
+      statusMessageKey = "integration.message.codebuddy.invalid";
     }
   }
 
-  const { healthLabel, actionLabel } = labelsForHealth(health);
+  const { healthLabel, actionLabel, healthLabelKey, actionLabelKey } = labelsForHealth(health);
 
   return {
     id: "codebuddy",
@@ -871,8 +934,11 @@ function inspectCodeBuddyConfig(
     hookInstalled,
     health,
     healthLabel,
+    healthLabelKey,
     actionLabel,
+    actionLabelKey,
     statusMessage,
+    statusMessageKey,
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
 }
@@ -1184,6 +1250,12 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
             ? `已写入 ${diagnostics.label} 配置`
             : `${diagnostics.label} 配置已是最新状态`
           : `${diagnostics.label} 配置未生效`,
+        messageKey: diagnostics.hookInstalled
+          ? result.changed
+            ? "integration.install.written"
+            : "integration.install.current"
+          : "integration.install.notApplied",
+        messageParams: { label: diagnostics.label },
         diagnostics,
       };
     },

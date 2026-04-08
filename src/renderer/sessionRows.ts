@@ -1,5 +1,7 @@
 import type { ActivityItem, SessionRecord } from "../shared/sessionTypes";
+import type { ResolvedLocale } from "../shared/i18nTypes";
 import type { MonitorSessionRow, TimelineItem } from "./monitorSession";
+import { createI18nValue } from "./i18n";
 import { summarizeMessageBody } from "./messageBody";
 
 function formatDuration(updatedAt: number): string {
@@ -11,13 +13,13 @@ function formatDuration(updatedAt: number): string {
   return `${h}h${m % 60}m`;
 }
 
-function formatUpdatedAt(updatedAt: number): string {
+function formatUpdatedAt(updatedAt: number, locale: ResolvedLocale): string {
   const date = new Date(updatedAt);
   if (Number.isNaN(date.getTime())) {
     return "unknown";
   }
 
-  return date.toLocaleString("zh-CN", {
+  return date.toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -153,7 +155,12 @@ function latestMeaningfulMessage(
   );
 }
 
-function buildTitleLabel(record: SessionRecord, timelineItems: TimelineItem[]): string {
+function buildTitleLabel(
+  record: SessionRecord,
+  timelineItems: TimelineItem[],
+  locale: ResolvedLocale,
+): string {
+  const i18n = createI18nValue(locale);
   const latestUserMessage = latestMeaningfulMessage(timelineItems, "user");
   if (latestUserMessage) {
     return lastMeaningfulSentence(latestUserMessage.body);
@@ -172,7 +179,9 @@ function buildTitleLabel(record: SessionRecord, timelineItems: TimelineItem[]): 
     return preferredTimeline;
   }
 
-  return `Session ${formatUpdatedAt(record.updatedAt)}`;
+  return i18n.t("session.title.fallback", {
+    time: formatUpdatedAt(record.updatedAt, locale),
+  });
 }
 
 function shortSessionId(id: string): string {
@@ -573,15 +582,19 @@ function buildCollapsedSummary(record: SessionRecord, timelineItems: TimelineIte
   return preferred.body;
 }
 
-export function sessionRecordToRow(record: SessionRecord): MonitorSessionRow {
+export function sessionRecordToRow(
+  record: SessionRecord,
+  locale: ResolvedLocale = "en",
+): MonitorSessionRow {
   const timelineItems = buildTimelineItems(record);
   const loading = isLowInformationLoadingState(record, timelineItems);
-  const fallbackSummary = loading ? "正在读取…" : undefined;
+  const i18n = createI18nValue(locale);
+  const fallbackSummary = loading ? i18n.t("session.loading") : undefined;
   return {
     ...record,
-    titleLabel: buildTitleLabel(record, timelineItems),
+    titleLabel: buildTitleLabel(record, timelineItems, locale),
     shortId: shortSessionId(record.id),
-    updatedLabel: formatUpdatedAt(record.updatedAt),
+    updatedLabel: formatUpdatedAt(record.updatedAt, locale),
     durationLabel: formatDuration(record.updatedAt),
     pendingCount: record.pendingActions?.length ?? 0,
     loading,

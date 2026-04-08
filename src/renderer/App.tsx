@@ -13,8 +13,9 @@ import { StatusBar } from "./components/StatusBar";
 import { SessionList } from "./components/SessionList";
 import { UsageStatusStrip } from "./components/UsageStatusStrip";
 import type { MonitorSessionRow } from "./monitorSession";
+import { createI18nValue, I18nProvider, resolveLocale } from "./i18n";
 import { formatSettingsPathForDisplay } from "./settingsPath";
-import { hydrateRowsIfEmpty, reconcileRows } from "./sessionBootstrap";
+import { hydrateRowsIfEmpty, reconcileRows, rowsFromSessions } from "./sessionBootstrap";
 import {
   type UsageAgentId,
 } from "./usageDisplaySettings";
@@ -45,13 +46,18 @@ export function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [appSettingsPath, setAppSettingsPath] = useState("");
   const [homeDir, setHomeDir] = useState("");
+  const resolvedLocale = resolveLocale(
+    appSettings.locale,
+    typeof navigator !== "undefined" ? navigator.language : undefined,
+  );
+  const i18n = createI18nValue(resolvedLocale);
 
   function clearSessionHistory() {
     setSessionHistoryClearing(true);
     return window.codepal
       .clearSessionHistory()
       .then((sessions) => {
-        setRows(reconcileRows([], sessions));
+        setRows(reconcileRows([], sessions, resolvedLocale));
         return sessions;
       })
       .finally(() => {
@@ -104,7 +110,7 @@ export function App() {
       .catch((error: unknown) => {
         const diagnostics = {
           kind: "internal" as const,
-          label: "CodeBuddy 内网版",
+          label: "CodeBuddy Enterprise",
           state: "error" as const,
           message: (error as Error).message,
           endpoint: "",
@@ -226,7 +232,7 @@ export function App() {
       .catch((error: unknown) => {
         const diagnostics = {
           kind: "internal" as const,
-          label: "CodeBuddy 内网版",
+          label: "CodeBuddy Enterprise",
           state: "error" as const,
           message: (error as Error).message,
           endpoint: "",
@@ -253,7 +259,7 @@ export function App() {
       .catch((error: unknown) => {
         const diagnostics = {
           kind: "internal" as const,
-          label: "CodeBuddy 内网版",
+          label: "CodeBuddy Enterprise",
           state: "error" as const,
           message: (error as Error).message,
           endpoint: "",
@@ -320,19 +326,25 @@ export function App() {
   useEffect(() => {
     let active = true;
     const unsub = window.codepal.onSessions((sessions) => {
-      setRows((currentRows) => reconcileRows(currentRows, sessions));
+      setRows((currentRows) => reconcileRows(currentRows, sessions, resolvedLocale));
     });
     void window.codepal.getSessions().then((sessions) => {
       if (!active) {
         return;
       }
-      setRows((currentRows) => hydrateRowsIfEmpty(currentRows, sessions));
+      setRows((currentRows) => hydrateRowsIfEmpty(currentRows, sessions, resolvedLocale));
     });
     return () => {
       active = false;
       unsub();
     };
-  }, []);
+  }, [resolvedLocale]);
+
+  useEffect(() => {
+    void window.codepal.getSessions().then((sessions) => {
+      setRows(rowsFromSessions(sessions, resolvedLocale));
+    });
+  }, [resolvedLocale]);
 
   useEffect(() => {
     void loadCursorDashboardDiagnostics();
@@ -480,12 +492,8 @@ export function App() {
     window.codepal.respondToPendingAction(sessionId, actionId, option);
   }, []);
 
-  const usageStrip = UsageStatusStrip({
-    overview: usageOverview,
-    settings: appSettings.display,
-  });
-
   return (
+    <I18nProvider locale={resolvedLocale}>
     <div className="app app-shell">
       <div className="app-header">
         <div className="app-header__meta">
@@ -494,16 +502,18 @@ export function App() {
         <button
           type="button"
           className="app-settings-trigger"
-          aria-label="打开设置"
+          aria-label={i18n.t("app.openSettings")}
           onClick={openSettingsDrawer}
         >
-          设置
+          {i18n.t("app.settings")}
         </button>
       </div>
-      <StatusBar usage={usageStrip} />
+      <StatusBar
+        usage={<UsageStatusStrip overview={usageOverview} settings={appSettings.display} />}
+      />
       {rows.length === 0 ? (
         <p className="app-hint" style={{ padding: "0 12px", opacity: 0.75 }}>
-          正在等待来自 Cursor、CodeBuddy 等接入源的会话更新。
+          {i18n.t("app.waitingForSessions")}
         </p>
       ) : null}
       <SessionList
@@ -514,7 +524,7 @@ export function App() {
         <button
           type="button"
           className="app-settings-backdrop"
-          aria-label="关闭设置"
+          aria-label={i18n.t("app.closeSettings")}
           onClick={closeSettingsDrawer}
         />
       ) : null}
@@ -524,16 +534,16 @@ export function App() {
       >
         <div className="app-settings-drawer__header">
           <div>
-            <h2 className="app-title">CodePal 设置</h2>
-            <p className="app-subtitle">低频的接入、修复和诊断操作都放在这里。</p>
+            <h2 className="app-title">{i18n.t("app.settings.title")}</h2>
+            <p className="app-subtitle">{i18n.t("app.settings.subtitle")}</p>
           </div>
           <button
             type="button"
             className="app-settings-close"
-            aria-label="返回主面板"
+            aria-label={i18n.t("app.returnToMain")}
             onClick={closeSettingsDrawer}
           >
-            关闭
+            {i18n.t("app.settings.close")}
           </button>
         </div>
         <div className="app-settings-drawer__content">
@@ -551,7 +561,9 @@ export function App() {
               void window.codepal
                 .installIntegrationHooks(agentId)
                 .then((result) => {
-                  setIntegrationFeedback(result.message);
+                  setIntegrationFeedback(
+                    i18n.translateMessage(result.message, result.messageKey, result.messageParams),
+                  );
                   return window.codepal.getIntegrationDiagnostics();
                 })
                 .then((diagnostics) => {
@@ -582,6 +594,12 @@ export function App() {
                   ...appSettings.display,
                   density: nextValue,
                 },
+              })
+            }
+            localeSetting={appSettings.locale}
+            onLocaleChange={(nextValue) =>
+              void updateAppSettings({
+                locale: nextValue,
               })
             }
           >
@@ -632,11 +650,11 @@ export function App() {
                 void clearSessionHistory();
               }}
             />
-            <div className="display-panel__subsection-block" aria-label="配置文件">
+            <div className="display-panel__subsection-block" aria-label={i18n.t("settings.yaml.title")}>
               <div className="display-panel__header">
-                <div className="display-panel__title">配置文件</div>
+                <div className="display-panel__title">{i18n.t("settings.yaml.title")}</div>
                 <div className="display-panel__subtitle">
-                  当前设置以本地 YAML 为准。修改后重新打开设置即可读取最新配置。
+                  {i18n.t("settings.yaml.subtitle")}
                 </div>
                 {appSettingsPath ? (
                   <div className="display-panel__subtitle">
@@ -652,7 +670,7 @@ export function App() {
                     void window.codepal.openExternalTarget(appSettingsPath);
                   }}
                 >
-                  打开 YAML
+                  {i18n.t("settings.yaml.open")}
                 </button>
                 <button
                   type="button"
@@ -661,7 +679,7 @@ export function App() {
                     void reloadAppSettings();
                   }}
                 >
-                  重新加载
+                  {i18n.t("settings.yaml.reload")}
                 </button>
               </div>
             </div>
@@ -669,5 +687,6 @@ export function App() {
         </div>
       </aside>
     </div>
+    </I18nProvider>
   );
 }

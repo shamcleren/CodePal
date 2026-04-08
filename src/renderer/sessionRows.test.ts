@@ -262,8 +262,8 @@ describe("sessionRecordToRow", () => {
       ],
     });
 
-    expect(row.collapsedSummary).toBe("正在读取…");
-    expect(row.hoverSummary).toBe("正在读取…");
+    expect(row.collapsedSummary).toBe("Loading…");
+    expect(row.hoverSummary).toBe("Loading…");
   });
 
   it("does not surface low-signal hook event names as title or collapsed summary", () => {

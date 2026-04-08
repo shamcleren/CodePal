@@ -2,6 +2,7 @@ import { isValidElement, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { SessionStatus } from "../../shared/sessionTypes";
+import { useI18n } from "../i18n";
 import type { TimelineItem } from "../monitorSession";
 import { parseMessageBody, toRenderableMessageBody } from "../messageBody";
 
@@ -19,20 +20,20 @@ function extractCodeText(node: unknown): string {
   return "";
 }
 
-function noteToneLabel(item: TimelineItem): string {
+function noteToneLabel(item: TimelineItem, t: (key: string) => string): string {
   switch (item.tone) {
     case "completed":
-      return "Done";
+      return t("session.note.completed");
     case "running":
-      return "Running";
+      return t("session.note.running");
     case "waiting":
-      return "Waiting";
+      return t("session.note.waiting");
     case "idle":
-      return "Idle";
+      return t("session.note.idle");
     case "error":
-      return "Error";
+      return t("session.note.error");
     default:
-      return "Event";
+      return t("session.note.default");
   }
 }
 
@@ -50,7 +51,7 @@ const COMPACT_STATUS_BODIES = new Set([
 function isCompactStatusNote(item: TimelineItem): boolean {
   const body = item.body.trim().toLowerCase();
   const label = item.label.trim().toLowerCase();
-  const toneLabel = noteToneLabel(item).trim().toLowerCase();
+  const toneLabel = item.tone?.trim().toLowerCase() ?? "system";
 
   return COMPACT_STATUS_BODIES.has(body) || body === label || body === toneLabel;
 }
@@ -92,7 +93,8 @@ function isExternalTarget(href: string): boolean {
 
 function RichTextBlock({ text }: { text: string }) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const { cleanedText, chips } = parseMessageBody(text);
+  const i18n = useI18n();
+  const { cleanedText, chips } = parseMessageBody(text, (key, params) => i18n.t(key, params));
   const hasMarkdownBody = cleanedText.trim().length > 0;
   const renderableText = toRenderableMessageBody(text);
 
@@ -167,7 +169,7 @@ function RichTextBlock({ text }: { text: string }) {
                       void copyCodeBlock(codeText);
                     }}
                   >
-                    {copied ? "已复制" : "复制"}
+                    {copied ? i18n.t("common.copied") : i18n.t("common.copy")}
                   </button>
                   <div className="session-stream__codeblock-content">
                     <pre className="session-stream__codeblock">{children}</pre>
@@ -185,7 +187,7 @@ function RichTextBlock({ text }: { text: string }) {
         </ReactMarkdown>
       ) : null}
       {chips.length > 0 ? (
-        <div className="session-stream__directive-chips" aria-label="Git actions">
+        <div className="session-stream__directive-chips" aria-label={i18n.t("session.directives")}>
           {chips.map((chip) => (
             <span key={chip.id} className="session-stream__directive-chip">
               {chip.label}
@@ -296,6 +298,7 @@ export function buildItemRenderKeys(items: TimelineItem[]): string[] {
 }
 
 export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
+  const i18n = useI18n();
   const chronologicalItems = [...items].reverse();
   const primaryItems = chronologicalItems.filter((item) => item.kind === "message" || item.kind === "tool");
   const primaryItemRenderKeys = buildItemRenderKeys(primaryItems);
@@ -321,16 +324,16 @@ export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
           source: "assistant" as const,
           label: "Assistant",
           title: "Assistant",
-          body: "正在整理回复",
+          body: i18n.t("session.typing"),
           timestamp: Number.MAX_SAFE_INTEGER,
         },
       ]
     : primaryItems;
 
   return (
-    <div className="session-stream" role="region" aria-label="Session activity stream">
+    <div className="session-stream" role="region" aria-label={i18n.t("session.activityStream")}>
       {items.length === 0 ? (
-        <div className="session-stream__empty">No detailed context yet.</div>
+        <div className="session-stream__empty">{i18n.t("session.noDetails")}</div>
       ) : (
         <>
           <div className="session-stream__section session-stream__section--primary">
@@ -349,8 +352,8 @@ export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
                     </div>
                     <div className="session-stream__body">
                       {isTypingItem ? (
-                        <div className="session-stream__typing-indicator" aria-label="Agent 正在输入">
-                          <span className="session-stream__typing-text">正在整理回复</span>
+                        <div className="session-stream__typing-indicator" aria-label={i18n.t("session.agentTyping")}>
+                          <span className="session-stream__typing-text">{i18n.t("session.typing")}</span>
                           <span className="session-stream__typing-dots" aria-hidden="true" />
                         </div>
                       ) : (
@@ -381,7 +384,7 @@ export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
                   <div className="session-stream__artifact-accent" aria-hidden="true" />
                   <div className="session-stream__artifact-copy">
                     <div className="session-stream__header">
-                      <span className="session-stream__artifact-kicker">Execution</span>
+                      <span className="session-stream__artifact-kicker">{i18n.t("session.execution")}</span>
                       <span className="session-stream__label">{item.label}</span>
                       {shouldShowArtifactName(item) ? (
                         <span className="session-stream__artifact-name">{item.toolName}</span>
@@ -399,7 +402,7 @@ export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
                             toggleTool(renderKey);
                           }}
                         >
-                          {expanded ? "收起" : "展开"}
+                          {expanded ? i18n.t("session.collapse") : i18n.t("session.expand")}
                         </button>
                       ) : null}
                     </div>
@@ -431,7 +434,7 @@ export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
                   <div className={`session-stream__note session-stream__note--${item.tone ?? "system"}`}>
                     <span className="session-stream__note-dot" aria-hidden="true" />
                     <span className="session-stream__note-body">{item.body}</span>
-                    <span className="session-stream__note-meta">{noteToneLabel(item)}</span>
+                    <span className="session-stream__note-meta">{noteToneLabel(item, i18n.t)}</span>
                   </div>
                 </div>
               ))}

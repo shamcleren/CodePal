@@ -3,6 +3,7 @@ import type {
   IntegrationAgentId,
   IntegrationDiagnostics,
 } from "../../shared/integrationTypes";
+import { useI18n } from "../i18n";
 
 type IntegrationPanelProps = {
   diagnostics: IntegrationDiagnostics | null;
@@ -14,28 +15,31 @@ type IntegrationPanelProps = {
   onInstall: (agentId: IntegrationAgentId) => void;
 };
 
-function listenerLabel(diagnostics: IntegrationDiagnostics | null): string {
-  if (!diagnostics) return "正在加载监听状态…";
+function listenerLabel(diagnostics: IntegrationDiagnostics | null, t: ReturnType<typeof useI18n>["t"]): string {
+  if (!diagnostics) return t("integration.listener.loading");
   const { listener } = diagnostics;
   if (listener.mode === "tcp") {
-    return `接收入口：本机端口 ${listener.port}`;
+    return t("integration.listener.tcp", { port: listener.port });
   }
   if (listener.mode === "socket") {
-    return `接收入口：本机连接 ${listener.socketPath}`;
+    return t("integration.listener.socket", { socketPath: listener.socketPath });
   }
-  return listener.message ?? "监听不可用";
+  return listener.message ?? t("integration.listener.unavailable");
 }
 
-function lastEventLabel(agent: IntegrationAgentDiagnostics): string {
+function lastEventLabel(
+  agent: IntegrationAgentDiagnostics,
+  i18n: ReturnType<typeof useI18n>,
+): string {
   if (!agent.lastEventAt || !agent.lastEventStatus) {
-    return "最近事件：无";
+    return i18n.t("integration.lastEvent.none");
   }
-  return `最近事件：${agent.lastEventStatus} · ${new Date(agent.lastEventAt).toLocaleString("zh-CN", {
+  return i18n.t("integration.lastEvent.value", { status: agent.lastEventStatus, time: i18n.formatDateTime(agent.lastEventAt, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  })}`;
+  }) });
 }
 
 function hookBadgeClass(agent: IntegrationAgentDiagnostics): string {
@@ -72,21 +76,22 @@ export function IntegrationPanel({
   onRefresh,
   onInstall,
 }: IntegrationPanelProps) {
+  const i18n = useI18n();
   const runtime = diagnostics?.runtime;
   const attentionAgents = (diagnostics?.agents ?? []).filter((agent) => agent.health !== "active");
   const healthyAgents = (diagnostics?.agents ?? []).filter((agent) => agent.health === "active");
   const allHealthy = diagnostics !== null && attentionAgents.length === 0;
 
   return (
-    <section className="integration-panel" aria-label="接入管理">
+    <section className="integration-panel" aria-label={i18n.t("integration.section")}>
       <div className="integration-panel__header">
         <div>
-          <div className="integration-panel__title">接入与诊断</div>
+          <div className="integration-panel__title">{i18n.t("integration.title")}</div>
           <div className="integration-panel__subtitle">
-            需要处理的接入项会展开显示；正常接入也会保留一层简洁状态。
+            {i18n.t("integration.subtitle")}
           </div>
           <div className="integration-panel__summary">
-            {allHealthy ? "当前接入均已就绪" : listenerLabel(diagnostics)}
+            {allHealthy ? i18n.t("integration.allHealthy") : listenerLabel(diagnostics, i18n.t)}
           </div>
         </div>
         <button
@@ -95,14 +100,14 @@ export function IntegrationPanel({
           onClick={onRefresh}
           disabled={loading}
         >
-          {loading ? "刷新中…" : "刷新"}
+          {loading ? i18n.t("integration.refreshing") : i18n.t("integration.refresh")}
         </button>
       </div>
 
       {runtime && !allHealthy ? (
         <div className="integration-panel__runtime">
           <span title={runtime.executablePath}>{runtime.executableLabel}</span>
-          <span>{runtime.packaged ? "打包构建" : "开发运行"}</span>
+          <span>{runtime.packaged ? i18n.t("integration.runtime.packaged") : i18n.t("integration.runtime.dev")}</span>
         </div>
       ) : null}
 
@@ -110,23 +115,23 @@ export function IntegrationPanel({
       {errorMessage ? <p className="integration-panel__error">{errorMessage}</p> : null}
 
       {healthyAgents.length > 0 ? (
-        <div className="integration-panel__healthy" aria-label="已就绪接入">
+        <div className="integration-panel__healthy" aria-label={i18n.t("integration.healthy")}>
           {healthyAgents.map((agent) => (
             <div key={agent.id} className="integration-panel__healthy-item">
               <div className="integration-panel__healthy-main">
                 <span className="integration-panel__healthy-name">{agent.label}</span>
-                <span className={hookBadgeClass(agent)}>{agent.healthLabel}</span>
+                <span className={hookBadgeClass(agent)}>{i18n.translateMessage(agent.healthLabel, agent.healthLabelKey)}</span>
               </div>
               <div className="integration-panel__healthy-meta">
-                <span>{agent.statusMessage}</span>
-                <span>{lastEventLabel(agent)}</span>
+                <span>{i18n.translateMessage(agent.statusMessage, agent.statusMessageKey, agent.statusMessageParams)}</span>
+                <span>{lastEventLabel(agent, i18n)}</span>
               </div>
             </div>
           ))}
         </div>
       ) : null}
 
-      {allHealthy ? <div className="integration-panel__feedback">当前没有需要修复或登录的接入项。</div> : null}
+      {allHealthy ? <div className="integration-panel__feedback">{i18n.t("integration.noActionNeeded")}</div> : null}
 
       <div className="integration-grid">
         {attentionAgents.map((agent) => {
@@ -136,15 +141,17 @@ export function IntegrationPanel({
               <div className="integration-card__header">
                 <div>
                   <div className="integration-card__name">{agent.label}</div>
-                  <div className="integration-card__message">{agent.statusMessage}</div>
+                  <div className="integration-card__message">
+                    {i18n.translateMessage(agent.statusMessage, agent.statusMessageKey, agent.statusMessageParams)}
+                  </div>
                 </div>
-                <span className={hookBadgeClass(agent)}>{agent.healthLabel}</span>
+                <span className={hookBadgeClass(agent)}>{i18n.translateMessage(agent.healthLabel, agent.healthLabelKey)}</span>
               </div>
               <div className="integration-card__path" title={agent.configPath}>
                 {compactPathLabel(agent.configPath)}
               </div>
               {agent.lastEventAt || agent.lastEventStatus ? (
-                <div className="integration-card__meta">{lastEventLabel(agent)}</div>
+                <div className="integration-card__meta">{lastEventLabel(agent, i18n)}</div>
               ) : null}
               {shouldShowAction(agent) ? (
                 <button
@@ -153,7 +160,9 @@ export function IntegrationPanel({
                   disabled={isInstalling}
                   onClick={() => onInstall(agent.id)}
                 >
-                  {isInstalling ? "应用中…" : agent.actionLabel}
+                  {isInstalling
+                    ? i18n.t("integration.action.applying")
+                    : i18n.translateMessage(agent.actionLabel, agent.actionLabelKey)}
                 </button>
               ) : null}
             </article>

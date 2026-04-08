@@ -1,4 +1,5 @@
 import type { SessionStatus } from "./sessionTypes";
+import type { MessageParams } from "./i18nTypes";
 
 export type IntegrationAgentId = "claude" | "cursor" | "codebuddy" | "codex";
 
@@ -34,8 +35,12 @@ export interface IntegrationAgentDiagnostics {
   hookInstalled: boolean;
   health: IntegrationHealth;
   healthLabel: string;
+  healthLabelKey?: string;
   actionLabel: string;
+  actionLabelKey?: string;
   statusMessage: string;
+  statusMessageKey?: string;
+  statusMessageParams?: MessageParams;
   lastEventAt?: number;
   lastEventStatus?: SessionStatus;
 }
@@ -54,5 +59,7 @@ export interface IntegrationInstallResult {
   health: IntegrationHealth;
   backupPath?: string;
   message: string;
+  messageKey?: string;
+  messageParams?: MessageParams;
   diagnostics: IntegrationAgentDiagnostics;
 }

@@ -1,3 +1,5 @@
+import { useI18n } from "../i18n";
+
 type SessionHistoryPanelProps = {
   loading: boolean;
   onClearHistory: () => void;
@@ -7,13 +9,13 @@ export function SessionHistoryPanel({
   loading,
   onClearHistory,
 }: SessionHistoryPanelProps) {
+  const { t } = useI18n();
+
   return (
-    <div className="display-panel__subsection-block" aria-label="Session 历史">
+    <div className="display-panel__subsection-block" aria-label={t("sessionHistory.title")}>
       <div className="display-panel__header">
-        <div className="display-panel__title">Session 历史</div>
-        <div className="display-panel__subtitle">
-          清掉已完成、空闲、离线或报错的历史 session，保留正在运行或等待中的 session。
-        </div>
+        <div className="display-panel__title">{t("sessionHistory.title")}</div>
+        <div className="display-panel__subtitle">{t("sessionHistory.subtitle")}</div>
       </div>
 
       <div className="display-panel__actions">
@@ -23,7 +25,7 @@ export function SessionHistoryPanel({
           disabled={loading}
           onClick={onClearHistory}
         >
-          {loading ? "清理中…" : "清空历史 session"}
+          {loading ? t("sessionHistory.clearing") : t("sessionHistory.clear")}
         </button>
       </div>
     </div>

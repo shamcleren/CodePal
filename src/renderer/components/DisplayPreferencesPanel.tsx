@@ -1,11 +1,15 @@
 import type { ReactNode } from "react";
 import type { UsageAgentId, UsageDisplaySettings } from "../usageDisplaySettings";
+import type { AppLocale } from "../../shared/i18nTypes";
+import { useI18n } from "../i18n";
 
 type DisplayPreferencesPanelProps = {
   settings: UsageDisplaySettings;
   onToggleStrip: (nextValue: boolean) => void;
   onToggleAgent: (agent: UsageAgentId) => void;
   onDensityChange: (nextValue: UsageDisplaySettings["density"]) => void;
+  localeSetting: AppLocale;
+  onLocaleChange: (nextValue: AppLocale) => void;
   children?: ReactNode;
 };
 
@@ -21,13 +25,17 @@ export function DisplayPreferencesPanel({
   onToggleStrip,
   onToggleAgent,
   onDensityChange,
+  localeSetting,
+  onLocaleChange,
   children,
 }: DisplayPreferencesPanelProps) {
+  const { t } = useI18n();
+
   return (
-    <section className="display-panel" aria-label="显示与用量">
+    <section className="display-panel" aria-label={t("display.section")}>
       <div className="display-panel__header">
-        <div className="display-panel__title">面板显示</div>
-        <div className="display-panel__subtitle">这里只保留日常会改动的显示选项。</div>
+        <div className="display-panel__title">{t("display.title")}</div>
+        <div className="display-panel__subtitle">{t("display.subtitle")}</div>
       </div>
 
       <label className="display-panel__toggle">
@@ -36,12 +44,12 @@ export function DisplayPreferencesPanel({
           checked={settings.showInStatusBar}
           onChange={(event) => onToggleStrip(event.target.checked)}
         />
-        <span>在顶部状态栏显示额度</span>
+        <span>{t("display.showQuota")}</span>
       </label>
 
       <div className="display-panel__header">
-        <div className="display-panel__title">显示的 Agent</div>
-        <div className="display-panel__subtitle">按需隐藏顶部用量条里的指定 code agent。</div>
+        <div className="display-panel__title">{t("display.agents.title")}</div>
+        <div className="display-panel__subtitle">{t("display.agents.subtitle")}</div>
       </div>
       <div className="display-panel__agents">
         {AGENTS.map((agent) => (
@@ -57,10 +65,8 @@ export function DisplayPreferencesPanel({
       </div>
 
       <div className="display-panel__header">
-        <div className="display-panel__title">用量显示密度</div>
-        <div className="display-panel__subtitle">
-          简洁模式只显示核心数值；详细模式会额外显示 reset 信息。
-        </div>
+        <div className="display-panel__title">{t("display.density.title")}</div>
+        <div className="display-panel__subtitle">{t("display.density.subtitle")}</div>
       </div>
       <div className="display-panel__agents">
         <label className="display-panel__toggle">
@@ -70,7 +76,7 @@ export function DisplayPreferencesPanel({
             checked={settings.density === "compact"}
             onChange={() => onDensityChange("compact")}
           />
-          <span>简洁</span>
+          <span>{t("display.density.compact")}</span>
         </label>
         <label className="display-panel__toggle">
           <input
@@ -79,8 +85,25 @@ export function DisplayPreferencesPanel({
             checked={settings.density === "detailed"}
             onChange={() => onDensityChange("detailed")}
           />
-          <span>详细</span>
+          <span>{t("display.density.detailed")}</span>
         </label>
+      </div>
+      <div className="display-panel__header">
+        <div className="display-panel__title">{t("display.language.title")}</div>
+        <div className="display-panel__subtitle">{t("display.language.subtitle")}</div>
+      </div>
+      <div className="display-panel__agents">
+        {(["system", "en", "zh-CN"] as const).map((locale) => (
+          <label key={locale} className="display-panel__toggle">
+            <input
+              type="radio"
+              name="app-locale"
+              checked={localeSetting === locale}
+              onChange={() => onLocaleChange(locale)}
+            />
+            <span>{t(`display.language.${locale}`)}</span>
+          </label>
+        ))}
       </div>
       {children ? <div className="display-panel__subsection">{children}</div> : null}
     </section>

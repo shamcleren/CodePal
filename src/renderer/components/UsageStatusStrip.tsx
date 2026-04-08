@@ -4,6 +4,7 @@ import codexAppIcon from "../assets/codex-app-icon.png";
 import cursorAppIcon from "../assets/cursor-app-icon.png";
 import type { UsageOverview } from "../../shared/usageTypes";
 import type { UsageDisplaySettings } from "../usageDisplaySettings";
+import { useI18n, translateWindowLabel } from "../i18n";
 
 type UsageStatusStripProps = {
   overview: UsageOverview | null;
@@ -32,12 +33,15 @@ function toRemainingPercent(usedPercent: number | undefined): string | null {
   return formatPercent(typeof usedPercent === "number" ? 100 - usedPercent : undefined);
 }
 
-function formatResetTime(resetAt: number | undefined): string | null {
+function formatResetTime(
+  resetAt: number | undefined,
+  i18n: ReturnType<typeof useI18n>,
+): string | null {
   if (typeof resetAt !== "number" || Number.isNaN(resetAt)) {
     return null;
   }
 
-  return new Date(resetAt * 1000).toLocaleString("zh-CN", {
+  return i18n.formatDateTime(resetAt * 1000, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -49,6 +53,7 @@ function formatResetTime(resetAt: number | undefined): string | null {
 function summarizeCodex(
   overview: UsageOverview,
   settings: UsageDisplaySettings,
+  i18n: ReturnType<typeof useI18n>,
 ): UsageAgentSummary | null {
   const limits = overview.summary.rateLimits.filter((item) => item.agent === "codex");
   if (limits.length === 0) {
@@ -58,8 +63,8 @@ function summarizeCodex(
   const segments = limits
     .map((limit) => {
       const percent = toRemainingPercent(limit.usedPercent);
-      const windowLabel = formatWindowLabel(limit.windowLabel);
-      const resetTime = formatResetTime(limit.resetAt);
+      const windowLabel = translateWindowLabel(limit.windowLabel, i18n.t);
+      const resetTime = formatResetTime(limit.resetAt, i18n);
       if (!percent) {
         return null;
       }
@@ -75,8 +80,13 @@ function summarizeCodex(
     .filter((part): part is { text: string; tone: "primary" | "secondary" } => Boolean(part));
   const resetHints = limits
     .map((limit) => {
-      const resetTime = formatResetTime(limit.resetAt);
-      return resetTime ? `${formatWindowLabel(limit.windowLabel)} reset ${resetTime}` : null;
+      const resetTime = formatResetTime(limit.resetAt, i18n);
+      return resetTime
+        ? i18n.t("usage.reset", {
+            label: translateWindowLabel(limit.windowLabel, i18n.t),
+            time: resetTime,
+          })
+        : null;
     })
     .filter((part): part is string => Boolean(part));
 
@@ -96,6 +106,7 @@ function summarizeCodex(
 function summarizeClaude(
   overview: UsageOverview,
   settings: UsageDisplaySettings,
+  i18n: ReturnType<typeof useI18n>,
 ): UsageAgentSummary | null {
   const limits = overview.summary.rateLimits.filter((item) => item.agent === "claude");
   if (limits.length === 0) {
@@ -104,8 +115,8 @@ function summarizeClaude(
   const segments = limits
     .map((limit) => {
       const percent = toRemainingPercent(limit.usedPercent);
-      const windowLabel = formatWindowLabel(limit.windowLabel);
-      const resetTime = formatResetTime(limit.resetAt);
+      const windowLabel = translateWindowLabel(limit.windowLabel, i18n.t);
+      const resetTime = formatResetTime(limit.resetAt, i18n);
       if (!percent) {
         return null;
       }
@@ -121,8 +132,13 @@ function summarizeClaude(
     .filter((part): part is { text: string; tone: "primary" | "secondary" } => Boolean(part));
   const resetHints = limits
     .map((limit) => {
-      const resetTime = formatResetTime(limit.resetAt);
-      return resetTime ? `${formatWindowLabel(limit.windowLabel)} reset ${resetTime}` : null;
+      const resetTime = formatResetTime(limit.resetAt, i18n);
+      return resetTime
+        ? i18n.t("usage.reset", {
+            label: translateWindowLabel(limit.windowLabel, i18n.t),
+            time: resetTime,
+          })
+        : null;
     })
     .filter((part): part is string => Boolean(part));
 
@@ -142,6 +158,7 @@ function summarizeClaude(
 function summarizeCursor(
   overview: UsageOverview,
   settings: UsageDisplaySettings,
+  i18n: ReturnType<typeof useI18n>,
 ): UsageAgentSummary | null {
   const limit = overview.summary.rateLimits.find((item) => item.agent === "cursor");
   if (!limit) {
@@ -162,7 +179,7 @@ function summarizeCursor(
   }
   const percent = toRemainingPercent(limit.usedPercent);
   if (percent) {
-    const resetTime = formatResetTime(limit.resetAt);
+    const resetTime = formatResetTime(limit.resetAt, i18n);
     if (settings.density === "detailed" && resetTime) {
       segments.push({ text: percent, tone: "primary" });
       segments.push({ text: resetTime, tone: "secondary" });
@@ -180,8 +197,8 @@ function summarizeCursor(
     iconSrc: cursorAppIcon,
     segments,
     resetHints: (() => {
-      const resetTime = formatResetTime(limit.resetAt);
-      return resetTime ? [`reset ${resetTime}`] : [];
+      const resetTime = formatResetTime(limit.resetAt, i18n);
+      return resetTime ? [i18n.t("usage.reset", { label: "", time: resetTime }).trim()] : [];
     })(),
   };
 }
@@ -189,6 +206,7 @@ function summarizeCursor(
 function summarizeCodeBuddy(
   overview: UsageOverview,
   settings: UsageDisplaySettings,
+  i18n: ReturnType<typeof useI18n>,
 ): UsageAgentSummary | null {
   const limits = overview.summary.rateLimits.filter((item) => item.agent === "codebuddy");
   if (limits.length === 0) {
@@ -199,7 +217,7 @@ function summarizeCodeBuddy(
   const resetHints: string[] = [];
 
   for (const limit of limits) {
-    const label = formatWindowLabel(limit.windowLabel);
+    const label = translateWindowLabel(limit.windowLabel, i18n.t);
     const remainingPercent =
       typeof limit.remaining === "number" && typeof limit.limit === "number" && limit.limit > 0
         ? Math.round((limit.remaining / limit.limit) * 100)
@@ -211,16 +229,16 @@ function summarizeCodeBuddy(
       segments.push({ text: `${label} ${remainingPercent}%`, tone: "primary" });
     }
 
-    const resetTime = formatResetTime(limit.resetAt);
+    const resetTime = formatResetTime(limit.resetAt, i18n);
     if (settings.density === "detailed" && resetTime) {
       segments.push({ text: resetTime, tone: "secondary" });
     }
 
     if (resetTime) {
-      resetHints.push(`${label} reset ${resetTime}`);
+      resetHints.push(i18n.t("usage.reset", { label, time: resetTime }));
     }
     if (remainingPercent !== null && Number.isFinite(remainingPercent)) {
-      resetHints.push(`${label} remaining ${remainingPercent}%`);
+      resetHints.push(i18n.t("usage.remaining", { label, value: `${remainingPercent}%` }));
     }
   }
 
@@ -235,17 +253,6 @@ function summarizeCodeBuddy(
     segments,
     resetHints,
   };
-}
-
-function formatWindowLabel(value: string | undefined): string {
-  if (!value) {
-    return "窗口";
-  }
-
-  return value
-    .replace(/\s*小时/g, "h")
-    .replace(/\s*天/g, "d")
-    .replace(/\s+/g, "");
 }
 
 function formatCompactUsdCents(value: number): string {
@@ -264,25 +271,27 @@ function formatCompactAmount(value: number): string {
 function buildSummaries(
   overview: UsageOverview | null,
   settings: UsageDisplaySettings,
+  i18n: ReturnType<typeof useI18n>,
 ): UsageAgentSummary[] {
   if (!overview) {
     return [];
   }
 
   return [
-    summarizeClaude(overview, settings),
-    summarizeCodex(overview, settings),
-    summarizeCodeBuddy(overview, settings),
-    summarizeCursor(overview, settings),
+    summarizeClaude(overview, settings, i18n),
+    summarizeCodex(overview, settings, i18n),
+    summarizeCodeBuddy(overview, settings, i18n),
+    summarizeCursor(overview, settings, i18n),
   ].filter((item): item is UsageAgentSummary => item !== null);
 }
 
 export function UsageStatusStrip({ overview, settings }: UsageStatusStripProps) {
+  const i18n = useI18n();
   if (!settings.showInStatusBar) {
     return null;
   }
 
-  const summaries = buildSummaries(overview, settings).filter(
+  const summaries = buildSummaries(overview, settings, i18n).filter(
     (item) => !settings.hiddenAgents.includes(item.agent as "claude" | "codex" | "cursor" | "codebuddy"),
   );
 

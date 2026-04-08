@@ -168,6 +168,14 @@ function notConfiguredDiagnostics(
       missingFields.length > 0
         ? `请先在设置中配置 ${config.label} 的${missingFields.join("和")}`
         : `${config.label} 尚未配置`,
+    messageKey:
+      missingFields.length > 0
+        ? "codebuddy.message.not_configured"
+        : "codebuddy.message.not_configured_generic",
+    messageParams:
+      missingFields.length > 0
+        ? { label: config.label, fields: missingFields.join("和") }
+        : { label: config.label },
     endpoint: config.quotaEndpoint,
     loginUrl: config.loginUrl,
     ...(lastSyncAt ? { lastSyncAt } : {}),
@@ -183,6 +191,8 @@ function loginNotEstablishedDiagnostics(
     label: config.label,
     state: "error",
     message: `${config.label} 未检测到登录态，请确认登录已完成，或检查 settings.yaml 中的 loginUrl 是否正确`,
+    messageKey: "codebuddy.message.login_not_established",
+    messageParams: { label: config.label },
     endpoint: config.quotaEndpoint,
     loginUrl: config.loginUrl,
     ...(lastSyncAt ? { lastSyncAt } : {}),
@@ -204,6 +214,8 @@ export function buildCodeBuddyInternalQuotaDiagnostics(input: {
       label: input.config.label,
       state: "connected",
       message: `已连接 ${input.config.label} 用量`,
+      messageKey: "codebuddy.message.connected",
+      messageParams: { label: input.config.label },
       endpoint: input.config.quotaEndpoint,
       loginUrl: input.config.loginUrl,
       ...(input.lastSyncAt ? { lastSyncAt: input.lastSyncAt } : {}),
@@ -215,6 +227,8 @@ export function buildCodeBuddyInternalQuotaDiagnostics(input: {
     label: input.config.label,
     state: "not_connected",
     message: `未连接 ${input.config.label} 用量，请在 CodePal 弹出的登录窗口内完成登录`,
+    messageKey: "codebuddy.message.not_connected",
+    messageParams: { label: input.config.label },
     endpoint: input.config.quotaEndpoint,
     loginUrl: input.config.loginUrl,
     ...(input.lastSyncAt ? { lastSyncAt: input.lastSyncAt } : {}),
@@ -291,6 +305,8 @@ export function createCodeBuddyInternalQuotaService(
       label: configToUse.label,
       state: "connected",
       message: `已连接 ${configToUse.label} 用量`,
+      messageKey: "codebuddy.message.connected",
+      messageParams: { label: configToUse.label },
       endpoint: configToUse.quotaEndpoint,
       loginUrl: configToUse.loginUrl,
       ...(lastSyncAtToUse ? { lastSyncAt: lastSyncAtToUse } : {}),
@@ -352,6 +368,14 @@ export function createCodeBuddyInternalQuotaService(
           kind: "internal",
           label: config.label,
           message,
+          messageKey:
+            error instanceof Error && error.message.includes("ERR_BLOCKED_BY_CLIENT")
+              ? "codebuddy.message.request_blocked"
+              : "codebuddy.message.request_failed",
+          messageParams:
+            error instanceof Error && error.message.includes("ERR_BLOCKED_BY_CLIENT")
+              ? { label: config.label }
+              : { label: config.label, detail: error instanceof Error ? error.message : String(error) },
           endpoint: config.quotaEndpoint,
           loginUrl: config.loginUrl,
           ...(lastSyncAt ? { lastSyncAt } : {}),
@@ -369,6 +393,8 @@ export function createCodeBuddyInternalQuotaService(
             kind: "internal",
             label: config.label,
             message: `${config.label} 登录已过期，请重新登录`,
+            messageKey: "codebuddy.message.expired",
+            messageParams: { label: config.label },
             endpoint: config.quotaEndpoint,
             loginUrl: config.loginUrl,
             ...(lastSyncAt ? { lastSyncAt } : {}),
@@ -382,6 +408,8 @@ export function createCodeBuddyInternalQuotaService(
           kind: "internal",
           label: config.label,
           message: `${config.label} 用量拉取失败：${response.status} ${response.statusText}`,
+          messageKey: "codebuddy.message.pull_failed",
+          messageParams: { label: config.label, status: response.status, statusText: response.statusText },
           endpoint: config.quotaEndpoint,
           loginUrl: config.loginUrl,
           ...(lastSyncAt ? { lastSyncAt } : {}),
@@ -399,6 +427,8 @@ export function createCodeBuddyInternalQuotaService(
           kind: "internal",
           label: config.label,
           message: `${config.label} 登录态无效，额度接口返回了登录页，请重新登录`,
+          messageKey: "codebuddy.message.login_page",
+          messageParams: { label: config.label },
           endpoint: config.quotaEndpoint,
           loginUrl: config.loginUrl,
           ...(lastSyncAt ? { lastSyncAt } : {}),
@@ -418,6 +448,8 @@ export function createCodeBuddyInternalQuotaService(
           kind: "internal",
           label: config.label,
           message: `${config.label} 用量响应不是有效 JSON`,
+          messageKey: "codebuddy.message.invalid_json",
+          messageParams: { label: config.label },
           endpoint: config.quotaEndpoint,
           loginUrl: config.loginUrl,
           ...(lastSyncAt ? { lastSyncAt } : {}),
@@ -434,6 +466,8 @@ export function createCodeBuddyInternalQuotaService(
           kind: "internal",
           label: config.label,
           message: `${config.label} 用量响应缺少可用额度字段`,
+          messageKey: "codebuddy.message.missing_fields",
+          messageParams: { label: config.label },
           endpoint: config.quotaEndpoint,
           loginUrl: config.loginUrl,
           ...(lastSyncAt ? { lastSyncAt } : {}),
@@ -476,6 +510,8 @@ export function createCodeBuddyInternalQuotaService(
           kind: "internal",
           label: config.label,
           message: `${config.label} 登录页打开失败：${openError.message}`,
+          messageKey: "codebuddy.message.open_failed",
+          messageParams: { label: config.label, detail: openError.message },
           endpoint: config.quotaEndpoint,
           loginUrl: config.loginUrl,
           ...(lastSyncAt ? { lastSyncAt } : {}),

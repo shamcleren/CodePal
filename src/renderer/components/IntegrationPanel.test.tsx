@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { IntegrationDiagnostics } from "../../shared/integrationTypes";
+import { I18nProvider } from "../i18n";
 import { IntegrationPanel } from "./IntegrationPanel";
 
 const baseRuntime = {
@@ -29,8 +30,11 @@ const diagnostics: IntegrationDiagnostics = {
       hookInstalled: false,
       health: "not_configured",
       healthLabel: "未配置",
+      healthLabelKey: "integration.health.not_configured",
       actionLabel: "启用",
+      actionLabelKey: "integration.action.enable",
       statusMessage: "未配置 CodePal Cursor hooks",
+      statusMessageKey: "integration.message.cursor.notConfigured",
     },
     {
       id: "codex",
@@ -43,8 +47,11 @@ const diagnostics: IntegrationDiagnostics = {
       hookInstalled: true,
       health: "active",
       healthLabel: "正常",
+      healthLabelKey: "integration.health.active",
       actionLabel: "修复",
+      actionLabelKey: "integration.action.repair",
       statusMessage: "已增强 Codex 接入，并持续同步会话记录",
+      statusMessageKey: "integration.message.codex.enhancedWithSessions",
       lastEventAt: Date.parse("2026-03-31T11:00:00.000Z"),
       lastEventStatus: "running",
     },
@@ -59,8 +66,11 @@ const diagnostics: IntegrationDiagnostics = {
       hookInstalled: true,
       health: "active",
       healthLabel: "正常",
+      healthLabelKey: "integration.health.active",
       actionLabel: "修复",
+      actionLabelKey: "integration.action.repair",
       statusMessage: "已配置用户级 CodeBuddy hooks",
+      statusMessageKey: "integration.message.codebuddy.active",
       lastEventAt: Date.parse("2026-03-31T12:00:00.000Z"),
       lastEventStatus: "running",
     },
@@ -81,8 +91,11 @@ const legacyDiagnostics: IntegrationDiagnostics = {
       hookInstalled: true,
       health: "legacy_path",
       healthLabel: "待迁移",
+      healthLabelKey: "integration.health.legacy_path",
       actionLabel: "迁移",
+      actionLabelKey: "integration.action.migrate",
       statusMessage: "检测到旧版 CodePal Cursor hook 命令，建议迁移",
+      statusMessageKey: "integration.message.cursor.legacy",
     },
   ],
 };
@@ -97,15 +110,17 @@ const unavailableDiagnostics: IntegrationDiagnostics = {
 describe("IntegrationPanel", () => {
   it("renders hook command context, listener, and agent actions", () => {
     const html = renderToStaticMarkup(
-      <IntegrationPanel
-        diagnostics={diagnostics}
-        loading={false}
-        installingAgentId={null}
-        feedbackMessage="配置已更新"
-        errorMessage={null}
-        onRefresh={vi.fn()}
-        onInstall={vi.fn()}
-      />,
+      <I18nProvider locale="zh-CN">
+        <IntegrationPanel
+          diagnostics={diagnostics}
+          loading={false}
+          installingAgentId={null}
+          feedbackMessage="配置已更新"
+          errorMessage={null}
+          onRefresh={vi.fn()}
+          onInstall={vi.fn()}
+        />
+      </I18nProvider>,
     );
 
     expect(html).toContain("接入与诊断");
@@ -130,15 +145,17 @@ describe("IntegrationPanel", () => {
 
   it("shows legacy_path as 待迁移 with 迁移 action", () => {
     const html = renderToStaticMarkup(
-      <IntegrationPanel
-        diagnostics={legacyDiagnostics}
-        loading={false}
-        installingAgentId={null}
-        feedbackMessage={null}
-        errorMessage={null}
-        onRefresh={vi.fn()}
-        onInstall={vi.fn()}
-      />,
+      <I18nProvider locale="zh-CN">
+        <IntegrationPanel
+          diagnostics={legacyDiagnostics}
+          loading={false}
+          installingAgentId={null}
+          feedbackMessage={null}
+          errorMessage={null}
+          onRefresh={vi.fn()}
+          onInstall={vi.fn()}
+        />
+      </I18nProvider>,
     );
 
     expect(html).toContain("待迁移");
@@ -149,39 +166,44 @@ describe("IntegrationPanel", () => {
 
   it("renders Chinese fallback labels for unavailable listener", () => {
     const html = renderToStaticMarkup(
-      <IntegrationPanel
-        diagnostics={unavailableDiagnostics}
-        loading={false}
-        installingAgentId={null}
-        feedbackMessage={null}
-        errorMessage={null}
-        onRefresh={vi.fn()}
-        onInstall={vi.fn()}
-      />,
+      <I18nProvider locale="en">
+        <IntegrationPanel
+          diagnostics={unavailableDiagnostics}
+          loading={false}
+          installingAgentId={null}
+          feedbackMessage={null}
+          errorMessage={null}
+          onRefresh={vi.fn()}
+          onInstall={vi.fn()}
+        />
+      </I18nProvider>,
     );
 
-    expect(html).toContain("监听不可用");
+    expect(html).toContain("Listener unavailable");
   });
 
   it("shows a compact all-good message when no agents need attention", () => {
     const html = renderToStaticMarkup(
-      <IntegrationPanel
-        diagnostics={{
-          ...diagnostics,
-          agents: diagnostics.agents.map((agent) => ({
-            ...agent,
-            health: "active",
-            healthLabel: "正常",
-            hookInstalled: true,
-          })),
-        }}
-        loading={false}
-        installingAgentId={null}
-        feedbackMessage={null}
-        errorMessage={null}
-        onRefresh={vi.fn()}
-        onInstall={vi.fn()}
-      />,
+      <I18nProvider locale="zh-CN">
+        <IntegrationPanel
+          diagnostics={{
+            ...diagnostics,
+            agents: diagnostics.agents.map((agent) => ({
+              ...agent,
+              health: "active",
+              healthLabel: "正常",
+              healthLabelKey: "integration.health.active",
+              hookInstalled: true,
+            })),
+          }}
+          loading={false}
+          installingAgentId={null}
+          feedbackMessage={null}
+          errorMessage={null}
+          onRefresh={vi.fn()}
+          onInstall={vi.fn()}
+        />
+      </I18nProvider>,
     );
 
     expect(html).toContain("当前接入均已就绪");

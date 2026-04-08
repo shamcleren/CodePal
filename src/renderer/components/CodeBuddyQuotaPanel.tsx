@@ -1,4 +1,5 @@
 import type { CodeBuddyQuotaDiagnostics } from "../../shared/codebuddyQuotaTypes";
+import { useI18n } from "../i18n";
 
 type CodeBuddyQuotaPanelProps = {
   diagnostics: CodeBuddyQuotaDiagnostics | null;
@@ -8,11 +9,14 @@ type CodeBuddyQuotaPanelProps = {
   onClearAuth: () => void;
 };
 
-function lastSyncLabel(diagnostics: CodeBuddyQuotaDiagnostics | null): string {
+function lastSyncLabel(
+  diagnostics: CodeBuddyQuotaDiagnostics | null,
+  locale: ReturnType<typeof useI18n>,
+): string {
   if (!diagnostics?.lastSyncAt) {
-    return "尚未同步";
+    return locale.t("codebuddy.notSynced");
   }
-  return new Date(diagnostics.lastSyncAt).toLocaleString("zh-CN", {
+  return locale.formatDateTime(diagnostics.lastSyncAt, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -27,56 +31,58 @@ export function CodeBuddyQuotaPanel({
   onRefresh,
   onClearAuth,
 }: CodeBuddyQuotaPanelProps) {
+  const i18n = useI18n();
   const connected = diagnostics?.state === "connected";
   const reconnectRequired = diagnostics?.state === "expired";
   const missingConfiguration = !diagnostics?.loginUrl || !diagnostics?.endpoint;
   const label =
     diagnostics?.kind === "internal"
-      ? "CodeBuddy 内网版"
+      ? i18n.t("codebuddy.label.internal")
       : diagnostics?.kind === "code"
-        ? "CodeBuddy Code / IDE"
+        ? i18n.t("codebuddy.label.code")
         : diagnostics?.label ?? "CodeBuddy";
+  const title = `${label} ${i18n.t("codebuddy.usageSuffix")}`;
   const scopeText =
     diagnostics?.kind === "internal"
-      ? "覆盖「CodeBuddy（内网版）插件、With、Knot、Claude Code Internal、Gemini CLI Internal、Codex CLI Internal、OpenClaw（内网版）」数据。"
-      : "覆盖「CodeBuddy IDE、CodeBuddy Code」个人用量与限额情况。";
+      ? i18n.t("codebuddy.subtitle.internal")
+      : i18n.t("codebuddy.subtitle.code");
   const actionLabel = connected
     ? loading
-      ? "刷新中…"
-      : "刷新"
+      ? i18n.t("codebuddy.refreshing")
+      : i18n.t("codebuddy.refresh")
     : missingConfiguration
-      ? "先配置登录地址"
+      ? i18n.t("codebuddy.configureFirst")
     : reconnectRequired
       ? loading
-        ? "重新登录中…"
-        : "重新登录 CodeBuddy"
+        ? i18n.t("codebuddy.reloggingIn")
+        : i18n.t("codebuddy.relogin")
       : loading
-        ? "登录中…"
-        : "登录 CodeBuddy";
+        ? i18n.t("codebuddy.loggingIn")
+        : i18n.t("codebuddy.login");
   const helperText =
     diagnostics?.kind === "internal"
       ? missingConfiguration
-        ? "请先在设置文件中填写登录地址和额度地址，再回来完成 CodeBuddy 内网版登录。"
+        ? i18n.t("codebuddy.helper.internal.config")
         : connected || reconnectRequired
-          ? "CodePal 会自动刷新 CodeBuddy 内网版聚合额度。"
-          : "如果你已在浏览器登录过，仍需在 CodePal 弹出的窗口内再登录一次，才能读取内网版隔离会话 cookie。"
+          ? i18n.t("codebuddy.helper.internal.connected")
+          : i18n.t("codebuddy.helper.internal.login")
       : missingConfiguration
-        ? "请先在设置文件中填写登录地址和额度地址，再回来完成 IDE / Code 用量登录。"
+        ? i18n.t("codebuddy.helper.code.config")
         : connected || reconnectRequired
-          ? "CodePal 会自动刷新 CodeBuddy IDE / Code 月度额度。"
-          : "如果你已在浏览器登录过，仍需在 CodePal 弹出的窗口内再登录一次，才能读取 IDE / Code 隔离会话 cookie。";
+          ? i18n.t("codebuddy.helper.code.connected")
+          : i18n.t("codebuddy.helper.code.login");
 
   return (
-    <div className="display-panel__subsection-block" aria-label={`${label} 用量`}>
+    <div className="display-panel__subsection-block" aria-label={title}>
       <div className="display-panel__header">
-        <div className="display-panel__title">{label} 用量</div>
+        <div className="display-panel__title">{title}</div>
         <div className="display-panel__subtitle">{scopeText}</div>
         <div className="display-panel__subtitle">{helperText}</div>
       </div>
 
       <div className="display-panel__summary">
-        <span>{diagnostics?.message ?? "未连接 CodeBuddy 用量"}</span>
-        <span>{lastSyncLabel(diagnostics)}</span>
+        <span>{i18n.translateMessage(diagnostics?.message ?? i18n.t("codebuddy.message.not_connected", { label: label }), diagnostics?.messageKey, diagnostics?.messageParams)}</span>
+        <span>{lastSyncLabel(diagnostics, i18n)}</span>
       </div>
 
       <div className="display-panel__actions">
@@ -95,7 +101,7 @@ export function CodeBuddyQuotaPanel({
             disabled={loading}
             onClick={onClearAuth}
           >
-            删除登录态
+            {i18n.t("codebuddy.clearAuth")}
           </button>
         ) : null}
       </div>
