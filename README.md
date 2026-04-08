@@ -1,7 +1,7 @@
-<p align="center">
+<h1 align="center">
   <img src="docs/icon.png" width="56" alt="CodePal icon" valign="middle" />
-  <span valign="middle"><strong><font size="7">CodePal</font></strong></span>
-</p>
+  <span valign="middle">CodePal</span>
+</h1>
 
 <p align="center"><strong>One floating monitoring surface for your AI coding agents.</strong></p>
 <p align="center">Keep Cursor, Claude Code, Codex, and CodeBuddy visible in one place instead of hopping between IDEs, terminals, and dashboards.</p>
