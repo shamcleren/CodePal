@@ -1,6 +1,6 @@
-# CodePal v0.1.0 Release Notes
+# CodePal v1.0.0 Release Notes
 
-CodePal v0.1.0 is the first internal release of the monitoring-first product direction.
+CodePal v1.0.0 is the first release candidate for the monitoring-first product direction.
 
 It gives you one floating desktop panel for keeping multiple AI coding agents visible in one place.
 
@@ -9,8 +9,9 @@ It gives you one floating desktop panel for keeping multiple AI coding agents vi
 - One floating panel for Cursor, Claude Code, Codex, CodeBuddy, and the currently calibrated GoLand / PyCharm path
 - Flat, time-sorted session monitoring with clearer `running`, `waiting`, `completed`, and `error` states
 - Unified activity timeline for assistant, tool, and system events with lower-noise rendering
-- Usage visibility across supported sources, including Cursor spend, CodeBuddy quota, Claude token usage, and first-pass Codex usage signals
+- Usage visibility across supported sources
 - In-app integration diagnostics and repair, plus login-state reset for Cursor and CodeBuddy
+- Bilingual desktop UI with `system` / `en` / `zh-CN`
 
 ## Install
 
@@ -20,15 +21,18 @@ It gives you one floating desktop panel for keeping multiple AI coding agents vi
 4. Launch the app.
 5. If macOS blocks the app on first launch, allow it manually in Security settings.
 
-Current builds are unsigned / ad-hoc internal builds.
+The main remaining release blocker is final macOS signing / notarization.
 
-## Known Non-Blockers
+## Remaining Release Blocker
+
+- macOS signing / notarization is still the main item left before the polished 1.0.0 distribution bar is met
+
+## Known Follow-Ups
 
 - Claude does not yet have an authoritative live quota/reset source. Current behavior is token-first, with last-known quota retained locally when statusline data is available.
 - Cursor payload coverage is still expanding beyond the currently normalized subset.
 - CodeBuddy payload and transcript-shape calibration is still expanding beyond the currently confirmed subset.
 - GoLand / PyCharm support currently stays within the shared CodeBuddy JetBrains watcher path and calibrated scope.
-- macOS distribution is not yet signed or notarized.
 - CodePal is still monitoring-first, not a full cross-agent control console.
 
 ## Not In This Release
@@ -37,7 +41,7 @@ Current builds are unsigned / ad-hoc internal builds.
 - A general CodePal -> agent message channel
 - Deep IDE pane navigation guarantees
 - Deep terminal control
-- Signed / notarized production distribution
+- Anything beyond the remaining signing / notarization release step
 
 ## Feedback That Helps
 

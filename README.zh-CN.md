@@ -8,7 +8,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
-  <img src="https://img.shields.io/badge/version-0.1.0-green" alt="version 0.1.0" />
+  <img src="https://img.shields.io/badge/version-1.0.0-green" alt="version 1.0.0" />
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="license MIT" />
   <br/>
   <a href="https://github.com/shamcleren/CodePal/releases"><strong>前往 Releases 下载</strong></a>
@@ -39,16 +39,19 @@ CodePal 的目标，就是把这些状态收拢成一个可持续挂在桌面的
 - **可读的活动流**：突出 assistant、tool、system 的关键信号，压制低价值噪音
 - **quota / usage 感知**：持续看到 token 和额度压力
 - **低摩擦接入**：可以直接在应用内修复受支持的本地接入配置
+- **双语界面**：支持英文、简体中文和跟随系统语言
 
 ## 当前支持的 Agent
 
-| Agent | Session 监控 | 活动时间线 | 用量 |
-|:---|:---:|:---:|:---:|
-| **Cursor** | ✅ | ✅ | ✅ Dashboard spend |
-| **Claude Code** | ✅ | ✅ | ✅ Token，用量可用时保留最近一次 quota 快照 |
-| **Codex** | ✅ | ✅ | Partial |
-| **CodeBuddy** | ✅ | ✅ | ✅ 月度 quota |
-| **GoLand / PyCharm** | ✅ | ✅ | — |
+| Agent | Session | 用量 |
+|:---|:---:|:---:|
+| **Cursor** | ✅ | ✅ |
+| **Claude Code** | ✅ | ✅ |
+| **Codex** | ✅ | ⚠️ |
+| **CodeBuddy** | ✅ | ✅ |
+| **GoLand / PyCharm** | ✅ | — |
+
+不同来源的 usage 覆盖深度仍有差异；真正还需要关心的边界放在下方说明和 release notes 里。
 
 ## 安装
 
@@ -57,7 +60,7 @@ CodePal 的目标，就是把这些状态收拢成一个可持续挂在桌面的
 3. 把 `CodePal.app` 移到 `Applications`。
 4. 启动应用；如果 macOS 拦截，按系统提示手动放行即可。
 
-当前构建仍是 unsigned / ad-hoc，首次启动时可能需要在 macOS 安全设置中手动确认。
+当前距离更完整的 1.0.0 发布口径，主要还差 macOS 签名 / 公证这一道正式分发流程。
 
 ## 适合谁
 
@@ -74,9 +77,15 @@ CodePal v1 刻意保持 monitoring-first。
 - 统一监控
 - session / activity 可见性
 - quota / usage 可见性
+- 双语桌面 UI（`system` / `en` / `zh-CN`）
 - 应用内已经支持的有限审批 / 结构化选择回路
 
-当前不打算做成：
+在更干净的 1.0.0 发布标准下，当前主要剩余工作是：
+
+- macOS 签名与 notarization
+- 在现有绿色构建基础上完成最终发布可信度收口
+
+当前仍不打算做成：
 
 - 一个通用的 agent 聊天入口
 - 一个深度 IDE 导航层
@@ -85,9 +94,14 @@ CodePal v1 刻意保持 monitoring-first。
 
 ## 接下来
 
-下一轮工作大概率会继续优先补 usage 可见性、真实 payload 校准，以及更顺滑的 macOS 发布体验。
+近期优先级主要是：
 
-更完整的规划方向见 [docs/roadmap-next.md](docs/roadmap-next.md)。
+- 完成 macOS 签名 / 公证并降低安装摩擦
+- 在当前仍不完整的数据源上继续补 usage / quota 可见性
+- 扩大已支持 agent 的真实 payload 校准范围
+- 继续打磨 diagnostics、空状态和降级状态表达
+
+更完整的规划方向见 [docs/roadmap-next.zh-CN.md](docs/roadmap-next.zh-CN.md)。
 
 ## 给开发者
 

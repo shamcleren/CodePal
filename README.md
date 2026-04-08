@@ -8,7 +8,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
-  <img src="https://img.shields.io/badge/version-0.1.0-green" alt="version 0.1.0" />
+  <img src="https://img.shields.io/badge/version-1.0.0-green" alt="version 1.0.0" />
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="license MIT" />
   <br/>
   <a href="https://github.com/shamcleren/CodePal/releases"><strong>Download from Releases</strong></a>
@@ -39,16 +39,19 @@ CodePal turns that into one compact desktop panel.
 - **Readable activity flow**: assistant, tool, and system activity without the worst noise
 - **Quota and usage awareness**: keep token and rate-limit signals visible while you work
 - **Low-friction setup**: repair supported local integrations from inside the app
+- **Bilingual UI**: English and Simplified Chinese, with system-language follow mode
 
 ## Supported Agents
 
-| Agent | Session Monitoring | Activity Timeline | Usage |
-|:---|:---:|:---:|:---:|
-| **Cursor** | ✅ | ✅ | ✅ Dashboard spend |
-| **Claude Code** | ✅ | ✅ | ✅ Tokens, cached last-known quota when available |
-| **Codex** | ✅ | ✅ | Partial |
-| **CodeBuddy** | ✅ | ✅ | ✅ Monthly quota |
-| **GoLand / PyCharm** | ✅ | ✅ | — |
+| Agent | Session | Usage |
+|:---|:---:|:---:|
+| **Cursor** | ✅ | ✅ |
+| **Claude Code** | ✅ | ✅ |
+| **Codex** | ✅ | ⚠️ |
+| **CodeBuddy** | ✅ | ✅ |
+| **GoLand / PyCharm** | ✅ | — |
+
+Usage coverage depth still differs by source. See the current scope and release notes for the boundaries that still matter.
 
 ## Install
 
@@ -57,7 +60,7 @@ CodePal turns that into one compact desktop panel.
 3. Move `CodePal.app` into `Applications`.
 4. Launch the app and allow it in macOS Security settings if prompted.
 
-Current builds are unsigned / ad-hoc, so first launch may require manual approval in macOS.
+Current builds still need final macOS signing / notarization before the polished public release flow is complete.
 
 ## Best For
 
@@ -74,9 +77,15 @@ It is built for:
 - unified monitoring
 - session and activity visibility
 - quota and usage awareness
+- bilingual desktop UI (`system` / `en` / `zh-CN`)
 - bounded approval / structured-choice handling already supported by the app
 
-It is not trying to be:
+What still remains before the clean 1.0.0 release bar is primarily:
+
+- macOS signing and notarization
+- the final release packaging / trust pass on top of the already-green app build
+
+It is still not trying to be:
 
 - a general chat console for talking to every agent
 - a full IDE navigation layer
@@ -85,7 +94,12 @@ It is not trying to be:
 
 ## What's Next
 
-Near-term work is likely to focus on deeper usage visibility, broader real-world agent calibration, and a smoother macOS release experience.
+Near-term priorities are:
+
+- finish signed / notarized macOS distribution
+- keep improving usage coverage where current sources are still partial
+- continue real-world payload calibration across supported agents
+- keep polishing diagnostics, empty states, and degraded-state messaging
 
 See [docs/roadmap-next.md](docs/roadmap-next.md) for the current planning direction.
 

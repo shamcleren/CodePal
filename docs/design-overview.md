@@ -242,7 +242,7 @@ Invalid existing config should be reported, not silently overwritten.
 - upstream payload quality still varies across tools
 - some tools have stronger monitoring support than control-loop support
 - usage sources are not equally mature across all integrations
-- current macOS packaging remains unsigned / ad-hoc
+- current macOS packaging still needs the final signing / notarization pass
 - future message-send, observability, and capability-unification work all depend on upstream APIs or hook semantics becoming stable enough to support them cleanly
 
 ## Source Of Truth

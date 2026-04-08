@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document captures the near-term and medium-term product direction after the current V1 internal release baseline.
+This document captures the near-term and medium-term product direction after the current V1 release baseline.
 
 It is not a date-based promise list.
 
@@ -20,7 +20,7 @@ That means:
 
 ## Near-Term Product Priorities
 
-These are the most reasonable next steps after the current V1 internal release:
+These are the most reasonable next steps after the current V1 release baseline:
 
 ### 1. Monitoring Depth
 
@@ -45,11 +45,11 @@ These are the most reasonable next steps after the current V1 internal release:
 
 ## Distribution And Updates
 
-Built-in macOS updates are worth doing, but not as an isolated feature bolted onto the current unsigned internal build flow.
+Built-in macOS updates are worth doing, but not as an isolated feature bolted onto the current pre-signing build flow.
 
 The recommended order is:
 
-1. keep the current internal release loop working reliably
+1. keep the current release loop working reliably
 2. add signing and notarization
 3. confirm a stable macOS distribution channel
 4. add built-in app updates on top of that release foundation

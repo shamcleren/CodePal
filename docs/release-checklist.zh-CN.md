@@ -54,8 +54,8 @@
 
 - [ ] `README.md` 已对齐当前产品状态
 - [ ] `README.zh-CN.md` 已对齐当前产品状态
-- [ ] `docs/release-notes-v0.1.0.md` 可直接用于 GitHub Release
-- [ ] `docs/release-notes-v0.1.0.zh-CN.md` 可直接用于中文说明
+- [ ] `docs/release-notes-v1.0.0.md` 可直接用于 GitHub Release
+- [ ] `docs/release-notes-v1.0.0.zh-CN.md` 可直接用于中文说明
 
 特别注意：
 
@@ -73,18 +73,18 @@
 
 如果这些边界发生变化，先改文档，再发版。
 
-## E. macOS 内测分发
+## E. macOS 当前测试分发
 
-如果本次仍然是当前的内部测试发布，只需要确认：
+如果本次仍然还是签名前的测试分发，只需要确认：
 
 - [ ] `npm run dist:mac` 产物已生成
 - [ ] `release/` 中 `.zip` / `.dmg` 可正常产出
-- [ ] 你知道本次仍然是 `unsigned / ad-hoc`
+- [ ] 你知道本次仍然处于签名前测试分发状态
 - [ ] README / release notes 没有错误地把它写成“已签名 / 已公证”
 
 ## F. macOS 正式可信分发
 
-只有当你准备把“unsigned / ad-hoc”正式拿掉时，才需要完整检查这一节。
+只有当你准备把“签名前测试分发”正式升级成可信正式分发时，才需要完整检查这一节。
 
 - [ ] `Developer ID Application` 证书已可见
   - 验证命令：`security find-identity -v -p codesigning`
@@ -93,9 +93,9 @@
 - [ ] notarization 已提交并通过
 - [ ] 最终产物已 `staple`
 - [ ] `spctl` / `codesign --verify` 本机验证通过
-- [ ] README / release notes / current-status 已去掉 `unsigned / ad-hoc` 表述
+- [ ] README / release notes / current-status 已去掉签名前测试分发表述
 
-如果这一节有任意一项没完成，就不要把它叫“正式签名版”。
+如果这一节有任意一项没完成，就不要把它叫“完整 1.0.0 正式签名版”。
 
 ## G. 发布后回收
 
@@ -118,4 +118,4 @@
 1. 拿到 `Developer ID Application`
 2. 跑通签名
 3. 跑通 notarization
-4. 再把分发表述从 `unsigned / ad-hoc` 升级
+4. 再把分发表述升级成正式签名版

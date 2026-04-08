@@ -2,7 +2,7 @@
 
 这份文档是给当前维护者自己执行的 runbook，不是对外发布说明。
 
-目标是把 CodePal 从当前的 `unsigned / ad-hoc` 内测构建，推进到：
+目标是把 CodePal 从当前的签名前测试构建，推进到：
 
 - 已签名
 - 已 notarize
@@ -39,7 +39,7 @@
 2. `.dmg` 或 `.zip` 对应的 app 已通过 notarization
 3. 最终产物已执行 `staple`
 4. 本机可通过 `spctl` / `codesign` 基本校验
-5. README / release notes 不再需要强调“unsigned / ad-hoc”
+5. README / release notes 不再需要强调“签名前测试分发”
 
 ## 建议落地顺序
 
@@ -186,7 +186,7 @@ xcrun notarytool store-credentials "codepal-notary" \
 先找到构建出来的 `.dmg` 或 `.zip`，然后手动提交：
 
 ```bash
-xcrun notarytool submit "release/CodePal-0.1.0.dmg" \
+xcrun notarytool submit "release/CodePal-1.0.0.dmg" \
   --keychain-profile "codepal-notary" \
   --wait
 ```
@@ -225,7 +225,7 @@ xcrun notarytool log <submission-id> --keychain-profile "codepal-notary"
 对最终产物执行：
 
 ```bash
-xcrun stapler staple "release/CodePal-0.1.0.dmg"
+xcrun stapler staple "release/CodePal-1.0.0.dmg"
 ```
 
 如果你最终发布的是 `.app` 或其他载体，也按实际产物执行对应 staple。
@@ -251,7 +251,7 @@ spctl --assess --type execute --verbose=4 "release/mac/CodePal.app"
 - 决定签名相关环境变量如何管理
 - 决定 notarization 是本机跑还是未来接 CI
 - 更新 `dist:mac` 或新增正式 release 命令
-- 更新 README / release notes / current-status 里的“unsigned / ad-hoc”表述
+- 更新 README / release notes / current-status 里的签名前测试分发表述
 
 ## 推荐环境变量与本地约定
 
@@ -326,8 +326,8 @@ spctl --assess --type execute --verbose=4 "release/mac/CodePal.app"
 
 - `README.md`
 - `README.zh-CN.md`
-- `docs/release-notes-v0.1.0.md`
-- `docs/release-notes-v0.1.0.zh-CN.md`
+- `docs/release-notes-v1.0.0.md`
+- `docs/release-notes-v1.0.0.zh-CN.md`
 - `docs/context/current-status.md`
 
-届时要把“unsigned / ad-hoc”相关表述改掉，避免文档落后于实际发布状态。
+届时要把签名前测试分发相关表述改掉，避免文档落后于实际发布状态。

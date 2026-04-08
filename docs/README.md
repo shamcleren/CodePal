@@ -9,10 +9,10 @@ Use this directory by purpose rather than trying to read everything in one pass.
 
 ## If You Need Release-Facing Material
 
-- `docs/release-notes-v0.1.0.md`
-  English release notes for the current internal release.
-- `docs/release-notes-v0.1.0.zh-CN.md`
-  Chinese release notes for the current internal release.
+- `docs/release-notes-v1.0.0.md`
+  English release notes for the current 1.0.0 release target.
+- `docs/release-notes-v1.0.0.zh-CN.md`
+  Chinese release notes for the current 1.0.0 release target.
 - `docs/release-assets.md`
   Asset checklist for README and GitHub Release screenshots / media.
 - `docs/release-assets.zh-CN.md`
@@ -21,7 +21,7 @@ Use this directory by purpose rather than trying to read everything in one pass.
 ## If You Need Future Planning
 
 - `docs/roadmap-next.md`
-  English planning notes for what should come after the current V1 internal release baseline.
+  English planning notes for what should come after the current V1 release baseline.
 - `docs/roadmap-next.zh-CN.md`
   Chinese planning notes for the same roadmap direction.
 

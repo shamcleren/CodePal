@@ -9,10 +9,10 @@
 
 ## 如果你要看发版材料
 
-- `docs/release-notes-v0.1.0.md`
-  当前内测版本的英文 release notes。
-- `docs/release-notes-v0.1.0.zh-CN.md`
-  当前内测版本的中文 release notes。
+- `docs/release-notes-v1.0.0.md`
+  当前 1.0.0 发布目标的英文 release notes。
+- `docs/release-notes-v1.0.0.zh-CN.md`
+  当前 1.0.0 发布目标的中文 release notes。
 - `docs/release-assets.md`
   README 和 GitHub Release 所需截图 / 媒体资产的英文清单。
 - `docs/release-assets.zh-CN.md`
@@ -25,13 +25,13 @@
 建议你按这个顺序使用：
 
 1. 先看 `release-checklist.zh-CN.md`
-2. 再看 `release-notes-v0.1.0.zh-CN.md`
+2. 再看 `release-notes-v1.0.0.zh-CN.md`
 3. 如果卡在签名，再看 `macos-signing-runbook.zh-CN.md`
 
 ## 如果你要看未来规划
 
 - `docs/roadmap-next.md`
-  当前 V1 内测基线之后的英文规划文档。
+  当前 V1 发布基线之后的英文规划文档。
 - `docs/roadmap-next.zh-CN.md`
   同一份规划的中文版本。
 

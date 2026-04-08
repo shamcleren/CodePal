@@ -80,7 +80,7 @@
 ### Test Build
 
 - A macOS internal test build can be produced via `npm run dist:mac`
-- Current artifacts are unsigned / ad-hoc and land under `release/`
+- Current artifacts still need the final signing / notarization pass and land under `release/`
 - Current local packaging verification is green on 2026-04-08
 
 ### Pending Action Loop
@@ -192,6 +192,6 @@ These items are not part of the current accepted V1 baseline, but they still bel
 
 For release-facing and forward-looking work, use:
 
-- `docs/release-notes-v0.1.0.md` for release-facing summary
+- `docs/release-notes-v1.0.0.md` for release-facing summary
 - `docs/roadmap-next.md` for forward-looking prioritization
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
