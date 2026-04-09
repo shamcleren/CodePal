@@ -1,6 +1,8 @@
-import { autoUpdater } from "electron-updater";
+import electronUpdater from "electron-updater";
 import type { AppUpdateState } from "../../shared/updateTypes";
 import { createUpdateStateStore } from "./updateStateStore";
+
+const { autoUpdater } = electronUpdater;
 
 type UpdateServiceOptions = {
   isPackaged: boolean;

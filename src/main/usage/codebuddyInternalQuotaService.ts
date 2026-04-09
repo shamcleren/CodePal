@@ -131,7 +131,6 @@ async function requestQuotaWithFallback(
     method: "GET",
     headers: {
       accept: "*/*",
-      referer: loginUrl,
       cookie: cookieHeader(cookies),
     },
   } satisfies RequestInit;

@@ -11,15 +11,17 @@ const updaterMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("electron-updater", () => ({
-  autoUpdater: {
-    autoDownload: true,
-    autoInstallOnAppQuit: true,
-    on(event: string, handler: (payload?: unknown) => void) {
-      updaterMocks.handlers.set(event, handler);
+  default: {
+    autoUpdater: {
+      autoDownload: true,
+      autoInstallOnAppQuit: true,
+      on(event: string, handler: (payload?: unknown) => void) {
+        updaterMocks.handlers.set(event, handler);
+      },
+      checkForUpdates: updaterMocks.checkForUpdates,
+      downloadUpdate: updaterMocks.downloadUpdate,
+      quitAndInstall: updaterMocks.quitAndInstall,
     },
-    checkForUpdates: updaterMocks.checkForUpdates,
-    downloadUpdate: updaterMocks.downloadUpdate,
-    quitAndInstall: updaterMocks.quitAndInstall,
   },
 }));
 

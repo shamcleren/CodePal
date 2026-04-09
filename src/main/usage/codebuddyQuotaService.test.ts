@@ -156,24 +156,25 @@ describe("codebuddyQuotaService", () => {
 
   it("refreshes usage when configured", async () => {
     const onUsageSnapshot = vi.fn();
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          code: 0,
+          msg: "OK",
+          data: {
+            credit: 905.96,
+            cycleStartTime: "2026-04-01 00:00:00",
+            cycleEndTime: "2026-04-30 23:59:59",
+            limitNum: 100000,
+            cycleResetTime: "2026-05-01 00:00:00",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
     const service = createCodeBuddyQuotaService({
       config,
-      fetchImpl: vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            code: 0,
-            msg: "OK",
-            data: {
-              credit: 905.96,
-              cycleStartTime: "2026-04-01 00:00:00",
-              cycleEndTime: "2026-04-30 23:59:59",
-              limitNum: 100000,
-              cycleResetTime: "2026-05-01 00:00:00",
-            },
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
-      ),
+      fetchImpl,
       now: () => 1_775_000_000_000,
       session: {
         cookies: {
@@ -203,6 +204,17 @@ describe("codebuddyQuotaService", () => {
         sessionId: "codebuddy-quota",
       }),
     );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      config.quotaEndpoint,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          origin: new URL(config.loginUrl).origin,
+          cookie: "RIO_TOKEN=secret",
+        }),
+      }),
+    );
+    const requestInit = fetchImpl.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined;
+    expect(requestInit?.headers?.referer).toBeUndefined();
   });
 
   it("marks the quota as connected once refresh succeeds even if cookie names are non-standard", async () => {

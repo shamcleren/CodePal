@@ -101,18 +101,19 @@ describe("codebuddyInternalQuotaService", () => {
 
   it("refreshes usage when configured", async () => {
     const onUsageSnapshot = vi.fn();
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          usage_percentage: 1.7198805,
+          remaining_percentage: 98.28,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
     const service = createCodeBuddyInternalQuotaService({
       config,
-      fetchImpl: vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            success: true,
-            usage_percentage: 1.7198805,
-            remaining_percentage: 98.28,
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        ),
-      ),
+      fetchImpl,
       now: () => 1_775_000_000_000,
       session: {
         cookies: {
@@ -142,6 +143,16 @@ describe("codebuddyInternalQuotaService", () => {
         sessionId: "codebuddy-internal-quota",
       }),
     );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      config.quotaEndpoint,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          cookie: "RIO_TOKEN=secret",
+        }),
+      }),
+    );
+    const requestInit = fetchImpl.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined;
+    expect(requestInit?.headers?.referer).toBeUndefined();
   });
 
   it("surfaces a configuration hint when login closes without establishing auth", async () => {

@@ -218,7 +218,6 @@ async function requestQuotaWithFallback(
       accept: "*/*",
       "content-type": "application/json",
       origin: new URL(loginUrl).origin,
-      referer: loginUrl,
       cookie: cookieHeader(cookies),
       ...(enterpriseId ? { "x-enterprise-id": enterpriseId } : {}),
     },
