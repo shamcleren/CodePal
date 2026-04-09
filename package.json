@@ -26,6 +26,7 @@
     "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {
+    "electron-updater": "^6.8.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",

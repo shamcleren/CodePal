@@ -13,10 +13,10 @@ import type {
   IntegrationInstallResult,
 } from "../../shared/integrationTypes";
 import type { SessionRecord } from "../../shared/sessionTypes";
+import type { AppUpdateState } from "../../shared/updateTypes";
 import type { UsageOverview } from "../../shared/usageTypes";
 
 contextBridge.exposeInMainWorld("codepal", {
-  version: "0.1.0",
   getSessions() {
     return ipcRenderer.invoke("codepal:get-sessions") as Promise<SessionRecord[]>;
   },
@@ -53,6 +53,37 @@ contextBridge.exposeInMainWorld("codepal", {
   },
   updateAppSettings(settings: Partial<AppSettings>) {
     return ipcRenderer.invoke("codepal:update-app-settings", settings) as Promise<AppSettings>;
+  },
+  getUpdateState() {
+    return ipcRenderer.invoke("codepal:get-update-state") as Promise<AppUpdateState>;
+  },
+  checkForUpdates() {
+    return ipcRenderer.invoke("codepal:check-for-updates") as Promise<AppUpdateState>;
+  },
+  downloadUpdate() {
+    return ipcRenderer.invoke("codepal:download-update") as Promise<AppUpdateState>;
+  },
+  installUpdate() {
+    return ipcRenderer.invoke("codepal:install-update") as Promise<AppUpdateState>;
+  },
+  skipUpdateVersion() {
+    return ipcRenderer.invoke("codepal:skip-update-version") as Promise<AppUpdateState>;
+  },
+  clearSkippedUpdateVersion() {
+    return ipcRenderer.invoke("codepal:clear-skipped-update-version") as Promise<AppUpdateState>;
+  },
+  onUpdateState(handler: (state: AppUpdateState) => void) {
+    const channel = "codepal:update-state";
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      state: AppUpdateState,
+    ) => {
+      handler(state);
+    };
+    ipcRenderer.on(channel, listener);
+    return () => {
+      ipcRenderer.removeListener(channel, listener);
+    };
   },
   onUsageOverview(handler: (overview: UsageOverview) => void) {
     const channel = "codepal:usage-overview";

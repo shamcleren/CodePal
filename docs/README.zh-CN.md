@@ -21,6 +21,8 @@
   给当前维护者执行 macOS 签名、notarization、DMG `staple + validate` 的中文操作清单。
 - `docs/release-checklist.zh-CN.md`
   最终发版前使用的中文检查清单。
+- `docs/operational-readiness-v1.0.0.zh-CN.md`
+  `1.0.0` 走向正式运营前仍需补齐的缺口清单。
 
 建议你按这个顺序使用：
 

@@ -3,6 +3,7 @@ import { defaultAppSettings, type AppSettings } from "../shared/appSettings";
 import type { CodeBuddyQuotaDiagnostics } from "../shared/codebuddyQuotaTypes";
 import type { CursorDashboardDiagnostics } from "../shared/cursorDashboardTypes";
 import type { IntegrationAgentId, IntegrationDiagnostics } from "../shared/integrationTypes";
+import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview } from "../shared/usageTypes";
 import { DisplayPreferencesPanel } from "./components/DisplayPreferencesPanel";
 import { CursorDashboardPanel } from "./components/CursorDashboardPanel";
@@ -11,6 +12,7 @@ import { IntegrationPanel } from "./components/IntegrationPanel";
 import { SessionHistoryPanel } from "./components/SessionHistoryPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SessionList } from "./components/SessionList";
+import { UpdatePanel } from "./components/UpdatePanel";
 import { UsageStatusStrip } from "./components/UsageStatusStrip";
 import type { MonitorSessionRow } from "./monitorSession";
 import { createI18nValue, I18nProvider, resolveLocale } from "./i18n";
@@ -46,6 +48,8 @@ export function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [appSettingsPath, setAppSettingsPath] = useState("");
   const [homeDir, setHomeDir] = useState("");
+  const [updateState, setUpdateState] = useState<AppUpdateState | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
   const resolvedLocale = resolveLocale(
     appSettings.locale,
     typeof navigator !== "undefined" ? navigator.language : undefined,
@@ -376,6 +380,28 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    const unsub = window.codepal.onUpdateState((nextState) => {
+      setUpdateState(nextState);
+      if (
+        nextState.phase !== "checking" &&
+        nextState.phase !== "downloading"
+      ) {
+        setUpdateBusy(false);
+      }
+    });
+    void window.codepal.getUpdateState().then((nextState) => {
+      if (active) {
+        setUpdateState(nextState);
+      }
+    });
+    return () => {
+      active = false;
+      unsub();
+    };
+  }, []);
+
+  useEffect(() => {
     const unsub = window.codepal.onOpenSettings(() => {
       openSettingsDrawer();
     });
@@ -473,6 +499,23 @@ export function App() {
       setAppSettings(settings);
       return settings;
     });
+  }
+
+  function runUpdateAction(
+    action: () => Promise<AppUpdateState>,
+    options?: { keepBusyUntilEvent?: boolean },
+  ) {
+    setUpdateBusy(true);
+    return action()
+      .then((nextState) => {
+        setUpdateState(nextState);
+        return nextState;
+      })
+      .finally(() => {
+        if (!options?.keepBusyUntilEvent) {
+          setUpdateBusy(false);
+        }
+      });
   }
 
   function toggleUsageAgent(agent: UsageAgentId) {
@@ -642,6 +685,29 @@ export function App() {
               }}
               onClearAuth={() => {
                 void clearCursorDashboardAuth();
+              }}
+            />
+            <UpdatePanel
+              state={updateState}
+              busy={updateBusy}
+              onCheck={() => {
+                void runUpdateAction(() => window.codepal.checkForUpdates(), {
+                  keepBusyUntilEvent: true,
+                });
+              }}
+              onDownload={() => {
+                void runUpdateAction(() => window.codepal.downloadUpdate(), {
+                  keepBusyUntilEvent: true,
+                });
+              }}
+              onInstall={() => {
+                void runUpdateAction(() => window.codepal.installUpdate());
+              }}
+              onSkip={() => {
+                void runUpdateAction(() => window.codepal.skipUpdateVersion());
+              }}
+              onClearSkipped={() => {
+                void runUpdateAction(() => window.codepal.clearSkippedUpdateVersion());
               }}
             />
             <SessionHistoryPanel

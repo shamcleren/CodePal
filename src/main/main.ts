@@ -16,12 +16,14 @@ import { startSessionWatchers } from "./sessionWatchersBootstrap";
 import { createTray } from "./tray/createTray";
 import { createFloatingWindow } from "./window/createFloatingWindow";
 import type { SessionRecord } from "../shared/sessionTypes";
+import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview, UsageSnapshot } from "../shared/usageTypes";
 import { createCursorDashboardService } from "./usage/cursorDashboardService";
 import { createCodeBuddyInternalQuotaService } from "./usage/codebuddyInternalQuotaService";
 import { createCodeBuddyQuotaService } from "./usage/codebuddyQuotaService";
 import { createUsageSnapshotCache } from "./usage/usageSnapshotCache";
 import { createUsageStore } from "./usage/usageStore";
+import { createUpdateService } from "./update/updateService";
 
 const sessionStore = createSessionStore();
 const usageStore = createUsageStore();
@@ -64,6 +66,12 @@ function broadcastUsageOverview() {
   win.webContents.send("codepal:usage-overview", payload);
 }
 
+function broadcastUpdateState(state: AppUpdateState) {
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send("codepal:update-state", state);
+}
+
 function sweepExpiredPendingActions() {
   const now = Date.now();
   const pendingChanged = sessionStore.expireStalePendingActions(now);
@@ -81,6 +89,7 @@ function wireActionResponseIpc(
   cursorDashboardService: ReturnType<typeof createCursorDashboardService>,
   codeBuddyQuotaService: ReturnType<typeof createCodeBuddyQuotaService>,
   codeBuddyInternalQuotaService: ReturnType<typeof createCodeBuddyInternalQuotaService>,
+  updateService: ReturnType<typeof createUpdateService>,
 ) {
   ipcMain.handle("codepal:get-sessions", () => {
     const sessions = sessionStore.getSessions();
@@ -117,6 +126,12 @@ function wireActionResponseIpc(
     codeBuddyInternalQuotaService.updateConfig(settings.codebuddy.enterprise);
     return settings;
   });
+  ipcMain.handle("codepal:get-update-state", () => updateService.getState());
+  ipcMain.handle("codepal:check-for-updates", () => updateService.checkForUpdates());
+  ipcMain.handle("codepal:download-update", () => updateService.downloadUpdate());
+  ipcMain.handle("codepal:install-update", () => updateService.installUpdate());
+  ipcMain.handle("codepal:skip-update-version", () => updateService.skipVersion());
+  ipcMain.handle("codepal:clear-skipped-update-version", () => updateService.clearSkippedVersion());
   ipcMain.handle("codepal:get-integration-diagnostics", () =>
     integrationService.getDiagnostics(),
   );
@@ -424,6 +439,12 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
           broadcastUsageOverview();
         },
       });
+      const updateService = createUpdateService({
+        isPackaged: app.isPackaged,
+        currentVersion: app.getVersion(),
+        stateFilePath: path.join(app.getPath("userData"), "update-state.json"),
+        onStateChange: broadcastUpdateState,
+      });
 
       wireActionResponseIpc(
         settingsService,
@@ -431,6 +452,7 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         cursorDashboardService,
         codeBuddyQuotaService,
         codeBuddyInternalQuotaService,
+        updateService,
       );
       const ipcResult = await wireIpcHub(integrationService, usageSnapshotCache);
       if (ipcResult === "already_running") {
@@ -497,7 +519,9 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       win.webContents.once("dom-ready", () => {
         sessionBroadcastScheduler.flushNow();
         broadcastUsageOverview();
+        broadcastUpdateState(updateService.getState());
       });
+      updateService.initialize();
       tray = createTray({
         onOpenMain: () => {
           const next = getOrCreateMainWindow();

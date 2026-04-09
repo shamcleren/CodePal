@@ -12,10 +12,10 @@ import type {
   IntegrationInstallResult,
 } from "../shared/integrationTypes";
 import type { SessionRecord } from "../shared/sessionTypes";
+import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview } from "../shared/usageTypes";
 
 export type CodePalApi = {
-  version: string;
   getSessions: () => Promise<SessionRecord[]>;
   clearSessionHistory: () => Promise<SessionRecord[]>;
   onSessions: (handler: (sessions: SessionRecord[]) => void) => () => void;
@@ -25,6 +25,13 @@ export type CodePalApi = {
   reloadAppSettings: () => Promise<AppSettings>;
   getAppSettingsPath: () => Promise<string>;
   updateAppSettings: (settings: Partial<AppSettings>) => Promise<AppSettings>;
+  getUpdateState: () => Promise<AppUpdateState>;
+  checkForUpdates: () => Promise<AppUpdateState>;
+  downloadUpdate: () => Promise<AppUpdateState>;
+  installUpdate: () => Promise<AppUpdateState>;
+  skipUpdateVersion: () => Promise<AppUpdateState>;
+  clearSkippedUpdateVersion: () => Promise<AppUpdateState>;
+  onUpdateState: (handler: (state: AppUpdateState) => void) => () => void;
   onUsageOverview: (handler: (overview: UsageOverview) => void) => () => void;
   getIntegrationDiagnostics: () => Promise<IntegrationDiagnostics>;
   installIntegrationHooks: (

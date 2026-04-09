@@ -19,6 +19,8 @@ Use this directory by purpose rather than trying to read everything in one pass.
   Chinese version of the same asset checklist.
 - `docs/macos-signing-runbook.zh-CN.md`
   Chinese maintainer runbook for macOS signing, notarization, and DMG `staple + validate`.
+- `docs/operational-readiness-v1.0.0.zh-CN.md`
+  Chinese checklist for what still needs to be in place before treating `1.0.0` as a fully operated release.
 
 ## If You Need Future Planning
 

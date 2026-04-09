@@ -9,6 +9,10 @@ files:
 asar: true
 npmRebuild: false
 afterAllArtifactBuild: scripts/afterAllArtifactBuild.cjs
+publish:
+  provider: github
+  owner: shamcleren
+  repo: CodePal
 mac:
   icon: build/icon.icns
   artifactName: ${productName}-${version}-${arch}.${ext}
