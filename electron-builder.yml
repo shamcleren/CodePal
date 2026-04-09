@@ -8,13 +8,14 @@ files:
   - config/settings.template.yaml
 asar: true
 npmRebuild: false
-afterSign: scripts/notarize.cjs
+afterAllArtifactBuild: scripts/afterAllArtifactBuild.cjs
 mac:
   icon: build/icon.icns
   artifactName: ${productName}-${version}-${arch}.${ext}
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
+  notarize: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
   target:

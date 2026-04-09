@@ -17,6 +17,8 @@ Use this directory by purpose rather than trying to read everything in one pass.
   Asset checklist for README and GitHub Release screenshots / media.
 - `docs/release-assets.zh-CN.md`
   Chinese version of the same asset checklist.
+- `docs/macos-signing-runbook.zh-CN.md`
+  Chinese maintainer runbook for macOS signing, notarization, and DMG `staple + validate`.
 
 ## If You Need Future Planning
 

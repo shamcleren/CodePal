@@ -13,7 +13,7 @@
 1. 先过工程验证
 2. 再过发布资产
 3. 再过文档与 release 页面
-4. 如果本次要做正式可信分发，再过签名 / notarization
+4. 如果本次要做正式可信分发，再过签名 / notarization / 自动收尾校验
 
 ## A. 工程验证
 
@@ -27,6 +27,7 @@
 
 - [ ] `npm run test:e2e`
 - [ ] `npm run dist:mac`
+  - 预期已自动串起 notarization、DMG `staple + validate`，以及 app 级别 `codesign` / `spctl` 校验
 
 如果是通过 GitHub 流程发版，还应确认：
 
@@ -79,6 +80,7 @@
 
 - [ ] `npm run dist:mac` 产物已生成
 - [ ] `release/` 中 `.zip` / `.dmg` 可正常产出
+- [ ] 本次明确使用了 `CODEPAL_SKIP_RELEASE_FINISH=1`，或你接受本次不走正式收尾校验
 - [ ] 你知道本次仍然处于签名前测试分发状态
 - [ ] README / release notes 没有错误地把它写成“已签名 / 已公证”
 
@@ -88,10 +90,10 @@
 
 - [ ] `Developer ID Application` 证书已可见
   - 验证命令：`security find-identity -v -p codesigning`
-- [ ] `npm run dist:mac` 产物不再回退到 ad-hoc
+- [ ] `npm run dist:mac` 产物不再回退到 ad-hoc，并且自动收尾脚本没有报错
 - [ ] `codesign --display --verbose=4` 确认签名身份正确
 - [ ] notarization 已提交并通过
-- [ ] 最终产物已 `staple`
+- [ ] 最终 `.dmg` 已 `staple` 且 `stapler validate` 通过
 - [ ] `spctl` / `codesign --verify` 本机验证通过
 - [ ] README / release notes / current-status 已去掉签名前测试分发表述
 
@@ -111,11 +113,11 @@
 在今天这个项目状态下：
 
 - 工程验证、README、Release 文案、CI / E2E 入口，已经基本收齐
-- 最大剩余阻塞仍然是 `Developer ID + notarization`
+- 正式发布主要取决于 Apple notarization 队列是否及时返回 `Accepted`
 
 所以如果你正在判断“下一个最值得投入的发布工作是什么”，答案仍然是：
 
-1. 拿到 `Developer ID Application`
-2. 跑通签名
-3. 跑通 notarization
+1. 保持 `Developer ID Application` 和 notary 凭据可用
+2. 跑通 `npm run dist:mac`
+3. 等 notarization 返回 `Accepted`
 4. 再把分发表述升级成正式签名版

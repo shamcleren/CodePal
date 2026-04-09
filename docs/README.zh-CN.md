@@ -18,7 +18,7 @@
 - `docs/release-assets.zh-CN.md`
   同一份视觉资产清单的中文版本。
 - `docs/macos-signing-runbook.zh-CN.md`
-  给当前维护者执行 macOS 签名与 notarization 的中文操作清单。
+  给当前维护者执行 macOS 签名、notarization、DMG `staple + validate` 的中文操作清单。
 - `docs/release-checklist.zh-CN.md`
   最终发版前使用的中文检查清单。
 
@@ -26,7 +26,7 @@
 
 1. 先看 `release-checklist.zh-CN.md`
 2. 再看 `release-notes-v1.0.0.zh-CN.md`
-3. 如果卡在签名，再看 `macos-signing-runbook.zh-CN.md`
+3. 如果卡在签名、公证或 DMG 收尾校验，再看 `macos-signing-runbook.zh-CN.md`
 
 ## 如果你要看未来规划
 

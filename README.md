@@ -3,7 +3,7 @@
   <span valign="middle">CodePal</span>
 </h1>
 
-<p align="center"><strong>Monitor all your AI coding agents in one floating panel — sessions, approvals, quotas, activity.</strong></p>
+<p align="center"><strong>Monitor all your AI coding agents in one floating panel — sessions, quotas, activity.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
@@ -62,12 +62,12 @@ Coverage still differs in how upstream signals are sourced, but the session / us
 3. Move `CodePal.app` into `Applications`.
 4. Launch the app and allow it in macOS Security settings if prompted.
 
-Current builds still need final macOS signing / notarization before the polished public release flow is complete.
+Release builds use `electron-builder`'s native notarization flow and finish with automatic DMG `staple + validate` plus app-level `codesign` / `spctl` checks.
 
 ## Best For
 
 - developers juggling multiple AI coding agents who want one glanceable status panel
-- anyone who cares about approval state, recent activity, and quota pressure across tools
+- anyone who cares about recent activity, quota pressure, and session state across tools
 
 ## Current Scope
 
@@ -77,7 +77,6 @@ It is not trying to be a general chat console, a full IDE navigation layer, or a
 
 ## What's Next
 
-- Finish macOS signing & notarization to lower install friction
 - Improve usage / quota coverage where upstream sources are still partial
 - Expand real-world payload calibration across supported agents
 - Polish diagnostics, empty states, and degraded-state messaging
@@ -92,8 +91,10 @@ cd CodePal
 npm install
 npm run dev        # launch in dev mode
 npm run test       # run unit tests
-npm run dist:mac   # build .dmg / .zip
+npm run dist:mac   # build .dmg / .zip (requires Apple signing credentials)
 ```
+
+To produce a signed and notarized build, set `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` before running `dist:mac`.
 
 ## Troubleshooting
 

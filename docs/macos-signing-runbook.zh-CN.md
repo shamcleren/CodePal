@@ -179,9 +179,50 @@ xcrun notarytool store-credentials "codepal-notary" \
 
 成功后，后续提交可以直接引用这个 profile。
 
-### 第 6 步：让构建后自动 notarize，或先手动 notarize
+### 第 6 步：优先走构建后自动 notarize
 
-更稳的起步方式是先手动 notarize，一旦跑通再自动化。
+当前仓库已经接到 `electron-builder` 原生 notarization 流程，默认会在签名后自动 notarize，并由 `@electron/notarize` 自动 staple `.app`。构建完成后，`afterAllArtifactBuild` 还会继续对最终 `.dmg` 执行 `staple + validate`，并补一轮 `codesign` / `spctl` 校验。
+
+推荐优先使用下面 3 种凭据入口中的任意一种：
+
+1. `APPLE_API_KEY` + `APPLE_API_KEY_ID` + `APPLE_API_ISSUER`
+2. `APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID`
+3. `APPLE_KEYCHAIN_PROFILE`（可选再配 `APPLE_KEYCHAIN`）
+
+对当前本机流程，最顺手的是第 3 种，也就是先执行：
+
+```bash
+xcrun notarytool store-credentials "codepal-notary" \
+  --apple-id "YOUR_APPLE_ID" \
+  --team-id "YOUR_TEAM_ID" \
+  --password "YOUR_APP_SPECIFIC_PASSWORD"
+```
+
+然后在构建前设置：
+
+```bash
+export APPLE_KEYCHAIN_PROFILE="codepal-notary"
+```
+
+如果你用的是 Apple ID 方案，则设置：
+
+```bash
+export APPLE_ID="YOUR_APPLE_ID"
+export APPLE_APP_SPECIFIC_PASSWORD="YOUR_APP_SPECIFIC_PASSWORD"
+export APPLE_TEAM_ID="YOUR_TEAM_ID"
+```
+
+之后直接执行：
+
+```bash
+npm run dist:mac
+```
+
+如果配置完整，构建日志里应出现 `notarization successful`，然后继续执行 DMG 的 `staple + validate`，而不再是 `skipped macOS notarization`。
+
+### 第 7 步：必要时手动提交 notarization
+
+更稳的排障方式仍然是：当自动 notarization 或自动 `staple + validate` 没跑通时，再退回手动 `notarytool submit`。
 
 先找到构建出来的 `.dmg` 或 `.zip`，然后手动提交：
 
@@ -199,7 +240,7 @@ xcrun notarytool submit "release/CodePal-1.0.0.dmg" \
 - 产物格式可提交
 - Apple 接受当前签名内容
 
-### 第 7 步：处理 notarization 失败
+### 第 8 步：处理 notarization 失败
 
 如果失败，不要立刻回头乱改很多配置。先看日志：
 
@@ -220,9 +261,9 @@ xcrun notarytool log <submission-id> --keychain-profile "codepal-notary"
 
 当 notarization 已通过，再做本地收尾。
 
-### 第 8 步：staple
+### 第 9 步：staple
 
-对最终产物执行：
+如果你已经走了自动闭环，这一步通常已经由构建脚本完成。手动排障时，再对最终产物执行：
 
 ```bash
 xcrun stapler staple "release/CodePal-1.0.0.dmg"
@@ -230,9 +271,9 @@ xcrun stapler staple "release/CodePal-1.0.0.dmg"
 
 如果你最终发布的是 `.app` 或其他载体，也按实际产物执行对应 staple。
 
-### 第 9 步：验证签名和 Gatekeeper
+### 第 10 步：验证签名和 Gatekeeper
 
-至少做这几项：
+如果你已经走了自动闭环，这一步通常也已经由构建脚本完成。手动排障时，至少做这几项：
 
 ```bash
 codesign --verify --deep --strict --verbose=2 "release/mac/CodePal.app"
@@ -257,10 +298,12 @@ spctl --assess --type execute --verbose=4 "release/mac/CodePal.app"
 
 如果你后面要把流程变成更稳定的本地命令，建议统一这些输入：
 
+- `APPLE_KEYCHAIN_PROFILE`
 - `APPLE_ID`
 - `APPLE_APP_SPECIFIC_PASSWORD`
 - `APPLE_TEAM_ID`
 - `CSC_NAME`
+- `CODEPAL_SKIP_RELEASE_FINISH`（仅在需要跳过自动 `staple + validate` 做纯实验构建时使用）
 
 如果未来改成 CI，再把这些映射成 CI secrets。
 

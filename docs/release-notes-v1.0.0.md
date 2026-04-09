@@ -1,6 +1,6 @@
 # CodePal v1.0.0 Release Notes
 
-CodePal v1.0.0 is the first release candidate for the monitoring-first product direction.
+CodePal v1.0.0 is the first signed and notarized public release for the monitoring-first product direction.
 
 It gives you one floating desktop panel for keeping multiple AI coding agents visible in one place.
 
@@ -19,13 +19,7 @@ It gives you one floating desktop panel for keeping multiple AI coding agents vi
 2. Download the latest macOS `.dmg` or `.zip`.
 3. Move `CodePal.app` into `Applications`.
 4. Launch the app.
-5. If macOS blocks the app on first launch, allow it manually in Security settings.
-
-The main remaining release blocker is final macOS signing / notarization.
-
-## Remaining Release Blocker
-
-- macOS signing / notarization is still the main item left before the polished 1.0.0 distribution bar is met
+5. If macOS still prompts on first launch, allow it manually in Security settings once and continue.
 
 ## Known Follow-Ups
 
@@ -41,7 +35,7 @@ The main remaining release blocker is final macOS signing / notarization.
 - A general CodePal -> agent message channel
 - Deep IDE pane navigation guarantees
 - Deep terminal control
-- Anything beyond the remaining signing / notarization release step
+- Anything beyond the current monitoring-first v1 release baseline
 
 ## Feedback That Helps
 
@@ -54,10 +48,12 @@ The main remaining release blocker is final macOS signing / notarization.
 
 ## Validation
 
-Validated on 2026-04-08:
+Validated on 2026-04-09:
 
 - `npm test`
 - `npm run lint`
 - `npm run build`
 - `npm run test:e2e`
 - `npm run dist:mac`
+- Apple notarization status: `Accepted`
+- DMG staple: `validated`
