@@ -104,6 +104,13 @@ npm run dist:mac   # 构建 .dmg / .zip（需要 Apple 签名凭据）
 **看不到 Session**
 确认对应的 Agent（Cursor / Claude Code / Codex / CodeBuddy）确实有正在运行的会话。可以使用应用内诊断页检查集成路径是否正常。
 
+## 隐私与支持
+
+- [隐私与数据边界说明](docs/privacy-and-data.zh-CN.md)
+- [支持范围说明](docs/support-scope.zh-CN.md)
+- [常见问题与排查](docs/troubleshooting.zh-CN.md)
+- [提交 Issue](https://github.com/shamcleren/CodePal/issues/new/choose)
+
 ## 给开发者
 
 <details>

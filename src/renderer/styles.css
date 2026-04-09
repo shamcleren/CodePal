@@ -381,6 +381,34 @@ body {
   gap: 10px;
 }
 
+.display-panel__details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.display-panel__details-summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.display-panel__diagnostics {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 92%, black 8%);
+  color: color-mix(in srgb, var(--text) 92%, white 8%);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .display-panel__usage-list {
   display: flex;
   flex-direction: column;
@@ -1172,6 +1200,19 @@ body {
 
 .session-stream__section--primary {
   gap: 10px;
+}
+
+.session-stream__virtual-viewport {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+
+.session-stream__virtual-item {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
 }
 
 .session-stream__section--footer {

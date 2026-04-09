@@ -1,0 +1,58 @@
+name: Bug Report
+description: Report a problem in a currently supported CodePal flow
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please attach the copied diagnostics summary from CodePal settings whenever possible.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Agent / IDE
+      description: Which integration is affected?
+      options:
+        - Cursor
+        - Claude Code
+        - Codex
+        - CodeBuddy
+        - GoLand / PyCharm
+        - Packaging / Update
+        - Other supported area
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: reproducibility
+    attributes:
+      label: Reproducibility
+      options:
+        - Reproduces every time
+        - Reproduces sometimes
+        - Happened once
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Copied diagnostics
+      description: Paste the diagnostics summary copied from CodePal settings
+      render: text
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots or log excerpts
+      description: Include screenshots or upstream log excerpts if they help explain the issue

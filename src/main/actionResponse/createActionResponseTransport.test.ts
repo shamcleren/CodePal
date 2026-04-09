@@ -226,6 +226,46 @@ describe("createActionResponseTransport", () => {
     }
   });
 
+  it("createActionResponseTransportFromResponseTarget sends via TCP host/port", async () => {
+    const server = net.createServer();
+    const port = await new Promise<number>((resolve, reject) => {
+      server.listen(0, "127.0.0.1", () => {
+        const addr = server.address();
+        if (addr && typeof addr !== "string") {
+          resolve(addr.port);
+        } else {
+          reject(new Error("expected TCP address"));
+        }
+      });
+      server.on("error", reject);
+    });
+
+    const received = new Promise<string>((resolve, reject) => {
+      server.once("connection", (socket) => {
+        let buf = "";
+        socket.on("data", (chunk) => {
+          buf += chunk.toString();
+          if (buf.endsWith("\n")) {
+            resolve(buf.slice(0, -1));
+          }
+        });
+        socket.on("error", reject);
+      });
+    });
+
+    const transport = createActionResponseTransportFromResponseTarget({
+      mode: "socket",
+      host: "127.0.0.1",
+      port,
+    });
+    await transport.send("from-target-tcp");
+    expect(await received).toBe("from-target-tcp");
+
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
+  });
+
   it("createActionResponseTransportFromResponseTarget uses ResponseTarget.timeoutMs for socket timeout", async () => {
     vi.useFakeTimers();
 

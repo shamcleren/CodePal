@@ -249,7 +249,11 @@ export const SessionRow = memo(function SessionRow({
             </div>
           ) : null}
           {!showLoadingPanel ? (
-            <HoverDetails items={session.timelineItems} sessionStatus={session.status} />
+            <HoverDetails
+              items={session.timelineItems}
+              sessionStatus={session.status}
+              scrollContainerRef={detailsRef}
+            />
           ) : null}
           {showExperimentalControls && pendingActions.length > 0 ? (
             <div className="session-row__interaction">

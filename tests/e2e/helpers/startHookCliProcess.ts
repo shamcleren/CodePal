@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
+import type { ResponseTarget } from "../../../src/shared/sessionTypes";
 
 const require = createRequire(import.meta.url);
 
@@ -14,7 +15,7 @@ export function codePalMainJs(repoRoot: string): string {
 
 export type StartBlockingHookOptions = {
   repoRoot: string;
-  ipcSocketPath: string;
+  ipcTarget: Extract<ResponseTarget, { host: string; port: number }>;
   payload: Record<string, unknown>;
   env?: NodeJS.ProcessEnv;
 };
@@ -67,7 +68,9 @@ export function startBlockingHookCliProcess(
     env: {
       ...process.env,
       ...options.env,
-      CODEPAL_SOCKET_PATH: options.ipcSocketPath,
+      CODEPAL_SOCKET_PATH: "",
+      CODEPAL_IPC_HOST: options.ipcTarget.host,
+      CODEPAL_IPC_PORT: String(options.ipcTarget.port),
     },
     stdio: ["pipe", "pipe", "pipe"],
   });

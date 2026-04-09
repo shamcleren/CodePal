@@ -425,6 +425,30 @@ describe("lineToSessionEvent", () => {
     });
   });
 
+  it("parses legal TCP responseTarget on canonical status_change", () => {
+    const responseTarget = {
+      mode: "socket" as const,
+      host: "127.0.0.1",
+      port: 17371,
+      timeoutMs: 25000,
+    };
+    const ev = lineToSessionEvent(
+      JSON.stringify({
+        type: "status_change",
+        sessionId: "s-rt-tcp",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 9.5,
+        responseTarget,
+      }),
+    );
+    expect(ev).toMatchObject({
+      sessionId: "s-rt-tcp",
+      status: "waiting",
+      responseTarget,
+    });
+  });
+
   it("rejects canonical status_change when pendingAction is null but responseTarget is invalid", () => {
     expect(
       lineToSessionEvent(

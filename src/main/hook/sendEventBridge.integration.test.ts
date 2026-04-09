@@ -214,8 +214,17 @@ describe("runBlockingHookFromRaw", () => {
       expect(line).toBe(buildActionResponseLine("sess-block", "pa-1", "Allow", "approval"));
       expect(onMessage).toHaveBeenCalledTimes(1);
       const sent = onMessage.mock.calls[0][0] as string;
-      const parsed = JSON.parse(sent) as { responseTarget: { socketPath: string } };
-      expect(parsed.responseTarget.socketPath).toBeTruthy();
+      const parsed = JSON.parse(sent) as {
+        responseTarget:
+          | { socketPath: string; timeoutMs?: number }
+          | { host: string; port: number; timeoutMs?: number };
+      };
+      if ("socketPath" in parsed.responseTarget) {
+        expect(parsed.responseTarget.socketPath).toBeTruthy();
+      } else {
+        expect(parsed.responseTarget.host).toBe("127.0.0.1");
+        expect(parsed.responseTarget.port).toBeGreaterThan(0);
+      }
 
       await new Promise<void>((resolve) => server.close(() => resolve()));
     },
@@ -231,8 +240,14 @@ describe("runBlockingHookFromRaw", () => {
         return {
           ...actual,
           sendEventLine: vi.fn(async (body: string) => {
-            const payload = JSON.parse(body) as { responseTarget?: { socketPath: string } };
-            responseSocketPath = payload.responseTarget?.socketPath ?? "";
+            const payload = JSON.parse(body) as {
+              responseTarget?: { socketPath?: string; host?: string; port?: number };
+            };
+            responseSocketPath =
+              payload.responseTarget?.socketPath ??
+              (payload.responseTarget?.host && payload.responseTarget?.port
+                ? `${payload.responseTarget.host}:${payload.responseTarget.port}`
+                : "");
             throw new Error("send failed");
           }),
         };
@@ -255,8 +270,10 @@ describe("runBlockingHookFromRaw", () => {
 
       await expect(runWithMockedSend(payload, process.env)).rejects.toThrow("send failed");
       expect(responseSocketPath).toBeTruthy();
-      expect(fs.existsSync(responseSocketPath)).toBe(false);
-      expect(fs.existsSync(dirname(responseSocketPath))).toBe(false);
+      if (responseSocketPath.startsWith("/")) {
+        expect(fs.existsSync(responseSocketPath)).toBe(false);
+        expect(fs.existsSync(dirname(responseSocketPath))).toBe(false);
+      }
 
       vi.doUnmock("./sendEventBridge");
       vi.resetModules();

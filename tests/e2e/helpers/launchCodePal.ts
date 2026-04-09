@@ -1,32 +1,39 @@
-import { promises as fs } from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import type { ElectronApplication } from "@playwright/test";
 import { _electron as electron } from "@playwright/test";
+import type { ResponseTarget } from "../../../src/shared/sessionTypes";
+import { getFreePort } from "./getFreePort";
 
 const repoRoot = process.cwd();
 
 export type LaunchCodePalOptions = {
-  actionResponseSocketPath: string;
+  actionResponseTarget: ResponseTarget;
   homeDir?: string;
 };
 
 export type LaunchedCodePal = {
   app: ElectronApplication;
-  ipcSocketPath: string;
+  ipcTarget: Extract<ResponseTarget, { host: string; port: number }>;
   close: () => Promise<void>;
 };
 
-async function waitForSocketPath(socketPath: string): Promise<void> {
+async function waitForTcpListener(host: string, port: number): Promise<void> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
-    try {
-      await fs.access(socketPath);
+    const connected = await new Promise<boolean>((resolve) => {
+      const socket = net.connect({ host, port }, () => {
+        socket.end();
+        resolve(true);
+      });
+      socket.once("error", () => resolve(false));
+    });
+    if (connected) {
       return;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 25));
     }
+    await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error(`Timed out waiting for CodePal IPC socket: ${socketPath}`);
+  throw new Error(`Timed out waiting for CodePal IPC TCP listener: ${host}:${port}`);
 }
 
 /**
@@ -38,13 +45,30 @@ export async function launchCodePal(
 ): Promise<LaunchedCodePal> {
   const mainJs = path.join(repoRoot, "out/main/main.js");
   const env: NodeJS.ProcessEnv = { ...process.env };
-  const socketDir = await fs.mkdtemp(path.join("/tmp", "codepal-ipc-"));
-  const ipcSocketPath = path.join(socketDir, "hub.sock");
+  const ipcTarget = {
+    mode: "socket" as const,
+    host: "127.0.0.1",
+    port: await getFreePort(),
+  };
   delete env.ELECTRON_RENDERER_URL;
   delete env.CODEPAL_SOCKET_PATH;
   delete env.CODEPAL_IPC_PORT;
+  delete env.CODEPAL_IPC_HOST;
+  delete env.CODEPAL_ACTION_RESPONSE_SOCKET_PATH;
   delete env.CODEPAL_ACTION_RESPONSE_HOST;
   delete env.CODEPAL_ACTION_RESPONSE_PORT;
+
+  const actionResponseEnv =
+    "socketPath" in options.actionResponseTarget
+      ? {
+          CODEPAL_ACTION_RESPONSE_MODE: "socket",
+          CODEPAL_ACTION_RESPONSE_SOCKET_PATH: options.actionResponseTarget.socketPath,
+        }
+      : {
+          CODEPAL_ACTION_RESPONSE_MODE: "socket",
+          CODEPAL_ACTION_RESPONSE_HOST: options.actionResponseTarget.host,
+          CODEPAL_ACTION_RESPONSE_PORT: String(options.actionResponseTarget.port),
+        };
 
   const app = await electron.launch({
     args: [mainJs],
@@ -53,20 +77,19 @@ export async function launchCodePal(
       ...env,
       ...(options.homeDir ? { HOME: options.homeDir, USERPROFILE: options.homeDir } : {}),
       ...(options.homeDir ? { CODEPAL_HOME_DIR: options.homeDir } : {}),
-      CODEPAL_SOCKET_PATH: ipcSocketPath,
-      CODEPAL_ACTION_RESPONSE_MODE: "socket",
-      CODEPAL_ACTION_RESPONSE_SOCKET_PATH: options.actionResponseSocketPath,
+      CODEPAL_IPC_HOST: ipcTarget.host,
+      CODEPAL_IPC_PORT: String(ipcTarget.port),
+      ...actionResponseEnv,
     },
   });
 
-  await waitForSocketPath(ipcSocketPath);
+  await waitForTcpListener(ipcTarget.host, ipcTarget.port);
 
   return {
     app,
-    ipcSocketPath,
+    ipcTarget,
     close: async () => {
       await app.close().catch(() => undefined);
-      await fs.rm(socketDir, { recursive: true, force: true });
     },
   };
 }

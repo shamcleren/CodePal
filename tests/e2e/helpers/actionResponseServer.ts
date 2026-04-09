@@ -1,9 +1,9 @@
-import { promises as fs } from "node:fs";
 import net from "node:net";
-import path from "node:path";
+import type { ResponseTarget } from "../../../src/shared/sessionTypes";
+import { getFreePort } from "./getFreePort";
 
 export type ActionResponseCollector = {
-  socketPath: string;
+  responseTarget: ResponseTarget;
   waitForLine: () => Promise<string>;
   /**
    * Assert that no client connects to the collector within `ms`.
@@ -13,12 +13,12 @@ export type ActionResponseCollector = {
 };
 
 /**
- * Unix socket server that accepts the first connection and resolves the first
+ * TCP server that accepts the first connection and resolves the first
  * newline-terminated line.
  */
 export async function startActionResponseCollector(): Promise<ActionResponseCollector> {
-  const socketDir = await fs.mkdtemp(path.join("/tmp", "codepal-action-response-"));
-  const socketPath = path.join(socketDir, "collector.sock");
+  const host = "127.0.0.1";
+  const port = await getFreePort();
   const server = net.createServer();
   let firstLine: string | null = null;
   let firstError: Error | null = null;
@@ -76,7 +76,7 @@ export async function startActionResponseCollector(): Promise<ActionResponseColl
   };
 
   await new Promise<void>((resolve, reject) => {
-    server.listen(socketPath, () => resolve());
+    server.listen(port, host, () => resolve());
     server.once("error", reject);
   });
   server.on("connection", onFirstConnection);
@@ -118,7 +118,11 @@ export async function startActionResponseCollector(): Promise<ActionResponseColl
   }
 
   return {
-    socketPath,
+    responseTarget: {
+      mode: "socket",
+      host,
+      port,
+    },
     waitForLine,
     expectNoFurtherConnections,
     close: async () => {
@@ -133,7 +137,6 @@ export async function startActionResponseCollector(): Promise<ActionResponseColl
       await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
       });
-      await fs.rm(socketDir, { recursive: true, force: true });
     },
   };
 }

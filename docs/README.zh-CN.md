@@ -23,6 +23,18 @@
   最终发版前使用的中文检查清单。
 - `docs/operational-readiness-v1.0.0.zh-CN.md`
   `1.0.0` 走向正式运营前仍需补齐的缺口清单。
+- `docs/privacy-and-data.md`
+  当前 monitoring-first 发布基线的英文隐私与数据边界说明。
+- `docs/privacy-and-data.zh-CN.md`
+  同一份隐私与数据边界说明的中文版本。
+- `docs/support-scope.md`
+  当前正式运营 v1 基线的英文支持范围说明。
+- `docs/support-scope.zh-CN.md`
+  当前支持范围说明的中文版本。
+- `docs/troubleshooting.md`
+  面向 release 用户的英文排查与诊断来源说明。
+- `docs/troubleshooting.zh-CN.md`
+  同一份排查文档的中文版本。
 
 建议你按这个顺序使用：
 

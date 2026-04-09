@@ -92,11 +92,19 @@ function createUnixSocketTransport(socketPath: string): ActionResponseTransport 
   return createSocketTransport({ path: socketPath });
 }
 
+function isUnixSocketResponseTarget(
+  target: ResponseTarget,
+): target is Extract<ResponseTarget, { socketPath: string }> {
+  return "socketPath" in target;
+}
+
 /** 基于 {@link ResponseTarget} 构建一次性 socket transport（与 env 模式共用发送与超时逻辑） */
 export function createActionResponseTransportFromResponseTarget(
   target: ResponseTarget,
 ): ActionResponseTransport {
-  return createSocketTransport({ path: target.socketPath }, target.timeoutMs);
+  return isUnixSocketResponseTarget(target)
+    ? createSocketTransport({ path: target.socketPath }, target.timeoutMs)
+    : createSocketTransport({ host: target.host, port: target.port }, target.timeoutMs);
 }
 
 export function createActionResponseTransport(

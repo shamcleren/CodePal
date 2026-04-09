@@ -14,9 +14,12 @@ import { StatusBar } from "./components/StatusBar";
 import { SessionList } from "./components/SessionList";
 import { UpdatePanel } from "./components/UpdatePanel";
 import { UsageStatusStrip } from "./components/UsageStatusStrip";
+import { SupportPanel } from "./components/SupportPanel";
 import type { MonitorSessionRow } from "./monitorSession";
 import { createI18nValue, I18nProvider, resolveLocale } from "./i18n";
 import { formatSettingsPathForDisplay } from "./settingsPath";
+import { SUPPORT_LINKS } from "./supportLinks";
+import { buildSupportDiagnosticsReport } from "./supportDiagnostics";
 import { hydrateRowsIfEmpty, reconcileRows, rowsFromSessions } from "./sessionBootstrap";
 import {
   type UsageAgentId,
@@ -55,6 +58,18 @@ export function App() {
     typeof navigator !== "undefined" ? navigator.language : undefined,
   );
   const i18n = createI18nValue(resolvedLocale);
+  const supportDiagnosticsReport = buildSupportDiagnosticsReport({
+    generatedAt: Date.now(),
+    resolvedLocale,
+    appSettings,
+    appSettingsPath,
+    homeDir,
+    integrationDiagnostics,
+    cursorDashboardDiagnostics,
+    codeBuddyQuotaDiagnostics,
+    codeBuddyInternalQuotaDiagnostics,
+    updateState,
+  });
 
   function clearSessionHistory() {
     setSessionHistoryClearing(true);
@@ -749,6 +764,24 @@ export function App() {
                 </button>
               </div>
             </div>
+            <SupportPanel
+              diagnosticsReport={supportDiagnosticsReport}
+              onCopyDiagnostics={() => {
+                void window.codepal.writeClipboardText(supportDiagnosticsReport);
+              }}
+              onOpenPrivacy={() => {
+                void window.codepal.openExternalTarget(SUPPORT_LINKS.privacy);
+              }}
+              onOpenSupportScope={() => {
+                void window.codepal.openExternalTarget(SUPPORT_LINKS.supportScope);
+              }}
+              onOpenTroubleshooting={() => {
+                void window.codepal.openExternalTarget(SUPPORT_LINKS.troubleshooting);
+              }}
+              onOpenIssues={() => {
+                void window.codepal.openExternalTarget(SUPPORT_LINKS.issues);
+              }}
+            />
           </DisplayPreferencesPanel>
         </div>
       </aside>

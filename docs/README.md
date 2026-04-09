@@ -21,6 +21,18 @@ Use this directory by purpose rather than trying to read everything in one pass.
   Chinese maintainer runbook for macOS signing, notarization, and DMG `staple + validate`.
 - `docs/operational-readiness-v1.0.0.zh-CN.md`
   Chinese checklist for what still needs to be in place before treating `1.0.0` as a fully operated release.
+- `docs/privacy-and-data.md`
+  English privacy and local data-boundary statement for the current monitoring-first release.
+- `docs/privacy-and-data.zh-CN.md`
+  Chinese version of the same privacy and data-boundary statement.
+- `docs/support-scope.md`
+  English support scope for the current operated v1 baseline.
+- `docs/support-scope.zh-CN.md`
+  Chinese version of the current support scope.
+- `docs/troubleshooting.md`
+  English troubleshooting and diagnostic-source guide for release users.
+- `docs/troubleshooting.zh-CN.md`
+  Chinese version of the troubleshooting guide.
 
 ## If You Need Future Planning
 

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
-import { isPendingAction } from "../../shared/sessionTypes";
+import { isPendingAction, type ResponseTarget } from "../../shared/sessionTypes";
 import { sendEventLine } from "./sendEventBridge";
 
 function parseWaitMs(env: NodeJS.ProcessEnv): number {
@@ -23,7 +23,7 @@ function parseSocketTimeoutMs(env: NodeJS.ProcessEnv): number {
 }
 
 type Collector = {
-  socketPath: string;
+  responseTarget: ResponseTarget;
   linePromise: Promise<string>;
   dispose: (reason?: Error) => Promise<void>;
 };
@@ -36,9 +36,9 @@ function toError(error: unknown, fallbackMessage: string): Error {
 }
 
 export async function createBlockingHookCollector(waitMs: number): Promise<Collector> {
-  const socketDir = await mkdtemp(path.join("/tmp", "codepal-hook-response-"));
-  const socketPath = path.join(socketDir, "collector.sock");
   const server = net.createServer();
+  let socketDir: string | null = null;
+  let responseTarget: ResponseTarget | null = null;
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let activeSocket: net.Socket | null = null;
@@ -139,18 +139,51 @@ export async function createBlockingHookCollector(waitMs: number): Promise<Colle
   void linePromise.catch(() => undefined);
 
   try {
+    socketDir = await mkdtemp(path.join("/tmp", "codepal-hook-response-"));
+    const socketPath = path.join(socketDir, "collector.sock");
     await new Promise<void>((resolve, reject) => {
       server.listen(socketPath, () => resolve());
       server.once("error", reject);
     });
+    responseTarget = {
+      mode: "socket",
+      socketPath,
+    };
   } catch (error) {
-    clearWaitTimer();
-    forceCloseServerSockets();
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve());
+    const err = toError(error, "runBlockingHookFromRaw: failed to start unix collector");
+    const code = (err as NodeJS.ErrnoException).code;
+    const canFallback = code === "EPERM" || code === "EACCES";
+
+    if (!canFallback) {
+      clearWaitTimer();
+      forceCloseServerSockets();
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+      if (socketDir) {
+        await rm(socketDir, { recursive: true, force: true }).catch(() => undefined);
+      }
+      throw err;
+    }
+
+    if (socketDir) {
+      await rm(socketDir, { recursive: true, force: true }).catch(() => undefined);
+      socketDir = null;
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      server.listen(0, "127.0.0.1", () => resolve());
+      server.once("error", reject);
     });
-    await rm(socketDir, { recursive: true, force: true }).catch(() => undefined);
-    throw error;
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("runBlockingHookFromRaw: expected TCP address for fallback collector");
+    }
+    responseTarget = {
+      mode: "socket",
+      host: "127.0.0.1",
+      port: address.port,
+    };
   }
 
   async function dispose(
@@ -167,10 +200,16 @@ export async function createBlockingHookCollector(waitMs: number): Promise<Colle
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
-    await rm(socketDir, { recursive: true, force: true }).catch(() => undefined);
+    if (socketDir) {
+      await rm(socketDir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 
-  return { socketPath, linePromise, dispose };
+  if (responseTarget === null) {
+    throw new Error("runBlockingHookFromRaw: collector missing response target");
+  }
+
+  return { responseTarget, linePromise, dispose };
 }
 
 export async function runBlockingHookFromRaw(
@@ -204,8 +243,7 @@ export async function runBlockingHookFromRaw(
     const outbound = {
       ...parsed,
       responseTarget: {
-        mode: "socket" as const,
-        socketPath: collector.socketPath,
+        ...collector.responseTarget,
         timeoutMs: socketTimeoutMs,
       },
     };

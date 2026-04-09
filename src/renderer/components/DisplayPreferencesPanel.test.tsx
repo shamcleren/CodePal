@@ -28,4 +28,24 @@ describe("DisplayPreferencesPanel", () => {
     expect(html).not.toContain("Reset ");
     expect(html).toContain("Cursor");
   });
+
+  it("renders nested support content inside the subsection area", () => {
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="zh-CN">
+        <DisplayPreferencesPanel
+          settings={{ showInStatusBar: true, hiddenAgents: [], density: "detailed" }}
+          onToggleStrip={vi.fn()}
+          onToggleAgent={vi.fn()}
+          onDensityChange={vi.fn()}
+          localeSetting="system"
+          onLocaleChange={vi.fn()}
+        >
+          <div>支持与诊断</div>
+        </DisplayPreferencesPanel>
+      </I18nProvider>,
+    );
+
+    expect(html).toContain("支持与诊断");
+    expect(html).toContain("display-panel__subsection");
+  });
 });

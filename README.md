@@ -104,6 +104,13 @@ Open **System Settings → Privacy & Security**, scroll to the bottom, and click
 **Sessions not showing up**
 Make sure the corresponding agent (Cursor / Claude Code / Codex / CodeBuddy) is actually running a session. Use the in-app diagnostics page to verify the integration path is healthy.
 
+## Privacy And Support
+
+- [Privacy and Data Boundaries](docs/privacy-and-data.md)
+- [Support Scope](docs/support-scope.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Report an Issue](https://github.com/shamcleren/CodePal/issues/new/choose)
+
 ## Contributors
 
 <details>

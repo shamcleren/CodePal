@@ -22,7 +22,7 @@ test("cursor phase1: installs cursor hooks and surfaces degraded unsupported act
   const collector = await startActionResponseCollector();
   const homeDir = await fs.mkdtemp(path.join("/tmp", "codepal-home-"));
   const codepal = await launchCodePal({
-    actionResponseSocketPath: collector.socketPath,
+    actionResponseTarget: collector.responseTarget,
     homeDir,
   });
 
@@ -65,7 +65,7 @@ test("cursor phase1: installs cursor hooks and surfaces degraded unsupported act
           options: [OPTION_APPROVE, "Reject"],
         },
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     const row = firstCurrentSessionRow(mainPage);
@@ -95,7 +95,7 @@ test("cursor phase1: installs cursor hooks and surfaces degraded unsupported act
         },
         pendingAction: null,
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     await expect(
@@ -112,7 +112,7 @@ test("round-trips a single_choice pending action", async () => {
   const collector = await startActionResponseCollector();
 
   const codepal = await launchCodePal({
-    actionResponseSocketPath: collector.socketPath,
+    actionResponseTarget: collector.responseTarget,
   });
 
   try {
@@ -134,7 +134,7 @@ test("round-trips a single_choice pending action", async () => {
           options: [OPTION_APPROVE, "Reject"],
         },
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     await page.waitForLoadState("load");
@@ -174,7 +174,7 @@ const TITLE_B = "E2E concurrent card B";
 test("same session: two blocking hooks with different actionIds route action_response correctly", async () => {
   const collector = await startActionResponseCollector();
   const codepal = await launchCodePal({
-    actionResponseSocketPath: collector.socketPath,
+    actionResponseTarget: collector.responseTarget,
   });
 
   const basePayload = {
@@ -188,7 +188,7 @@ test("same session: two blocking hooks with different actionIds route action_res
 
   const hookA = startBlockingHookCliProcess({
     repoRoot,
-    ipcSocketPath: codepal.ipcSocketPath,
+    ipcTarget: codepal.ipcTarget,
     payload: {
       ...basePayload,
       pendingAction: {
@@ -202,7 +202,7 @@ test("same session: two blocking hooks with different actionIds route action_res
 
   const hookB = startBlockingHookCliProcess({
     repoRoot,
-    ipcSocketPath: codepal.ipcSocketPath,
+    ipcTarget: codepal.ipcTarget,
     payload: {
       ...basePayload,
       pendingAction: {
@@ -271,7 +271,7 @@ const TITLE_REMOTE_Y = "E2E remote close card Y";
 test("same session: pendingClosed removes only the matching pending card", async () => {
   const collector = await startActionResponseCollector();
   const codepal = await launchCodePal({
-    actionResponseSocketPath: collector.socketPath,
+    actionResponseTarget: collector.responseTarget,
   });
 
   const base = {
@@ -302,7 +302,7 @@ test("same session: pendingClosed removes only the matching pending card", async
           options: ["X1", "Reject"],
         },
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     await sendStatusChange(
@@ -316,7 +316,7 @@ test("same session: pendingClosed removes only the matching pending card", async
           options: ["Y1", "Reject"],
         },
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     const row = firstCurrentSessionRow(page);
@@ -328,7 +328,7 @@ test("same session: pendingClosed removes only the matching pending card", async
         timestamp: Date.now(),
         pendingClosed: { actionId: REMOTE_ACTION_X, reason: "consumed_remote" },
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     await expect(row.getByText("1 pending")).toBeVisible({ timeout: 15_000 });
@@ -339,7 +339,7 @@ test("same session: pendingClosed removes only the matching pending card", async
         timestamp: Date.now(),
         pendingClosed: { actionId: REMOTE_ACTION_Y, reason: "consumed_remote" },
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     await expect(row.getByText("1 pending")).toBeHidden();
@@ -352,7 +352,7 @@ test("same session: pendingClosed removes only the matching pending card", async
 test("tool artifact interactions: expand/collapse changes body height", async () => {
   const collector = await startActionResponseCollector();
   const codepal = await launchCodePal({
-    actionResponseSocketPath: collector.socketPath,
+    actionResponseTarget: collector.responseTarget,
   });
 
   const sessionId = "e2e-tool-artifact-session";
@@ -394,7 +394,7 @@ test("tool artifact interactions: expand/collapse changes body height", async ()
           },
         ],
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     const summary = page.getByLabel("Cursor RUNNING").first();
@@ -431,7 +431,7 @@ const EXPIRY_TITLE = "E2E short timeout pending";
 test("pending card disappears when lifecycle expires without pendingClosed", async () => {
   const collector = await startActionResponseCollector();
   const codepal = await launchCodePal({
-    actionResponseSocketPath: collector.socketPath,
+    actionResponseTarget: collector.responseTarget,
   });
 
   try {
@@ -458,11 +458,11 @@ test("pending card disappears when lifecycle expires without pendingClosed", asy
         },
         responseTarget: {
           mode: "socket",
-          socketPath: collector.socketPath,
+          ...collector.responseTarget,
           timeoutMs: 750,
         },
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     const row = firstCurrentSessionRow(page);
@@ -484,7 +484,7 @@ const FIRST_WIN_TITLE = "E2E first-win prompt";
 test("after a successful response the card hides and a second action_response is a no-op", async () => {
   const collector = await startActionResponseCollector();
   const codepal = await launchCodePal({
-    actionResponseSocketPath: collector.socketPath,
+    actionResponseTarget: collector.responseTarget,
   });
 
   try {
@@ -510,7 +510,7 @@ test("after a successful response the card hides and a second action_response is
           options: ["Once", "Twice"],
         },
       },
-      codepal.ipcSocketPath,
+      codepal.ipcTarget,
     );
 
     const row = firstCurrentSessionRow(page);

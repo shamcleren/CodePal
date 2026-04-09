@@ -21,6 +21,8 @@ describe("App", () => {
     expect(html).toContain("Integrations &amp; Diagnostics");
     expect(html).toContain("Config File");
     expect(html).toContain("Open YAML");
+    expect(html).toContain("Support &amp; Diagnostics");
+    expect(html).toContain("Copy Diagnostics");
     expect(html).toContain("aria-label=\"Open settings\"");
     expect(html.match(/aria-label="Display &amp; Usage"/g)?.length).toBe(1);
   });

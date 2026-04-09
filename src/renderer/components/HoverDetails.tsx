@@ -1,4 +1,10 @@
-import { isValidElement, useState } from "react";
+import {
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { SessionStatus } from "../../shared/sessionTypes";
@@ -9,7 +15,18 @@ import { parseMessageBody, toRenderableMessageBody } from "../messageBody";
 type HoverDetailsProps = {
   items: TimelineItem[];
   sessionStatus: SessionStatus;
+  scrollContainerRef?: RefObject<HTMLDivElement | null>;
 };
+
+type PrimaryRenderEntry = {
+  renderKey: string;
+  item: TimelineItem;
+  isTypingItem: boolean;
+};
+
+const PRIMARY_ITEM_GAP_PX = 10;
+const PRIMARY_VIRTUALIZATION_THRESHOLD = 24;
+const PRIMARY_OVERSCAN_PX = 360;
 
 function extractCodeText(node: unknown): string {
   if (typeof node === "string") return node;
@@ -297,16 +314,209 @@ export function buildItemRenderKeys(items: TimelineItem[]): string[] {
   });
 }
 
-export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
+export function buildPrimaryRenderEntries(
+  primaryItems: TimelineItem[],
+  sessionStatus: SessionStatus,
+  typingLabel: string,
+): PrimaryRenderEntry[] {
+  const primaryItemRenderKeys = buildItemRenderKeys(primaryItems);
+  const renderedPrimaryItems =
+    sessionStatus === "running" && primaryItems.length > 0
+      ? [
+          ...primaryItems,
+          {
+            id: "session-stream-typing-indicator",
+            kind: "message" as const,
+            source: "assistant" as const,
+            label: "Assistant",
+            title: "Assistant",
+            body: typingLabel,
+            timestamp: Number.MAX_SAFE_INTEGER,
+          },
+        ]
+      : primaryItems;
+
+  return renderedPrimaryItems.map((item, index) => ({
+    renderKey:
+      item.id === "session-stream-typing-indicator"
+        ? item.id
+        : (primaryItemRenderKeys[index] ?? `${item.id}::${index}`),
+    item,
+    isTypingItem: item.id === "session-stream-typing-indicator",
+  }));
+}
+
+function estimatePrimaryEntryHeight(entry: PrimaryRenderEntry): number {
+  if (entry.isTypingItem) {
+    return 76;
+  }
+
+  const { item } = entry;
+  if (item.kind === "tool") {
+    const lineCount = item.body.split("\n").length;
+    return Math.max(88, Math.min(220, 72 + lineCount * 16));
+  }
+
+  const bodyLength = item.body.trim().length;
+  const estimatedLines = Math.max(1, Math.ceil(bodyLength / 72));
+  return Math.max(74, Math.min(260, 54 + estimatedLines * 22));
+}
+
+export function calculateVirtualWindow(
+  offsets: number[],
+  heights: number[],
+  visibleTop: number,
+  visibleBottom: number,
+): { startIndex: number; endIndex: number } {
+  if (offsets.length === 0 || heights.length === 0) {
+    return { startIndex: 0, endIndex: -1 };
+  }
+
+  let startIndex = 0;
+  while (startIndex < offsets.length) {
+    const itemBottom = offsets[startIndex] + heights[startIndex];
+    if (itemBottom >= visibleTop) {
+      break;
+    }
+    startIndex += 1;
+  }
+
+  let endIndex = startIndex;
+  while (endIndex < offsets.length) {
+    if (offsets[endIndex] > visibleBottom) {
+      break;
+    }
+    endIndex += 1;
+  }
+
+  return {
+    startIndex: Math.min(startIndex, offsets.length - 1),
+    endIndex: Math.min(offsets.length - 1, Math.max(startIndex, endIndex)),
+  };
+}
+
+function PrimaryStreamItem({
+  entry,
+  entryIndex,
+  primaryItems,
+  sessionStatus,
+  expandedTools,
+  onToggleTool,
+}: {
+  entry: PrimaryRenderEntry;
+  entryIndex: number;
+  primaryItems: TimelineItem[];
+  sessionStatus: SessionStatus;
+  expandedTools: Record<string, boolean>;
+  onToggleTool: (renderKey: string) => void;
+}) {
+  const i18n = useI18n();
+  const { item, isTypingItem, renderKey } = entry;
+
+  if (item.kind === "message") {
+    return (
+      <div
+        className={`session-stream__item session-stream__item--message session-stream__item--message-${messageRole(item.label)} ${
+          isTypingItem ? "session-stream__item--typing" : ""
+        }`}
+      >
+        <div className="session-stream__header">
+          <span className="session-stream__label">{item.label}</span>
+        </div>
+        <div className="session-stream__body">
+          {isTypingItem ? (
+            <div className="session-stream__typing-indicator" aria-label={i18n.t("session.agentTyping")}>
+              <span className="session-stream__typing-text">{i18n.t("session.typing")}</span>
+              <span className="session-stream__typing-dots" aria-hidden="true" />
+            </div>
+          ) : (
+            <RichTextBlock text={item.body} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const expanded = expandedTools[renderKey] ?? false;
+  const activeArtifact =
+    sessionStatus === "running" &&
+    !primaryItems.slice(0, entryIndex).some((candidate) => candidate.kind === "tool");
+
+  const artifactPhaseClass = item.toolPhase
+    ? `session-stream__item--artifact-${item.toolPhase.toLowerCase()}`
+    : "";
+
+  return (
+    <div
+      className={`session-stream__item session-stream__item--artifact ${artifactPhaseClass} ${
+        activeArtifact ? "session-stream__item--artifact-active" : ""
+      }`}
+    >
+      <div className="session-stream__artifact-accent" aria-hidden="true" />
+      <div className="session-stream__artifact-copy">
+        <div className="session-stream__header">
+          <span className="session-stream__artifact-kicker">{i18n.t("session.execution")}</span>
+          <span className="session-stream__label">{item.label}</span>
+          {shouldShowArtifactName(item) ? (
+            <span className="session-stream__artifact-name">{item.toolName}</span>
+          ) : null}
+          {item.toolPhase ? (
+            <span className="session-stream__artifact-type">{item.toolPhase}</span>
+          ) : null}
+          {item.body.length > 72 || item.body.includes("\n") ? (
+            <button
+              type="button"
+              className="session-stream__artifact-toggle"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onToggleTool(renderKey);
+              }}
+            >
+              {expanded ? i18n.t("session.collapse") : i18n.t("session.expand")}
+            </button>
+          ) : null}
+        </div>
+        <div className="session-stream__body">
+          <div className="session-stream__artifact-body-shell">
+            {expanded ? (
+              <div className="session-stream__artifact-body session-stream__artifact-body--expanded">
+                <ToolTextBlock text={item.body} />
+              </div>
+            ) : (
+              <div className="session-stream__artifact-summary" title={item.body}>
+                {toolBodySummary(item.body)}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function HoverDetails({ items, sessionStatus, scrollContainerRef }: HoverDetailsProps) {
   const i18n = useI18n();
   const chronologicalItems = [...items].reverse();
   const primaryItems = chronologicalItems.filter((item) => item.kind === "message" || item.kind === "tool");
-  const primaryItemRenderKeys = buildItemRenderKeys(primaryItems);
   const notes = chronologicalItems
     .filter((item) => item.kind === "note" || item.kind === "system")
     .filter((item) => !(primaryItems.length > 0 && isLowSignalSystemEvent(item)));
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
-  const showTypingIndicator = sessionStatus === "running" && primaryItems.length > 0;
+  const primarySectionRef = useRef<HTMLDivElement | null>(null);
+  const itemNodesRef = useRef(new Map<string, HTMLElement>());
+  const measuredHeightsRef = useRef<Record<string, number>>({});
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const [metricsVersion, setMetricsVersion] = useState(0);
+  const [scrollMetrics, setScrollMetrics] = useState({
+    scrollTop: 0,
+    viewportHeight: 0,
+    sectionOffsetTop: 0,
+  });
+
+  const primaryEntries = buildPrimaryRenderEntries(primaryItems, sessionStatus, i18n.t("session.typing"));
+  const shouldVirtualize =
+    primaryEntries.length >= PRIMARY_VIRTUALIZATION_THRESHOLD && Boolean(scrollContainerRef?.current);
 
   function toggleTool(renderKey: string) {
     setExpandedTools((current) => ({
@@ -315,20 +525,172 @@ export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
     }));
   }
 
-  const renderedPrimaryItems = showTypingIndicator
-    ? [
-        ...primaryItems,
-        {
-          id: "session-stream-typing-indicator",
-          kind: "message" as const,
-          source: "assistant" as const,
-          label: "Assistant",
-          title: "Assistant",
-          body: i18n.t("session.typing"),
-          timestamp: Number.MAX_SAFE_INTEGER,
-        },
-      ]
-    : primaryItems;
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const entry of entries) {
+        const key = entry.target.getAttribute("data-render-key");
+        if (!key) {
+          continue;
+        }
+        const nextHeight = Math.ceil(entry.contentRect.height);
+        if (nextHeight > 0 && measuredHeightsRef.current[key] !== nextHeight) {
+          measuredHeightsRef.current[key] = nextHeight;
+          changed = true;
+        }
+      }
+      if (changed) {
+        setMetricsVersion((current) => current + 1);
+      }
+    });
+
+    resizeObserverRef.current = observer;
+    itemNodesRef.current.forEach((node) => observer.observe(node));
+    return () => {
+      resizeObserverRef.current = null;
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const activeKeys = new Set(primaryEntries.map((entry) => entry.renderKey));
+    for (const cachedKey of Object.keys(measuredHeightsRef.current)) {
+      if (!activeKeys.has(cachedKey)) {
+        delete measuredHeightsRef.current[cachedKey];
+      }
+    }
+  }, [primaryEntries]);
+
+  useEffect(() => {
+    if (!shouldVirtualize) {
+      return;
+    }
+
+    const container = scrollContainerRef?.current;
+    const section = primarySectionRef.current;
+    if (!container || !section) {
+      return;
+    }
+
+    const syncMetrics = () => {
+      setScrollMetrics({
+        scrollTop: container.scrollTop,
+        viewportHeight: container.clientHeight,
+        sectionOffsetTop: section.offsetTop,
+      });
+    };
+
+    syncMetrics();
+
+    container.addEventListener("scroll", syncMetrics, { passive: true });
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            syncMetrics();
+          })
+        : null;
+    observer?.observe(container);
+    observer?.observe(section);
+
+    return () => {
+      container.removeEventListener("scroll", syncMetrics);
+      observer?.disconnect();
+    };
+  }, [scrollContainerRef, shouldVirtualize, primaryEntries.length, metricsVersion]);
+
+  function registerPrimaryItemNode(renderKey: string) {
+    return (node: HTMLDivElement | null) => {
+      const previous = itemNodesRef.current.get(renderKey);
+      if (previous && resizeObserverRef.current) {
+        resizeObserverRef.current.unobserve(previous);
+      }
+      if (!node) {
+        itemNodesRef.current.delete(renderKey);
+        return;
+      }
+      itemNodesRef.current.set(renderKey, node);
+      node.setAttribute("data-render-key", renderKey);
+      resizeObserverRef.current?.observe(node);
+    };
+  }
+
+  let primaryContent: JSX.Element;
+  if (!shouldVirtualize) {
+    primaryContent = (
+      <div ref={primarySectionRef} className="session-stream__section session-stream__section--primary">
+        {primaryEntries.map((entry, index) => (
+          <PrimaryStreamItem
+            key={entry.renderKey}
+            entry={entry}
+            entryIndex={index}
+            primaryItems={primaryItems}
+            sessionStatus={sessionStatus}
+            expandedTools={expandedTools}
+            onToggleTool={toggleTool}
+          />
+        ))}
+      </div>
+    );
+  } else {
+    const heights = primaryEntries.map((entry) => measuredHeightsRef.current[entry.renderKey] ?? estimatePrimaryEntryHeight(entry));
+    const offsets: number[] = [];
+    let cursor = 0;
+    for (let index = 0; index < heights.length; index += 1) {
+      offsets.push(cursor);
+      cursor += heights[index] + (index < heights.length - 1 ? PRIMARY_ITEM_GAP_PX : 0);
+    }
+    const totalHeight = cursor;
+    const visibleTop = Math.max(
+      0,
+      scrollMetrics.scrollTop - scrollMetrics.sectionOffsetTop - PRIMARY_OVERSCAN_PX,
+    );
+    const visibleBottom =
+      scrollMetrics.viewportHeight > 0
+        ? Math.max(
+            visibleTop,
+            scrollMetrics.scrollTop +
+              scrollMetrics.viewportHeight -
+              scrollMetrics.sectionOffsetTop +
+              PRIMARY_OVERSCAN_PX,
+          )
+        : Number.POSITIVE_INFINITY;
+    const { startIndex, endIndex } =
+      Number.isFinite(visibleBottom)
+        ? calculateVirtualWindow(offsets, heights, visibleTop, visibleBottom)
+        : { startIndex: 0, endIndex: primaryEntries.length - 1 };
+    const visibleEntries = primaryEntries.slice(startIndex, endIndex + 1);
+
+    primaryContent = (
+      <div ref={primarySectionRef} className="session-stream__section session-stream__section--primary">
+        <div className="session-stream__virtual-viewport" style={{ height: `${totalHeight}px` }}>
+          {visibleEntries.map((entry, visibleIndex) => {
+            const absoluteIndex = startIndex + visibleIndex;
+            return (
+              <div
+                key={entry.renderKey}
+                ref={registerPrimaryItemNode(entry.renderKey)}
+                className="session-stream__virtual-item"
+                style={{ top: `${offsets[absoluteIndex]}px` }}
+              >
+                <PrimaryStreamItem
+                  entry={entry}
+                  entryIndex={absoluteIndex}
+                  primaryItems={primaryItems}
+                  sessionStatus={sessionStatus}
+                  expandedTools={expandedTools}
+                  onToggleTool={toggleTool}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="session-stream" role="region" aria-label={i18n.t("session.activityStream")}>
@@ -336,97 +698,7 @@ export function HoverDetails({ items, sessionStatus }: HoverDetailsProps) {
         <div className="session-stream__empty">{i18n.t("session.noDetails")}</div>
       ) : (
         <>
-          <div className="session-stream__section session-stream__section--primary">
-            {renderedPrimaryItems.map((item, index) => {
-              if (item.kind === "message") {
-                const isTypingItem = item.id === "session-stream-typing-indicator";
-                return (
-                  <div
-                    key={item.id}
-                    className={`session-stream__item session-stream__item--message session-stream__item--message-${messageRole(item.label)} ${
-                      isTypingItem ? "session-stream__item--typing" : ""
-                    }`}
-                  >
-                    <div className="session-stream__header">
-                      <span className="session-stream__label">{item.label}</span>
-                    </div>
-                    <div className="session-stream__body">
-                      {isTypingItem ? (
-                        <div className="session-stream__typing-indicator" aria-label={i18n.t("session.agentTyping")}>
-                          <span className="session-stream__typing-text">{i18n.t("session.typing")}</span>
-                          <span className="session-stream__typing-dots" aria-hidden="true" />
-                        </div>
-                      ) : (
-                        <RichTextBlock text={item.body} />
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              const renderKey = primaryItemRenderKeys[index] ?? `${item.id}::${index}`;
-              const expanded = expandedTools[renderKey] ?? false;
-              const activeArtifact =
-                sessionStatus === "running" &&
-                !primaryItems.slice(0, index).some((entry) => entry.kind === "tool");
-
-              const artifactPhaseClass = item.toolPhase
-                ? `session-stream__item--artifact-${item.toolPhase.toLowerCase()}`
-                : "";
-
-              return (
-                <div
-                  key={renderKey}
-                  className={`session-stream__item session-stream__item--artifact ${artifactPhaseClass} ${
-                    activeArtifact ? "session-stream__item--artifact-active" : ""
-                  }`}
-                >
-                  <div className="session-stream__artifact-accent" aria-hidden="true" />
-                  <div className="session-stream__artifact-copy">
-                    <div className="session-stream__header">
-                      <span className="session-stream__artifact-kicker">{i18n.t("session.execution")}</span>
-                      <span className="session-stream__label">{item.label}</span>
-                      {shouldShowArtifactName(item) ? (
-                        <span className="session-stream__artifact-name">{item.toolName}</span>
-                      ) : null}
-                      {item.toolPhase ? (
-                        <span className="session-stream__artifact-type">{item.toolPhase}</span>
-                      ) : null}
-                      {item.body.length > 72 || item.body.includes("\n") ? (
-                        <button
-                          type="button"
-                          className="session-stream__artifact-toggle"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            toggleTool(renderKey);
-                          }}
-                        >
-                          {expanded ? i18n.t("session.collapse") : i18n.t("session.expand")}
-                        </button>
-                      ) : null}
-                    </div>
-                    <div
-                      className="session-stream__body"
-                    >
-                      <div className="session-stream__artifact-body-shell">
-                        {expanded ? (
-                          <div className="session-stream__artifact-body session-stream__artifact-body--expanded">
-                            <ToolTextBlock text={item.body} />
-                          </div>
-                        ) : (
-                          <div className="session-stream__artifact-summary" title={item.body}>
-                            {toolBodySummary(item.body)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
+          {primaryContent}
           {notes.length > 0 ? (
             <div className="session-stream__section session-stream__section--notes">
               {notes.map((item) => (

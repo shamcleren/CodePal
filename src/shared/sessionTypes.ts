@@ -123,17 +123,33 @@ export function isPendingAction(value: unknown): value is PendingAction {
 }
 
 /** 外部 action_response 回写路由目标（bridge / hook 侧可选携带） */
-export interface ResponseTarget {
+export interface UnixSocketResponseTarget {
   mode: "socket";
   socketPath: string;
   timeoutMs?: number;
 }
 
+export interface TcpResponseTarget {
+  mode: "socket";
+  host: string;
+  port: number;
+  timeoutMs?: number;
+}
+
+export type ResponseTarget = UnixSocketResponseTarget | TcpResponseTarget;
+
 export function isResponseTarget(value: unknown): value is ResponseTarget {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
   if (o.mode !== "socket") return false;
-  if (typeof o.socketPath !== "string") return false;
+  const hasSocketPath = typeof o.socketPath === "string";
+  const hasTcpAddress =
+    typeof o.host === "string" &&
+    o.host.trim().length > 0 &&
+    typeof o.port === "number" &&
+    Number.isFinite(o.port) &&
+    o.port > 0;
+  if (!hasSocketPath && !hasTcpAddress) return false;
   if ("timeoutMs" in o && o.timeoutMs !== undefined && typeof o.timeoutMs !== "number") {
     return false;
   }

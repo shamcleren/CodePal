@@ -1,18 +1,24 @@
 import { spawn } from "node:child_process";
+import type { ResponseTarget } from "../../../src/shared/sessionTypes";
 import { codePalMainJs, resolveElectronExecutable } from "./startHookCliProcess";
 
 const repoRoot = process.cwd();
 
 export async function sendStatusChange(
   payload: Record<string, unknown>,
-  ipcSocketPath: string,
+  ipcTarget: Extract<ResponseTarget, { host: string; port: number }>,
 ): Promise<void> {
   const body = JSON.stringify(payload);
   const mainJs = codePalMainJs(repoRoot);
   const exitCode: number = await new Promise((resolve, reject) => {
     const child = spawn(resolveElectronExecutable(), [mainJs, "--codepal-hook", "send-event"], {
       cwd: repoRoot,
-      env: { ...process.env, CODEPAL_SOCKET_PATH: ipcSocketPath },
+      env: {
+        ...process.env,
+        CODEPAL_SOCKET_PATH: "",
+        CODEPAL_IPC_HOST: ipcTarget.host,
+        CODEPAL_IPC_PORT: String(ipcTarget.port),
+      },
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.on("error", reject);

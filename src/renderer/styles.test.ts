@@ -56,6 +56,10 @@ describe("renderer layout styles", () => {
     expect(css).toMatch(/\.session-stream__artifact-summary\s*\{[\s\S]*text-overflow:\s*ellipsis;/);
     expect(css).toMatch(/\.session-stream__item--note\s*\{/);
     expect(css).toMatch(/\.session-stream__section--primary\s*\{/);
+    expect(css).toMatch(/\.session-stream__virtual-viewport\s*\{/);
+    expect(css).toMatch(/\.session-stream__virtual-viewport\s*\{[\s\S]*position:\s*relative;/);
+    expect(css).toMatch(/\.session-stream__virtual-item\s*\{/);
+    expect(css).toMatch(/\.session-stream__virtual-item\s*\{[\s\S]*position:\s*absolute;/);
     expect(css).toMatch(/\.session-stream__item--artifact-active::after\s*\{/);
     expect(css).toMatch(/@keyframes session-artifact-scan/);
     expect(css).toMatch(/\.pending-action\s*\{[\s\S]*border-radius:\s*14px;/);

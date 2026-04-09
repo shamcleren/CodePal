@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineItem } from "../monitorSession";
-import { buildItemRenderKeys } from "./HoverDetails";
+import { buildItemRenderKeys, buildPrimaryRenderEntries, calculateVirtualWindow } from "./HoverDetails";
 import { toRenderableMessageBody } from "../messageBody";
 
 function toolItem(id: string, timestamp: number): TimelineItem {
@@ -37,6 +37,43 @@ describe("buildItemRenderKeys", () => {
         toolItem("tool-c", 4),
       ]),
     ).toEqual(["tool-a::0", "tool-b::0", "tool-a::1", "tool-c::0"]);
+  });
+});
+
+describe("buildPrimaryRenderEntries", () => {
+  it("appends a typing indicator for active running sessions", () => {
+    const entries = buildPrimaryRenderEntries([toolItem("tool-a", 1)], "running", "正在整理回复");
+
+    expect(entries).toHaveLength(2);
+    expect(entries[1]).toMatchObject({
+      renderKey: "session-stream-typing-indicator",
+      isTypingItem: true,
+    });
+  });
+
+  it("keeps completed sessions free of synthetic typing rows", () => {
+    const entries = buildPrimaryRenderEntries([toolItem("tool-a", 1)], "completed", "typing");
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].isTypingItem).toBe(false);
+  });
+});
+
+describe("calculateVirtualWindow", () => {
+  it("returns a bounded visible range for a scrolling window", () => {
+    expect(
+      calculateVirtualWindow([0, 110, 220, 330], [100, 100, 100, 100], 95, 260),
+    ).toEqual({
+      startIndex: 0,
+      endIndex: 3,
+    });
+  });
+
+  it("returns an empty range for empty inputs", () => {
+    expect(calculateVirtualWindow([], [], 0, 100)).toEqual({
+      startIndex: 0,
+      endIndex: -1,
+    });
   });
 });
 
