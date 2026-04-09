@@ -92,6 +92,40 @@ export function buildCodexHookArgv(context: HookCommandContext): string[] {
   return buildCodePalHookArgv("codex", context);
 }
 
+export function buildClaudeInternalHookCommand(context: HookCommandContext): string {
+  const hookArgs = buildCodePalHookArgs("claude-internal");
+  if (context.packaged) {
+    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
+  }
+  return wrapElectronShellCommand(
+    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
+  );
+}
+
+export function buildClaudeInternalStatusLineCommand(context: HookCommandContext): string {
+  const hookArgs = buildCodePalHookArgs("claude-internal-statusline");
+  if (context.packaged) {
+    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
+  }
+  return wrapElectronShellCommand(
+    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
+  );
+}
+
+export function buildCodexInternalHookCommand(context: HookCommandContext): string {
+  const hookArgs = buildCodePalHookArgs("codex-internal");
+  if (context.packaged) {
+    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
+  }
+  return wrapElectronShellCommand(
+    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
+  );
+}
+
+export function buildCodexInternalHookArgv(context: HookCommandContext): string[] {
+  return buildCodePalHookArgv("codex-internal", context);
+}
+
 export function detectLegacyHookCommand(command: string): boolean {
   if (/scripts\/hooks\/[^"'\s]+\.sh/.test(command)) {
     return true;

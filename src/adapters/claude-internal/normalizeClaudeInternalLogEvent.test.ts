@@ -1,0 +1,383 @@
+import { describe, expect, it } from "vitest";
+import { normalizeClaudeInternalLogEvent } from "./normalizeClaudeInternalLogEvent";
+
+const sourcePath =
+  "/Users/demo/.claude-internal/projects/-Users-demo-codepal/cc438eb3-af18-4eab-b69f-76925a94655b.jsonl";
+
+describe("normalizeClaudeInternalLogEvent", () => {
+  it("maps hook progress stop events into completed lifecycle activity", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "progress",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        cwd: "/Users/demo/codepal",
+        timestamp: "2026-04-03T13:08:27.952Z",
+        data: {
+          type: "hook_progress",
+          hookEvent: "Stop",
+          hookName: "Stop",
+          command: "/Users/demo/.vibe-island/bin/vibe-island-bridge --source claude-internal",
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      tool: "claude-internal",
+      status: "completed",
+      task: "Claude Internal request finished",
+      meta: {
+        event_type: "progress",
+        cwd: "/Users/demo/codepal",
+        hook_event: "Stop",
+        hook_name: "Stop",
+        progress_type: "hook_progress",
+      },
+      activityItems: [
+        {
+          kind: "system",
+          source: "system",
+          title: "Claude Internal request finished",
+          body: "Claude Internal request finished",
+          tone: "completed",
+        },
+      ],
+    });
+  });
+
+  it("maps SubagentStop into completed lifecycle activity", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "progress",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:08:28.000Z",
+        data: {
+          type: "hook_progress",
+          hookEvent: "SubagentStop",
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      tool: "claude-internal",
+      status: "completed",
+      task: "Claude Internal request finished",
+    });
+  });
+
+  it("maps SessionEnd into idle lifecycle activity", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "progress",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:09:00.000Z",
+        data: {
+          type: "hook_progress",
+          hookEvent: "SessionEnd",
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      tool: "claude-internal",
+      status: "idle",
+      task: "Claude Internal session ended",
+      activityItems: [
+        {
+          kind: "system",
+          source: "system",
+          title: "Claude Internal session ended",
+          tone: "idle",
+        },
+      ],
+    });
+  });
+
+  it("maps user messages into running session activity", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "user",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        cwd: "/Users/demo/codepal",
+        gitBranch: "feat/dashboard",
+        version: "2.1.63",
+        timestamp: "2026-04-03T13:08:23.948Z",
+        message: {
+          role: "user",
+          content: "可以切换到 2.7 模型吗？",
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      type: "status_change",
+      tool: "claude-internal",
+      sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+      status: "running",
+      task: "可以切换到 2.7 模型吗？",
+      activityItems: [
+        {
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "可以切换到 2.7 模型吗？",
+        },
+      ],
+      meta: {
+        event_type: "user",
+        cwd: "/Users/demo/codepal",
+        git_branch: "feat/dashboard",
+        version: "2.1.63",
+        role: "user",
+      },
+    });
+  });
+
+  it("maps assistant text replies and marks end_turn as completed", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "assistant",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:08:27.948Z",
+        message: {
+          role: "assistant",
+          model: "MiniMax-M2.5",
+          stop_reason: "end_turn",
+          content: [
+            {
+              type: "text",
+              text: "\n\n根据当前可用的模型选项，我可以使用 Opus 4.6、Sonnet 4.6 和 Haiku 4.5。",
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      tool: "claude-internal",
+      status: "completed",
+      task: "根据当前可用的模型选项，我可以使用 Opus 4.6、Sonnet 4.6 和 Haiku 4.5。",
+      activityItems: [
+        {
+          kind: "message",
+          source: "assistant",
+          title: "Assistant",
+          body: "根据当前可用的模型选项，我可以使用 Opus 4.6、Sonnet 4.6 和 Haiku 4.5。",
+        },
+      ],
+      meta: {
+        event_type: "assistant",
+        role: "assistant",
+        model: "MiniMax-M2.5",
+      },
+    });
+  });
+
+  it("maps assistant tool_use entries into tool call activity", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "assistant",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:12:07.001Z",
+        message: {
+          role: "assistant",
+          model: "MiniMax-M2.7",
+          stop_reason: "tool_use",
+          content: [
+            {
+              type: "tool_use",
+              id: "call_function_8z8r0padslbj_1",
+              name: "WebFetch",
+              input: {
+                url: "https://code.claude.com/docs/en/settings",
+              },
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      tool: "claude-internal",
+      status: "running",
+      task: "WebFetch",
+      meta: {
+        event_type: "assistant",
+        role: "assistant",
+        model: "MiniMax-M2.7",
+        tool_name: "WebFetch",
+        callId: "call_function_8z8r0padslbj_1",
+      },
+      activityItems: [
+        {
+          kind: "tool",
+          source: "tool",
+          title: "WebFetch",
+          body: '{\n  "url": "https://code.claude.com/docs/en/settings"\n}',
+          toolName: "WebFetch",
+          toolPhase: "call",
+          meta: {
+            callId: "call_function_8z8r0padslbj_1",
+          },
+        },
+      ],
+    });
+  });
+
+  it("maps tool_result user entries into tool result activity", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "user",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:12:07.426Z",
+        toolUseResult: {
+          bytes: 497,
+          code: 301,
+        },
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "call_function_8z8r0padslbj_1",
+              content:
+                "REDIRECT DETECTED: The URL redirects to a different host.",
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      tool: "claude-internal",
+      status: "running",
+      task: "REDIRECT DETECTED: The URL redirects to a different host.",
+      meta: {
+        event_type: "user",
+        role: "user",
+        callId: "call_function_8z8r0padslbj_1",
+      },
+      activityItems: [
+        {
+          kind: "tool",
+          source: "tool",
+          title: "Tool result",
+          body: "REDIRECT DETECTED: The URL redirects to a different host.",
+          toolName: "Tool result",
+          toolPhase: "result",
+          meta: {
+            callId: "call_function_8z8r0padslbj_1",
+          },
+        },
+      ],
+    });
+  });
+
+  it("ignores Claude local-command/meta user entries so they do not revive sessions", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "user",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        isMeta: true,
+        timestamp: "2026-04-07T03:50:53.384Z",
+        message: {
+          role: "user",
+          content:
+            "<command-name>/status</command-name>\n<command-message>status</command-message>",
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toBeNull();
+  });
+
+  it("maps rejected tool results into idle instead of running", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "user",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-07T08:17:12.149Z",
+        toolUseResult: "User rejected tool use",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_012uKFbEjptrbaSM9S6choun",
+              is_error: true,
+              content:
+                "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.",
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      tool: "claude-internal",
+      status: "idle",
+      activityItems: [
+        expect.objectContaining({
+          kind: "tool",
+          toolPhase: "result",
+          tone: "idle",
+        }),
+      ],
+    });
+  });
+
+  it("returns null for pure thinking-only assistant entries", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "assistant",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:08:27.802Z",
+        message: {
+          role: "assistant",
+          model: "MiniMax-M2.5",
+          content: [
+            {
+              type: "thinking",
+              thinking: "让我先整理一下。",
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toBeNull();
+  });
+
+  it("falls back to sessionId from filename when entry lacks sessionId", () => {
+    const event = normalizeClaudeInternalLogEvent(
+      JSON.stringify({
+        type: "user",
+        timestamp: "2026-04-03T13:08:23.948Z",
+        message: {
+          role: "user",
+          content: "Hello",
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+      tool: "claude-internal",
+    });
+  });
+
+  it("returns null for invalid JSON", () => {
+    const event = normalizeClaudeInternalLogEvent("{bad json", sourcePath);
+    expect(event).toBeNull();
+  });
+});

@@ -10,9 +10,12 @@ import type {
 } from "../../shared/integrationTypes";
 import {
   buildClaudeHookCommand,
+  buildClaudeInternalHookCommand,
   buildClaudeStatusLineCommand,
+  buildClaudeInternalStatusLineCommand,
   buildCodeBuddyHookCommand,
   buildCodexHookArgv,
+  buildCodexInternalHookArgv,
   buildCursorHookCommand,
   detectCodePalHookCommand,
   detectLegacyHookCommand,
@@ -39,6 +42,8 @@ const AGENT_LABELS: Record<IntegrationAgentId, string> = {
   codex: "Codex",
   cursor: "Cursor",
   codebuddy: "CodeBuddy",
+  "claude-internal": "Claude Internal",
+  "codex-internal": "Codex Internal",
 };
 
 function defaultNow() {
@@ -217,6 +222,10 @@ function claudeConfigPath(homeDir: string): string {
   return path.join(homeDir, ".claude", "settings.json");
 }
 
+function claudeInternalConfigPath(homeDir: string): string {
+  return path.join(homeDir, ".claude-internal", "settings.json");
+}
+
 function cursorHookScriptPath(hookScriptsRoot: string): string {
   return path.join(hookScriptsRoot, "cursor-agent-hook.sh");
 }
@@ -235,6 +244,18 @@ function codexHooksPath(homeDir: string): string {
 
 function codexSessionsPath(homeDir: string): string {
   return path.join(homeDir, ".codex", "sessions");
+}
+
+function codexInternalConfigPath(homeDir: string): string {
+  return path.join(homeDir, ".codex-internal", "config.toml");
+}
+
+function codexInternalHooksPath(homeDir: string): string {
+  return path.join(homeDir, ".codex-internal", "hooks.json");
+}
+
+function codexInternalSessionsPath(homeDir: string): string {
+  return path.join(homeDir, ".codex-internal", "sessions");
 }
 
 type CodexNotifyConfig =
@@ -489,6 +510,140 @@ function inspectCodexConfig(
   };
 }
 
+function inspectCodexInternalConfig(
+  homeDir: string,
+  hookCtx: HookCommandContext,
+  lastEvent?: LastEvent,
+): IntegrationAgentDiagnostics {
+  const configPath = codexInternalConfigPath(homeDir);
+  const hooksPath = codexInternalHooksPath(homeDir);
+  const sessionsPath = codexInternalSessionsPath(homeDir);
+  const sessionsExist = fs.existsSync(sessionsPath);
+  const hooksConfig = readOptionalJson(hooksPath);
+  const config = readOptionalText(configPath);
+  const desiredNotifyArgv = buildCodexInternalHookArgv(hookCtx);
+
+  let health: IntegrationHealth = "not_configured";
+  let hookInstalled = false;
+  let statusMessage = sessionsExist
+    ? "已接入 Codex Internal 监控（基于 session 日志）"
+    : "未检测到 Codex Internal session 日志或 hooks";
+  let statusMessageKey = sessionsExist
+    ? "integration.message.codex-internal.monitoring"
+    : undefined;
+  let displayPath = sessionsExist ? sessionsPath : hooksPath;
+
+  if (hooksConfig.error) {
+    health = "repair_needed";
+    statusMessage = hooksConfig.error;
+    displayPath = hooksPath;
+  } else if (hooksConfig.parsed) {
+    const hooksValue = hooksConfig.parsed.hooks;
+    if (hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)) {
+      const hooks = hooksValue as Record<string, unknown>;
+      const eventNames = ["SessionStart", "Stop", "UserPromptSubmit"];
+      const hasAnyHooks = eventNames.some((eventName) => {
+        const eventEntries = hooks[eventName];
+        return Array.isArray(eventEntries) && eventEntries.length > 0;
+      });
+      const hasCodePalHooks = eventNames.every((eventName) => {
+        const eventEntries = hooks[eventName];
+        return (
+          Array.isArray(eventEntries) &&
+          eventEntries.some((entry) => {
+            if (!entry || typeof entry !== "object") {
+              return false;
+            }
+            const nestedHooks = (entry as Record<string, unknown>).hooks;
+            return (
+              Array.isArray(nestedHooks) &&
+              nestedHooks.some(
+                (hook) =>
+                  hook &&
+                  typeof hook === "object" &&
+                  detectCodePalHookCommand(
+                    String((hook as Record<string, unknown>).command ?? ""),
+                    "codex-internal",
+                  ),
+              )
+            );
+          })
+        );
+      });
+
+      if (hasAnyHooks) {
+        health = "active";
+        hookInstalled = true;
+        statusMessage = hasCodePalHooks
+          ? "已接入 Codex Internal"
+          : "已检测到 Codex Internal 接入";
+        statusMessageKey = hasCodePalHooks
+          ? "integration.message.codex-internal.active"
+          : "integration.message.codex-internal.detected";
+        if (sessionsExist) {
+          statusMessage += "，并持续同步会话记录";
+          statusMessageKey = hasCodePalHooks
+            ? "integration.message.codex-internal.activeWithSessions"
+            : "integration.message.codex-internal.detected";
+        }
+        displayPath = hooksPath;
+      }
+    } else {
+      health = "repair_needed";
+      statusMessage = "Codex Internal hooks.json 结构不兼容";
+      statusMessageKey = "integration.message.codex-internal.invalidHooks";
+      displayPath = hooksPath;
+    }
+  }
+
+  if (health !== "active" && config.error) {
+    health = "repair_needed";
+    statusMessage = config.error;
+    displayPath = configPath;
+  } else if (health !== "active" && config.text !== undefined) {
+    const notify = readCodexNotifyConfig(config.text);
+    if (notify.kind === "invalid") {
+      health = "repair_needed";
+      statusMessage = notify.message;
+      displayPath = configPath;
+    } else if (notify.kind === "parsed" && arraysEqual(notify.argv, desiredNotifyArgv)) {
+      health = "active";
+      hookInstalled = true;
+      statusMessage = sessionsExist
+        ? "已增强 Codex Internal 接入，并持续同步会话记录"
+        : "已增强 Codex Internal 接入";
+      statusMessageKey = sessionsExist
+        ? "integration.message.codex-internal.enhancedWithSessions"
+        : "integration.message.codex-internal.enhanced";
+      displayPath = configPath;
+    } else if (sessionsExist) {
+      health = "active";
+    }
+  } else if (sessionsExist) {
+    health = "active";
+  }
+
+  const { healthLabel, healthLabelKey } = labelsForHealth(health);
+
+  return {
+    id: "codex-internal",
+    label: AGENT_LABELS["codex-internal"],
+    supported: false,
+    configPath: displayPath,
+    configExists: fs.existsSync(displayPath),
+    hookScriptPath: displayPath,
+    hookScriptExists: fs.existsSync(displayPath),
+    hookInstalled,
+    health,
+    healthLabel,
+    healthLabelKey,
+    actionLabel: "",
+    statusMessage,
+    statusMessageKey,
+    ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
+  };
+}
+
 function inspectCursorConfig(
   homeDir: string,
   hookScriptsRoot: string,
@@ -633,6 +788,17 @@ function claudeRequiredNewEntries(hookCtx: HookCommandContext): ClaudeRequiredEn
   ];
 }
 
+function claudeInternalRequiredNewEntries(hookCtx: HookCommandContext): ClaudeRequiredEntry[] {
+  const command = buildClaudeInternalHookCommand(hookCtx);
+  return [
+    { eventName: "SessionStart", matcher: "*", command },
+    { eventName: "UserPromptSubmit", command },
+    { eventName: "Notification", command },
+    { eventName: "Stop", command },
+    { eventName: "SessionEnd", command },
+  ];
+}
+
 function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
@@ -683,6 +849,15 @@ function hasClaudeStatusLine(config: Record<string, unknown>, hookCtx: HookComma
   }
   const expected = buildClaudeStatusLineCommand(hookCtx);
   return command === expected || commandContainsCodePalSubcommand(command, "claude-statusline");
+}
+
+function hasClaudeInternalStatusLine(config: Record<string, unknown>, hookCtx: HookCommandContext): boolean {
+  const command = readClaudeStatusLineCommand(config);
+  if (!command) {
+    return false;
+  }
+  const expected = buildClaudeInternalStatusLineCommand(hookCtx);
+  return command === expected || commandContainsCodePalSubcommand(command, "claude-internal-statusline");
 }
 
 function codeBuddyEveryRequiredSatisfiedByDetectLegacy(
@@ -842,6 +1017,84 @@ function inspectClaudeConfig(
   return {
     id: "claude",
     label: AGENT_LABELS.claude,
+    supported: true,
+    configPath,
+    configExists: config.exists,
+    hookScriptPath: configPath,
+    hookScriptExists: config.exists,
+    hookInstalled,
+    health,
+    healthLabel,
+    healthLabelKey,
+    actionLabel,
+    actionLabelKey,
+    statusMessage,
+    statusMessageKey,
+    ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
+  };
+}
+
+function inspectClaudeInternalConfig(
+  homeDir: string,
+  hookCtx: HookCommandContext,
+  lastEvent?: LastEvent,
+): IntegrationAgentDiagnostics {
+  const configPath = claudeInternalConfigPath(homeDir);
+  const config = readOptionalJson(configPath);
+  const required = claudeInternalRequiredNewEntries(hookCtx);
+
+  let health: IntegrationHealth = "not_configured";
+  let hookInstalled = false;
+  let statusMessage = "未配置 CodePal Claude Internal hooks";
+  let statusMessageKey = "integration.message.claude-internal.notConfigured";
+
+  if (config.error) {
+    health = "repair_needed";
+    statusMessage = config.error;
+  } else if (!config.exists) {
+    health = "not_configured";
+  } else if (config.parsed) {
+    const hasStatusLine = hasClaudeInternalStatusLine(config.parsed, hookCtx);
+    const hooksValue = config.parsed.hooks;
+    if (hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)) {
+      const hooks = hooksValue as Record<string, unknown>;
+      if (claudeHooksMatch(hooks, required) && hasStatusLine) {
+        health = "active";
+        hookInstalled = true;
+        statusMessage = "已配置用户级 Claude Internal hooks 与 statusLine";
+        statusMessageKey = "integration.message.claude-internal.active";
+      } else if (claudeHooksMatch(hooks, required)) {
+        health = "repair_needed";
+        statusMessage = "Claude Internal hooks 已配置，但缺少 CodePal statusLine";
+        statusMessageKey = "integration.message.claude-internal.missingStatusLine";
+      } else if (!claudeHooksEmpty(hooks)) {
+        health = "repair_needed";
+        statusMessage = "Claude Internal settings.json hooks 与当前 CodePal 要求不一致";
+        statusMessageKey = "integration.message.claude-internal.mismatch";
+      } else if (hasStatusLine) {
+        health = "repair_needed";
+        statusMessage = "Claude Internal statusLine 已配置，但 hooks 未完成";
+        statusMessageKey = "integration.message.claude-internal.statusLineOnly";
+      }
+    } else if (!("hooks" in config.parsed)) {
+      health = hasStatusLine ? "repair_needed" : "not_configured";
+      statusMessage = hasStatusLine
+        ? "Claude Internal statusLine 已配置，但 hooks 未完成"
+        : statusMessage;
+      statusMessageKey = hasStatusLine
+        ? "integration.message.claude-internal.statusLineOnly"
+        : "integration.message.claude-internal.notConfigured";
+    } else {
+      health = "repair_needed";
+      statusMessage = "Claude Internal settings.json hooks 结构不兼容";
+      statusMessageKey = "integration.message.claude-internal.invalid";
+    }
+  }
+
+  const { healthLabel, actionLabel, healthLabelKey, actionLabelKey } = labelsForHealth(health);
+  return {
+    id: "claude-internal",
+    label: AGENT_LABELS["claude-internal"],
     supported: true,
     configPath,
     configExists: config.exists,
@@ -1155,6 +1408,102 @@ function installCodexHooksFile(
   return { changed: next.changed, backupPath };
 }
 
+function installClaudeInternalHooksFile(
+  homeDir: string,
+  hookCtx: HookCommandContext,
+  now: () => number,
+): { changed: boolean; backupPath?: string } {
+  const configPath = claudeInternalConfigPath(homeDir);
+  const current = readOptionalJson(configPath);
+  if (current.error) {
+    throw new Error(current.error);
+  }
+
+  const next = { ...(current.parsed ?? {}) } as Record<string, unknown>;
+  const hooksValue = next.hooks;
+  if (
+    hooksValue !== undefined &&
+    (!hooksValue || typeof hooksValue !== "object" || Array.isArray(hooksValue))
+  ) {
+    throw new Error("Claude Internal settings.json hooks 结构不兼容");
+  }
+  const hooks = hooksValue ? ({ ...hooksValue } as Record<string, unknown>) : {};
+
+  let changed = current.exists === false;
+
+  for (const required of claudeInternalRequiredNewEntries(hookCtx)) {
+    const existingEntries = hooks[required.eventName];
+    if (existingEntries !== undefined && !Array.isArray(existingEntries)) {
+      throw new Error(`Claude Internal hooks.${required.eventName} 不是数组`);
+    }
+    const entries = Array.isArray(existingEntries) ? [...existingEntries] : [];
+    if (!hasClaudeHookEntry(entries, required)) {
+      entries.push({
+        ...(required.matcher !== undefined ? { matcher: required.matcher } : {}),
+        hooks: [{ type: "command", command: required.command }],
+      });
+      changed = true;
+    }
+    hooks[required.eventName] = entries;
+  }
+
+  next.hooks = hooks;
+  const desiredStatusLineCommand = buildClaudeInternalStatusLineCommand(hookCtx);
+  const existingStatusLineCommand = readClaudeStatusLineCommand(next);
+  if (!existingStatusLineCommand) {
+    next.statusLine = {
+      type: "command",
+      command: desiredStatusLineCommand,
+    };
+    changed = true;
+  } else if (!commandContainsCodePalSubcommand(existingStatusLineCommand, "claude-internal-statusline")) {
+    next.statusLine = {
+      type: "command",
+      command: buildChainedClaudeStatusLineCommand(
+        existingStatusLineCommand,
+        desiredStatusLineCommand,
+      ),
+    };
+    changed = true;
+  }
+
+  let backupPath: string | undefined;
+  if (changed) {
+    ensureParentDir(configPath);
+    if (current.exists) {
+      backupPath = backupFile(configPath, now);
+    }
+    fs.writeFileSync(configPath, formatJson(next));
+  }
+
+  return { changed, backupPath };
+}
+
+function installCodexInternalHooksFile(
+  homeDir: string,
+  hookCtx: HookCommandContext,
+  now: () => number,
+): { changed: boolean; backupPath?: string } {
+  const configPath = codexInternalConfigPath(homeDir);
+  const current = readOptionalText(configPath);
+  if (current.error) {
+    throw new Error(current.error);
+  }
+
+  const next = upsertCodexNotifyConfig(current.text ?? "", buildCodexInternalHookArgv(hookCtx));
+  let backupPath: string | undefined;
+
+  if (next.changed) {
+    ensureParentDir(configPath);
+    if (current.exists) {
+      backupPath = backupFile(configPath, now);
+    }
+    fs.writeFileSync(configPath, next.text);
+  }
+
+  return { changed: next.changed, backupPath };
+}
+
 function formatExecutableLabel(packaged: boolean, execPath: string): string {
   const base = path.basename(execPath);
   return packaged ? `CodePal 已打包构建 · ${base}` : "CodePal 开发构建";
@@ -1181,8 +1530,14 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
     if (agentId === "claude") {
       return inspectClaudeConfig(options.homeDir, hookCtx, lastEvents.get(agentId));
     }
+    if (agentId === "claude-internal") {
+      return inspectClaudeInternalConfig(options.homeDir, hookCtx, lastEvents.get(agentId));
+    }
     if (agentId === "codex") {
       return inspectCodexConfig(options.homeDir, hookCtx, lastEvents.get(agentId));
+    }
+    if (agentId === "codex-internal") {
+      return inspectCodexInternalConfig(options.homeDir, hookCtx, lastEvents.get(agentId));
     }
     if (agentId === "cursor") {
       return inspectCursorConfig(
@@ -1205,7 +1560,7 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
       listener = next;
     },
     recordEvent(tool: string, status: SessionStatus, timestamp: number) {
-      if (tool === "claude" || tool === "cursor" || tool === "codebuddy" || tool === "codex") {
+      if (tool === "claude" || tool === "cursor" || tool === "codebuddy" || tool === "codex" || tool === "claude-internal" || tool === "codex-internal") {
         lastEvents.set(tool, { at: timestamp, status });
       }
     },
@@ -1220,7 +1575,9 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
         },
         agents: [
           getAgentDiagnostics("claude"),
+          getAgentDiagnostics("claude-internal"),
           getAgentDiagnostics("codex"),
+          getAgentDiagnostics("codex-internal"),
           getAgentDiagnostics("cursor"),
           getAgentDiagnostics("codebuddy"),
         ],
@@ -1228,14 +1585,20 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
     },
     installHooks(agentId: IntegrationAgentId): IntegrationInstallResult {
       const hookCtx = integrationHookContext();
-      const result =
-        agentId === "claude"
-          ? installClaudeHooksFile(options.homeDir, hookCtx, now)
-          : agentId === "cursor"
-          ? installCursorHooksFile(options.homeDir, hookCtx, now)
-          : agentId === "codebuddy"
-            ? installCodeBuddyHooksFile(options.homeDir, hookCtx, now)
-            : installCodexHooksFile(options.homeDir, hookCtx, now);
+      let result: { changed: boolean; backupPath?: string };
+      if (agentId === "claude") {
+        result = installClaudeHooksFile(options.homeDir, hookCtx, now);
+      } else if (agentId === "claude-internal") {
+        result = installClaudeInternalHooksFile(options.homeDir, hookCtx, now);
+      } else if (agentId === "cursor") {
+        result = installCursorHooksFile(options.homeDir, hookCtx, now);
+      } else if (agentId === "codebuddy") {
+        result = installCodeBuddyHooksFile(options.homeDir, hookCtx, now);
+      } else if (agentId === "codex-internal") {
+        result = installCodexInternalHooksFile(options.homeDir, hookCtx, now);
+      } else {
+        result = installCodexHooksFile(options.homeDir, hookCtx, now);
+      }
 
       const diagnostics = getAgentDiagnostics(agentId);
       return {

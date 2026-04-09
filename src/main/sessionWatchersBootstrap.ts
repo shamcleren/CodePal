@@ -1,6 +1,8 @@
 import { createClaudeSessionWatcher } from "./claude/claudeSessionWatcher";
+import { createClaudeInternalSessionWatcher } from "./claude-internal/claudeInternalSessionWatcher";
 import { createCodeBuddySessionWatcher } from "./codebuddy/codebuddySessionWatcher";
 import { createCodexSessionWatcher } from "./codex/codexSessionWatcher";
+import { createCodexInternalSessionWatcher } from "./codex-internal/codexInternalSessionWatcher";
 import { createJetBrainsSessionWatcher } from "./jetbrains/jetbrainsSessionWatcher";
 import type { createIntegrationService } from "./integrations/integrationService";
 import type { SessionEvent } from "./session/sessionStore";
@@ -14,7 +16,9 @@ type IntegrationServiceLike = Pick<ReturnType<typeof createIntegrationService>, 
 
 type WatcherSet = {
   codex: ReturnType<typeof createCodexSessionWatcher>;
+  codexInternal: ReturnType<typeof createCodexInternalSessionWatcher>;
   claude: ReturnType<typeof createClaudeSessionWatcher>;
+  claudeInternal: ReturnType<typeof createClaudeInternalSessionWatcher>;
   codeBuddy: ReturnType<typeof createCodeBuddySessionWatcher>;
   jetbrains: ReturnType<typeof createJetBrainsSessionWatcher> | null;
 };
@@ -29,7 +33,9 @@ type StartSessionWatchersOptions = {
   broadcastSessions: () => void;
   broadcastUsageOverview: () => void;
   createCodexSessionWatcher?: typeof createCodexSessionWatcher;
+  createCodexInternalSessionWatcher?: typeof createCodexInternalSessionWatcher;
   createClaudeSessionWatcher?: typeof createClaudeSessionWatcher;
+  createClaudeInternalSessionWatcher?: typeof createClaudeInternalSessionWatcher;
   createCodeBuddySessionWatcher?: typeof createCodeBuddySessionWatcher;
   createJetBrainsSessionWatcher?: typeof createJetBrainsSessionWatcher;
 };
@@ -78,7 +84,9 @@ export function resolveJetBrainsLogRoot(
 
 export function startSessionWatchers(options: StartSessionWatchersOptions) {
   const makeCodexWatcher = options.createCodexSessionWatcher ?? createCodexSessionWatcher;
+  const makeCodexInternalWatcher = options.createCodexInternalSessionWatcher ?? createCodexInternalSessionWatcher;
   const makeClaudeWatcher = options.createClaudeSessionWatcher ?? createClaudeSessionWatcher;
+  const makeClaudeInternalWatcher = options.createClaudeInternalSessionWatcher ?? createClaudeInternalSessionWatcher;
   const makeCodeBuddyWatcher =
     options.createCodeBuddySessionWatcher ?? createCodeBuddySessionWatcher;
   const makeJetBrainsWatcher =
@@ -103,9 +111,35 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
       onUsageSnapshot: (snapshot) =>
         routeUsageSnapshot(options.usageStore, options.broadcastUsageOverview, snapshot),
     }),
+    codexInternal: makeCodexInternalWatcher({
+      sessionsRoot:
+        options.env.CODEPAL_CODEX_INTERNAL_SESSIONS_ROOT?.trim() || `${options.homeDir}/.codex-internal/sessions`,
+      onEvent: (event) =>
+        routeSessionEvent(
+          options.sessionStore,
+          options.integrationService,
+          options.broadcastSessions,
+          event,
+        ),
+      onUsageSnapshot: (snapshot) =>
+        routeUsageSnapshot(options.usageStore, options.broadcastUsageOverview, snapshot),
+    }),
     claude: makeClaudeWatcher({
       projectsRoot:
         options.env.CODEPAL_CLAUDE_PROJECTS_ROOT?.trim() || `${options.homeDir}/.claude/projects`,
+      onEvent: (event) =>
+        routeSessionEvent(
+          options.sessionStore,
+          options.integrationService,
+          options.broadcastSessions,
+          event,
+        ),
+      onUsageSnapshot: (snapshot) =>
+        routeUsageSnapshot(options.usageStore, options.broadcastUsageOverview, snapshot),
+    }),
+    claudeInternal: makeClaudeInternalWatcher({
+      projectsRoot:
+        options.env.CODEPAL_CLAUDE_INTERNAL_PROJECTS_ROOT?.trim() || `${options.homeDir}/.claude-internal/projects`,
       onEvent: (event) =>
         routeSessionEvent(
           options.sessionStore,
@@ -151,8 +185,14 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
   void watchers.codex.pollOnce().catch((error) => {
     logInitialPollError("Codex", error);
   });
+  void watchers.codexInternal.pollOnce().catch((error) => {
+    logInitialPollError("Codex-Internal", error);
+  });
   void watchers.claude.pollOnce().catch((error) => {
     logInitialPollError("Claude", error);
+  });
+  void watchers.claudeInternal.pollOnce().catch((error) => {
+    logInitialPollError("Claude-Internal", error);
   });
   void watchers.codeBuddy.pollOnce().catch((error) => {
     logInitialPollError("CodeBuddy", error);
@@ -164,14 +204,18 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
   }
 
   watchers.codex.start();
+  watchers.codexInternal.start();
   watchers.claude.start();
+  watchers.claudeInternal.start();
   watchers.codeBuddy.start();
   watchers.jetbrains?.start();
 
   return {
     stop() {
       watchers.codex.stop();
+      watchers.codexInternal.stop();
       watchers.claude.stop();
+      watchers.claudeInternal.stop();
       watchers.codeBuddy.stop();
       watchers.jetbrains?.stop();
     },

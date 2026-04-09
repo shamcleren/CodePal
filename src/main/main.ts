@@ -202,7 +202,7 @@ function wireActionResponseIpc(
       typeof (payload as Record<string, unknown>).agentId === "string"
         ? (payload as Record<string, unknown>).agentId
         : "";
-    if (agentId !== "claude" && agentId !== "cursor" && agentId !== "codebuddy" && agentId !== "codex") {
+    if (agentId !== "claude" && agentId !== "cursor" && agentId !== "codebuddy" && agentId !== "codex" && agentId !== "claude-internal" && agentId !== "codex-internal") {
       throw new Error("unsupported integration agent");
     }
     return integrationService.installHooks(agentId);

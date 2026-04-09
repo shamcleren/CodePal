@@ -1,7 +1,9 @@
 import { runBlockingHookFromRaw } from "./blockingHookBridge";
 import { runClaudeHookPipeline } from "./claudeHook";
-import { buildClaudeStatusLineUsageLine } from "./claudeStatusLine";
+import { runClaudeInternalHookPipeline } from "./claudeInternalHook";
+import { buildClaudeStatusLineUsageLine, buildClaudeInternalStatusLineUsageLine } from "./claudeStatusLine";
 import { runCodexHookPipeline } from "./codexHook";
+import { runCodexInternalHookPipeline } from "./codexInternalHook";
 import { buildCursorLifecycleEventLine } from "./cursorLifecycleHook";
 import { runCodeBuddyHookPipeline } from "./codeBuddyHook";
 import { runCursorHookPipeline } from "./cursorHook";
@@ -32,8 +34,11 @@ type ParsedArgv =
   | { kind: "invalid"; message: string }
   | { kind: "claude" }
   | { kind: "claude-statusline" }
+  | { kind: "claude-internal" }
+  | { kind: "claude-internal-statusline" }
   | { kind: "codebuddy" }
   | { kind: "codex"; payloadArg?: string }
+  | { kind: "codex-internal"; payloadArg?: string }
   | { kind: "cursor" }
   | { kind: "cursor-lifecycle"; phase: "sessionStart" | "stop" }
   | { kind: "send-event" }
@@ -61,11 +66,23 @@ function parseArgv(argv: string[]): ParsedArgv {
   if (subcommand === "claude-statusline") {
     return { kind: "claude-statusline" };
   }
+  if (subcommand === "claude-internal") {
+    return { kind: "claude-internal" };
+  }
+  if (subcommand === "claude-internal-statusline") {
+    return { kind: "claude-internal-statusline" };
+  }
   if (subcommand === "codex") {
     const payloadArg = argv[index + 2];
     return typeof payloadArg === "string" && payloadArg.trim()
       ? { kind: "codex", payloadArg }
       : { kind: "codex" };
+  }
+  if (subcommand === "codex-internal") {
+    const payloadArg = argv[index + 2];
+    return typeof payloadArg === "string" && payloadArg.trim()
+      ? { kind: "codex-internal", payloadArg }
+      : { kind: "codex-internal" };
   }
   if (subcommand === "cursor") {
     return { kind: "cursor" };
@@ -174,12 +191,44 @@ export async function runHookCli(
       return 0;
     }
 
+    if (parsed.kind === "claude-internal") {
+      if (!rawText) {
+        throw new Error("claudeInternalHook: empty payload");
+      }
+      const line = await runClaudeInternalHookPipeline(rawText, env);
+      await sendEventLine(line, env);
+      return 0;
+    }
+
+    if (parsed.kind === "claude-internal-statusline") {
+      if (!rawText) {
+        throw new Error("claudeInternalStatusLine: empty payload");
+      }
+      const line = buildClaudeInternalStatusLineUsageLine(rawText, env);
+      if (line) {
+        await sendEventLine(line, env);
+      }
+      return 0;
+    }
+
     if (parsed.kind === "codex") {
       const codexPayload = rawText || parsed.payloadArg?.trim() || "";
       if (!codexPayload) {
         throw new Error("codexHook: empty payload");
       }
       const line = await runCodexHookPipeline(codexPayload, env);
+      if (line !== undefined && line !== "") {
+        stdout.write(`${line}\n`);
+      }
+      return 0;
+    }
+
+    if (parsed.kind === "codex-internal") {
+      const codexInternalPayload = rawText || parsed.payloadArg?.trim() || "";
+      if (!codexInternalPayload) {
+        throw new Error("codexInternalHook: empty payload");
+      }
+      const line = await runCodexInternalHookPipeline(codexInternalPayload, env);
       if (line !== undefined && line !== "") {
         stdout.write(`${line}\n`);
       }

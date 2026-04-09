@@ -146,9 +146,10 @@ function parseStatusLinePayload(trimmed: string): Record<string, unknown> {
   }
 }
 
-export function buildClaudeStatusLineUsageLine(
+function buildStatusLineUsageLine(
   rawStdin: string,
   env: NodeJS.ProcessEnv,
+  agent: string,
 ): string | null {
   const payload = parseStatusLinePayload(rawStdin.trim());
   const sessionId =
@@ -164,19 +165,33 @@ export function buildClaudeStatusLineUsageLine(
   }
 
   const snapshot: UsageSnapshot = {
-    agent: "claude",
+    agent,
     sessionId,
     source: "statusline-derived",
     updatedAt: Date.now(),
     title:
       firstString(payload, ["title"]) ??
       firstString(asRecord(payload.model) ?? {}, ["display_name", "name"]) ??
-      "Claude quota",
+      `${agent} quota`,
     rateLimit,
     meta: {
-      statusline_source: "claude",
+      statusline_source: agent,
     },
   };
 
   return JSON.stringify(snapshot);
+}
+
+export function buildClaudeStatusLineUsageLine(
+  rawStdin: string,
+  env: NodeJS.ProcessEnv,
+): string | null {
+  return buildStatusLineUsageLine(rawStdin, env, "claude");
+}
+
+export function buildClaudeInternalStatusLineUsageLine(
+  rawStdin: string,
+  env: NodeJS.ProcessEnv,
+): string | null {
+  return buildStatusLineUsageLine(rawStdin, env, "claude-internal");
 }
