@@ -1,0 +1,10 @@
+{
+  "hook_event_name": "afterShellExecution",
+  "session_id": "cursor-fixture-107",
+  "tool_name": "Bash",
+  "stdout": "PASS very-long-raw-command-output",
+  "stderr": "warning: noisy stderr details",
+  "tool_result": {
+    "summary": "3 tests passed with warnings"
+  }
+}

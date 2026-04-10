@@ -1,0 +1,38 @@
+name: Feature Request
+description: Suggest an improvement for CodePal
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow gap
+      description: What problem are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: Describe the behavior or UX you want to see
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Monitoring
+        - Usage / Quota
+        - Integrations / Diagnostics
+        - Packaging / Updates
+        - UI / UX
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add examples, screenshots, or related workflows if useful

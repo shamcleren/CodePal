@@ -1,0 +1,9 @@
+{
+  "session_id": "cb-session-103",
+  "transcript_path": "/Users/demo/.codebuddy/projects/demo/transcript.jsonl",
+  "cwd": "/workspace/demo",
+  "permission_mode": "default",
+  "hook_event_name": "Notification",
+  "message": "CodeBuddy has been idle for 60 seconds",
+  "notification_type": "idle_prompt"
+}

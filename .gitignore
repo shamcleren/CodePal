@@ -1,0 +1,27 @@
+node_modules
+dist
+dist-electron
+out
+release
+*.log
+.DS_Store
+.env
+.env.local
+.env.*.local
+coverage
+*.tsbuildinfo
+.claude/
+.codex/
+.cursor/
+.idea/
+.superpowers/
+docs/superpowers/
+build/icon-candidate*
+build/*.iconset/
+scripts/debug/
+
+# Playwright (E2E)
+test-results/
+playwright-report/
+.worktrees/
+config/settings-dev.yaml

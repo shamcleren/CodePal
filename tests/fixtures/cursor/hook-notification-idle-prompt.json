@@ -1,0 +1,6 @@
+{
+  "hook_event_name": "Notification",
+  "session_id": "cursor-fixture-102",
+  "notification_type": "idle_prompt",
+  "message": "Cursor has been idle for 60 seconds"
+}

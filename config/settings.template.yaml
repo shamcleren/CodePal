@@ -1,0 +1,41 @@
+version: 1
+locale: system
+display:
+  showInStatusBar: true
+  hiddenAgents: []
+  density: detailed
+history:
+  persistenceEnabled: true
+  retentionDays: 2
+  maxStorageMb: 100
+codebuddy:
+  code:
+    enabled: true
+    label: CodeBuddy Code
+    loginUrl: https://tencent.sso.codebuddy.cn/profile/usage
+    quotaEndpoint: https://tencent.sso.codebuddy.cn/billing/meter/get-enterprise-user-usage
+    cookieNames:
+      - RIO_TOKEN
+      - RIO_TOKEN_HTTPS
+      - P_RIO_TOKEN
+      - BK_TICKET
+      - tof_auth
+      - keycloak_session
+      - x_host_key_access
+      - x_host_key_access_https
+      - x-tofapi-host-key
+  enterprise:
+    enabled: false
+    label: CodeBuddy Enterprise
+    loginUrl: ""
+    quotaEndpoint: ""
+    cookieNames:
+      - RIO_TOKEN
+      - RIO_TOKEN_HTTPS
+      - P_RIO_TOKEN
+      - BK_TICKET
+      - tof_auth
+      - keycloak_session
+      - x_host_key_access
+      - x_host_key_access_https
+      - x-tofapi-host-key

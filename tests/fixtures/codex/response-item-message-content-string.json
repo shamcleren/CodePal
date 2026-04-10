@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-04-02T08:13:11.750Z",
+  "type": "response_item",
+  "payload": {
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "output_text",
+        "content": "我先确认 watcher，再补 fixture。"
+      }
+    ]
+  }
+}

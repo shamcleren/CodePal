@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-04-02T08:13:13.500Z",
+  "type": "response_item",
+  "payload": {
+    "type": "function_call_output",
+    "name": "shell",
+    "output": [
+      {
+        "type": "text",
+        "text": "PASS src/adapters/codex/normalizeCodexLogEvent.test.ts"
+      }
+    ]
+  }
+}

@@ -1,0 +1,107 @@
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+const stylesPath = path.resolve(process.cwd(), "src/renderer/styles.css");
+
+describe("renderer layout styles", () => {
+  it("keeps the session list scrollable inside the floating window", () => {
+    const css = fs.readFileSync(stylesPath, "utf8");
+
+    expect(css).toMatch(/\.app\s*\{[\s\S]*height:\s*100vh;/);
+    expect(css).toMatch(/\.app\s*\{[\s\S]*overflow:\s*hidden;/);
+    expect(css).toMatch(/\.session-list\s*\{[\s\S]*min-height:\s*0;/);
+    expect(css).toMatch(/\.session-list\s*\{[\s\S]*overflow-y:\s*auto;/);
+  });
+
+  it("keeps the compact status row and contained session details layout", () => {
+    const css = fs.readFileSync(stylesPath, "utf8");
+
+    expect(css).toMatch(/\.status-bar\s*\{[\s\S]*align-items:\s*center;/);
+    expect(css).toMatch(/\.status-bar\s*\{[\s\S]*justify-content:\s*space-between;/);
+    expect(css).toMatch(/\.status-bar\s*\{[\s\S]*padding:\s*10px 12px;/);
+    expect(css).toMatch(/\.status-bar__group\s*\{/);
+    expect(css).toMatch(/\.usage-strip\s*\{/);
+    expect(css).toMatch(/\.usage-strip__agent\s*\{/);
+    expect(css).toMatch(/\.display-panel\s*\{/);
+    expect(css).toMatch(/\.display-panel__summary\s*\{/);
+    expect(css).toMatch(/\.display-panel__actions\s*\{/);
+    expect(css).toMatch(/\.session-row__summary-text\s*\{[\s\S]*white-space:\s*nowrap;/);
+    expect(css).toMatch(/\.session-row__pending\s*\{/);
+    expect(css).toMatch(/\.session-row--running\s*\{/);
+    expect(css).toMatch(/\.session-row--waiting\s*\{/);
+    expect(css).toMatch(/\.session-row--error\s*\{/);
+    expect(css).toMatch(/\.session-row--completed\s*\{/);
+    expect(css).toMatch(/\.session-row--idle\s*\{/);
+    expect(css).toMatch(/\.session-row--offline\s*\{/);
+    expect(css).toMatch(/\.session-row--running::before\s*\{/);
+    expect(css).toMatch(/\.session-row--running\s*\{[\s\S]*animation:\s*session-running-pulse/);
+    expect(css).toMatch(/@keyframes session-running-pulse/);
+    expect(css).toMatch(/@keyframes session-running-sheen/);
+    expect(css).toMatch(
+      /\.session-row__details\s*\{[\s\S]*max-height:\s*min\(52vh,\s*420px\);/,
+    );
+    expect(css).toMatch(/\.session-row__details\s*\{[\s\S]*overflow:\s*auto;/);
+    expect(css).toMatch(/\.session-row__history-status\s*\{/);
+    expect(css).toMatch(/\.session-row__history-status--loading\s*\{/);
+    expect(css).toMatch(/\.session-row__history-status--error\s*\{/);
+    expect(css).toMatch(/\.app-settings-drawer__content\s*\{[\s\S]*overflow:\s*hidden;/);
+    expect(css).toMatch(/\.settings-nav\s*\{/);
+    expect(css).toMatch(/\.settings-nav__item--active\s*\{/);
+    expect(css).toMatch(/\.settings-content\s*\{[\s\S]*overflow:\s*hidden;/);
+    expect(css).toMatch(/\.settings-section-shell\s*\{[\s\S]*overflow-y:\s*auto;/);
+    expect(css).toMatch(/\.settings-stack--maintenance\s*\{/);
+    expect(css).toMatch(/\.session-stream__item--message\s*\{/);
+    expect(css).toMatch(/\.session-stream__item--message\s*\{[\s\S]*width:\s*min\(100%,\s*82%\);/);
+    expect(css).toMatch(/\.session-stream__item--message-user\s*\{[\s\S]*margin-left:\s*auto;/);
+    expect(css).toMatch(/\.session-stream__item--message-agent[\s\S]*margin-right:\s*auto;/);
+    expect(css).toMatch(/\.session-stream__item--artifact\s*\{/);
+    expect(css).toMatch(/\.session-stream__item--artifact\s*\{[\s\S]*border-radius:\s*14px;/);
+    expect(css).toMatch(/\.session-stream__item--artifact-call\s+\.session-stream__body\s*\{/);
+    expect(css).toMatch(/\.session-stream__item--artifact-result\s+\.session-stream__body\s*\{/);
+    expect(css).toMatch(/\.session-stream__artifact-type\s*\{[\s\S]*font-size:\s*8px;/);
+    expect(css).toMatch(/\.session-stream__artifact-body-shell\s*\{/);
+    expect(css).toMatch(/\.session-stream__artifact-summary\s*\{[\s\S]*text-overflow:\s*ellipsis;/);
+    expect(css).toMatch(/\.session-stream__item--note\s*\{/);
+    expect(css).toMatch(/\.session-stream__section--primary\s*\{/);
+    expect(css).toMatch(/\.session-stream__virtual-viewport\s*\{/);
+    expect(css).toMatch(/\.session-stream__virtual-viewport\s*\{[\s\S]*position:\s*relative;/);
+    expect(css).toMatch(/\.session-stream__virtual-item\s*\{/);
+    expect(css).toMatch(/\.session-stream__virtual-item\s*\{[\s\S]*position:\s*absolute;/);
+    expect(css).toMatch(/\.session-stream__item--artifact-active::after\s*\{/);
+    expect(css).toMatch(/@keyframes session-artifact-scan/);
+    expect(css).toMatch(/\.pending-action\s*\{[\s\S]*border-radius:\s*14px;/);
+    expect(css).toMatch(/\.pending-action__eyebrow\s*\{/);
+    expect(css).toMatch(/\.pending-action__btn\s*\{/);
+    expect(css).toMatch(/\.session-stream__code\s*\{/);
+    expect(css).toMatch(/\.session-stream__code\s*\{[\s\S]*max-width:\s*100%;/);
+    expect(css).toMatch(/\.session-stream__code\s*\{[\s\S]*display:\s*inline;/);
+    expect(css).toMatch(/\.session-stream__code\s*\{[\s\S]*border-radius:\s*5px;/);
+    expect(css).toMatch(/\.session-stream__code\s*\{[\s\S]*box-decoration-break:\s*clone;/);
+    expect(css).toMatch(/\.session-stream__code\s*\{[\s\S]*overflow-wrap:\s*anywhere;/);
+    expect(css).toMatch(/\.session-stream__code\s*\{[\s\S]*word-break:\s*break-word;/);
+    expect(css).toMatch(/\.session-stream__codeblock\s*\{/);
+    expect(css).toMatch(/\.session-stream__codeblock-shell\s*\{/);
+    expect(css).toMatch(/\.session-stream__codeblock-shell\s*\{[\s\S]*position:\s*relative;/);
+    expect(css).toMatch(/\.session-stream__codeblock-shell\s*\{[\s\S]*border-radius:\s*9px;/);
+    expect(css).toMatch(/\.session-stream__codeblock-copy\s*\{[\s\S]*position:\s*absolute;/);
+    expect(css).toMatch(/\.session-stream__codeblock-copy\s*\{[\s\S]*top:\s*8px;/);
+    expect(css).toMatch(/\.session-stream__codeblock-copy\s*\{[\s\S]*right:\s*8px;/);
+    expect(css).toMatch(/\.session-stream__codeblock-content\s*\{/);
+    expect(css).toMatch(/\.session-stream__codeblock-code\s*\{/);
+    expect(css).toMatch(/\.session-stream__plaintext\s*\{/);
+    expect(css).toMatch(/\.session-stream__plaintext--diff\s*\{/);
+    expect(css).toMatch(/\.session-stream__plaintext--json\s*\{/);
+    expect(css).toMatch(/\.session-stream__plaintext--log\s*\{/);
+    expect(css).toMatch(/\.session-stream__plaintext-line--add\s*\{/);
+    expect(css).toMatch(/\.session-stream__plaintext-line--remove\s*\{/);
+    expect(css).toMatch(/\.session-stream__strong\s*\{/);
+    expect(css).toMatch(/\.session-stream__link\s*\{/);
+    expect(css).toMatch(/\.session-row__loading\s*\{/);
+    expect(css).toMatch(/\.session-row__loading-bubble\s*\{/);
+    expect(css).toMatch(/\.session-row__loading-dots\s*\{/);
+    expect(css).toMatch(/\.session-stream__typing-indicator\s*\{/);
+    expect(css).toMatch(/\.session-stream__typing-dots\s*\{/);
+    expect(css).toMatch(/@keyframes session-loading-dots/);
+  });
+});

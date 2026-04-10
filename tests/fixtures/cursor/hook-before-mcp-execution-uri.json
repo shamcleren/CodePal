@@ -1,0 +1,8 @@
+{
+  "hook_event_name": "beforeMCPExecution",
+  "session_id": "cursor-fixture-105",
+  "tool_name": "fetch_docs",
+  "tool_input": {
+    "uri": "docs://electron/ipc"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "hook_event_name": "afterShellExecution",
+  "session_id": "cursor-fixture-108",
+  "tool_name": "Bash",
+  "output": "Primary output wins",
+  "tool_result": {
+    "summary": "Secondary summary should not override"
+  }
+}

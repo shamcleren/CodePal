@@ -1,0 +1,8 @@
+{
+  "hook_event_name": "beforeReadFile",
+  "session_id": "cursor-fixture-101",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "src/renderer/App.tsx"
+  }
+}

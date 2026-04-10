@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: CodePal Support Scope
+    url: https://github.com/shamcleren/CodePal/blob/main/docs/support-scope.md
+    about: Check whether your problem is in the current supported v1 release scope
+  - name: CodePal Privacy and Data Boundaries
+    url: https://github.com/shamcleren/CodePal/blob/main/docs/privacy-and-data.md
+    about: Review the current data-handling and local-storage boundaries

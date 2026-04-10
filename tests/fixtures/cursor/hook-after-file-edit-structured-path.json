@@ -1,0 +1,7 @@
+{
+  "hook_event_name": "afterFileEdit",
+  "session_id": "cursor-fixture-109",
+  "tool_input": {
+    "file_path": "src/main/session/sessionStore.ts"
+  }
+}

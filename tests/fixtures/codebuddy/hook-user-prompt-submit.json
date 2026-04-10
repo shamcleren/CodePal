@@ -1,0 +1,8 @@
+{
+  "session_id": "cb-session-104",
+  "transcript_path": "/Users/demo/.codebuddy/projects/demo/transcript.jsonl",
+  "cwd": "/workspace/demo",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Write a function to calculate the factorial of a number"
+}

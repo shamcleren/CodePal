@@ -1,0 +1,12 @@
+{
+  "session_id": "cb-session-105",
+  "transcript_path": "/Users/demo/.codebuddy/projects/demo/transcript.jsonl",
+  "cwd": "/workspace/demo",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/workspace/demo/src/index.ts",
+    "content": "export const value = 1;\n"
+  }
+}

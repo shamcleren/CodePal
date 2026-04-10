@@ -1,0 +1,31 @@
+appId: ai.shamcleren.codepal
+productName: CodePal
+directories:
+  output: release
+files:
+  - out/**/*
+  - package.json
+  - config/settings.template.yaml
+asar: true
+npmRebuild: false
+afterAllArtifactBuild: scripts/afterAllArtifactBuild.cjs
+publish:
+  provider: github
+  owner: shamcleren
+  repo: CodePal
+mac:
+  icon: build/icon.icns
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  target:
+    - target: zip
+      arch:
+        - arm64
+    - target: dmg
+      arch:
+        - arm64

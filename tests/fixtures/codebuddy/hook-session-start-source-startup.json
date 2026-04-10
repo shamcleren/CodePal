@@ -1,0 +1,7 @@
+{
+  "session_id": "cb-session-101",
+  "transcript_path": "/Users/demo/.codebuddy/projects/demo/transcript.jsonl",
+  "permission_mode": "default",
+  "hook_event_name": "SessionStart",
+  "source": "startup"
+}
