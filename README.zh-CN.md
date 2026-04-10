@@ -3,7 +3,7 @@
   <span valign="middle">CodePal</span>
 </h1>
 
-<p align="center"><strong>一个面板监控所有 AI 编码代理 — 会话、配额、活动，一目了然。</strong></p>
+<p align="center"><strong>一个面板，掌控所有 AI 编码代理 — 会话、活动、配额，始终在眼前。</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
@@ -20,14 +20,14 @@
 
 ## 为什么是 CodePal
 
-AI 编码工作流很容易变得割裂：
+同时跑多个 AI 编码代理，注意力就会开始割裂：
 
 - 一个会话正在 Cursor 里运行
 - 另一个会话在终端里等待审批
 - 配额和用量藏在浏览器页面里
 - 最近活动分散在不同工具界面里
 
-CodePal 的目标，就是把这些状态收拢成一个可持续挂在桌面的监控面板。
+CodePal 把这一切收拢进一个始终悬浮在桌面上的面板。
 
 ## 界面预览
 
@@ -35,13 +35,14 @@ CodePal 的目标，就是把这些状态收拢成一个可持续挂在桌面的
 
 ## 你能得到什么
 
-- **统一 session 视图**：活跃、等待、完成、异常会话放在同一列表
-- **可读的活动流**：突出 assistant、tool、system 的关键信号，压制低价值噪音
-- **quota / usage 感知**：持续看到 token 和额度压力
-- **低摩擦接入**：可以直接在应用内修复受支持的本地接入配置
-- **双语界面**：支持英文、简体中文和跟随系统语言
+- **统一 session 视图**：所有代理的活跃、等待、完成、异常会话汇聚在同一列表
+- **聚焦的活动时间线**：看到每个代理在做什么 — 回复、工具调用、状态变化 — 去掉多余噪音
+- **配额与用量感知**：token 用量和限速信号始终可见，支持紧凑与详细两种密度切换
+- **历史持久化**：完整活动历史本地存储，重启后也能随时回溯
+- **一键修复接入**：直接在应用内修复受支持的本地代理配置
+- **双语界面**：支持英文和简体中文，默认跟随系统语言
 
-## 当前支持的 Agent
+## 支持的 Agent
 
 | Agent | Session | 用量 |
 |:---|:---:|:---:|
@@ -51,35 +52,22 @@ CodePal 的目标，就是把这些状态收拢成一个可持续挂在桌面的
 | **CodeBuddy** | ✅ | ✅ |
 | **GoLand / PyCharm*** | ✅ | ✅ |
 
-\* GoLand 和 PyCharm 当前走共享的 CodeBuddy JetBrains 插件路径，也包含用量可见性。
-
-不同来源在上游信号来源上仍有差异，但上表这层 `session / 用量` 基线目前都已经支持。
+\* GoLand 和 PyCharm 走共享的 CodeBuddy JetBrains 插件路径。
 
 ## 安装
 
 1. 打开 [Releases](https://github.com/shamcleren/CodePal/releases)。
 2. 下载最新的 macOS `.dmg` 或 `.zip`。
 3. 把 `CodePal.app` 移到 `Applications`。
-4. 启动应用；如果 macOS 拦截，按系统提示手动放行即可。
+4. 启动 — 已运行的代理会自动接入。
 
-正式发布构建先走 `electron-builder` 原生 app notarization 流程，再显式提交最终 DMG 做 notarization，最后补 app 级别的 `codesign` 与 notarization 校验。
-
-## 适合谁
-
-- 同时运行多个 AI 编码代理、需要一个统一状态面板的开发者
-- 关注最近活动、配额压力和会话状态的用户
-
-## 当前版本边界
-
-CodePal v1 刻意保持**监控优先**：统一的会话 / 活动 / 配额可见性，双语桌面 UI（`system` / `en` / `zh-CN`），以及有限的审批回路。
-
-当前不打算做成通用聊天入口、深度 IDE 导航层或终端控制台。
+正式发布构建已经过 Apple 签名与公证，打开时不会出现安全拦截提示。
 
 ## 接下来
 
-- 补全上游数据源尚不完整的用量 / 配额可见性
-- 扩大已支持 Agent 的真实 payload 校准范围
-- 继续打磨诊断页、空状态和降级状态表达
+- **审批与控制回路**：更完整的审批流，支持跨 Agent 的单选 / 多选结构化操作
+- **主动发送消息**：从 CodePal 直接向活跃的 Agent 会话发送消息
+- **灵动岛辅助**：macOS 轻量级常驻层，用于快速查看运行 / 等待状态和审批提醒
 
 更完整的规划方向见 [docs/roadmap-next.zh-CN.md](docs/roadmap-next.zh-CN.md)。
 
@@ -98,9 +86,6 @@ npm run dist:mac   # 构建 .dmg / .zip（需要 Apple 签名凭据）
 
 ## 常见问题
 
-**macOS 首次启动被拦截**
-打开 **系统设置 → 隐私与安全性**，滚动到底部，点击 CodePal 旁边的 **仍要打开**。
-
 **看不到 Session**
 确认对应的 Agent（Cursor / Claude Code / Codex / CodeBuddy）确实有正在运行的会话。可以使用应用内诊断页检查集成路径是否正常。
 
@@ -111,10 +96,10 @@ npm run dist:mac   # 构建 .dmg / .zip（需要 Apple 签名凭据）
 - [常见问题与排查](docs/troubleshooting.zh-CN.md)
 - [提交 Issue](https://github.com/shamcleren/CodePal/issues/new/choose)
 
-## 给开发者
+## 开发者文档
 
 <details>
-<summary>贡献者文档入口</summary>
+<summary>内部文档入口</summary>
 
 - [AGENTS.md](AGENTS.md) — Agent 编码约定
 - [docs/design-overview.md](docs/design-overview.md) — 架构概览

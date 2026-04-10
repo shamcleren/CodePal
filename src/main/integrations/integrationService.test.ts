@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -19,6 +19,15 @@ function createFixtureLayout() {
   const execPath = join(root, "Electron.bin");
   const appPath = appRoot;
   return { root, homeDir, hookScriptsRoot, execPath, appPath };
+}
+
+function writeRuntimeWrapperEnv(homeDir: string, execPath: string, appPath: string, packaged = false) {
+  const runtimeEnvPath = join(homeDir, ".codepal", "runtime", "active-codepal.env");
+  mkdirSync(dirname(runtimeEnvPath), { recursive: true });
+  writeFileSync(
+    runtimeEnvPath,
+    `CODEPAL_PACKAGED=${packaged ? "1" : "0"}\nCODEPAL_EXEC_PATH='${execPath}'\nCODEPAL_APP_PATH='${appPath}'\n`,
+  );
 }
 
 describe("createIntegrationService", () => {
@@ -74,7 +83,7 @@ describe("createIntegrationService", () => {
           hookInstalled: false,
           health: "not_configured",
           healthLabel: "未配置",
-          supported: false,
+          supported: true,
         }),
         expect.objectContaining({
           id: "codebuddy",
@@ -131,7 +140,7 @@ describe("createIntegrationService", () => {
       expect(parsed.hooks[eventName]).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook cursor`,
+            command: `"${join(homeDir, ".codepal", "bin", "cursor-hook")}"`,
           }),
         ]),
       );
@@ -182,7 +191,7 @@ describe("createIntegrationService", () => {
         expect.objectContaining({
           hooks: expect.arrayContaining([
             expect.objectContaining({
-              command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook codebuddy`,
+              command: `"${join(homeDir, ".codepal", "bin", "codebuddy-hook")}"`,
             }),
           ]),
         }),
@@ -227,6 +236,10 @@ describe("createIntegrationService", () => {
 
     expect(result.changed).toBe(true);
     expect(parsed.theme).toBe("dark");
+    const wrapperHookPath = join(homeDir, ".codepal", "bin", "claude-hook");
+    const wrapperStatusLinePath = join(homeDir, ".codepal", "bin", "claude-statusline");
+    expect(existsSync(wrapperHookPath)).toBe(true);
+    expect(existsSync(wrapperStatusLinePath)).toBe(true);
     expect(parsed.hooks.UserPromptSubmit).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -235,7 +248,7 @@ describe("createIntegrationService", () => {
         expect.objectContaining({
           hooks: expect.arrayContaining([
             expect.objectContaining({
-              command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook claude`,
+              command: `"${wrapperHookPath}"`,
             }),
           ]),
         }),
@@ -245,8 +258,7 @@ describe("createIntegrationService", () => {
     expect(parsed.hooks.Stop).toHaveLength(1);
     expect(parsed.statusLine).toEqual({
       type: "command",
-      command:
-        `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook claude-statusline`,
+      command: `"${wrapperStatusLinePath}"`,
     });
   });
 
@@ -284,8 +296,18 @@ describe("createIntegrationService", () => {
     });
   });
 
-  it("reports active Claude diagnostics when hooks are configured", () => {
+  it("reports active Claude diagnostics when wrapper-based hooks are configured", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const wrapperHookPath = join(homeDir, ".codepal", "bin", "claude-hook");
+    const wrapperStatusLinePath = join(homeDir, ".codepal", "bin", "claude-statusline");
+    mkdirSync(dirname(wrapperHookPath), { recursive: true });
+    writeExecutable(wrapperHookPath);
+    writeExecutable(wrapperStatusLinePath);
+    mkdirSync(dirname(join(homeDir, ".codepal", "runtime", "active-codepal.env")), { recursive: true });
+    writeFileSync(
+      join(homeDir, ".codepal", "runtime", "active-codepal.env"),
+      `CODEPAL_PACKAGED=0\nCODEPAL_EXEC_PATH='${execPath}'\nCODEPAL_APP_PATH='${appPath}'\n`,
+    );
     const configPath = join(homeDir, ".claude", "settings.json");
     mkdirSync(dirname(configPath), { recursive: true });
     writeFileSync(
@@ -299,7 +321,7 @@ describe("createIntegrationService", () => {
                 hooks: [
                   {
                     type: "command",
-                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook claude`,
+                    command: `"${wrapperHookPath}"`,
                   },
                 ],
               },
@@ -309,7 +331,7 @@ describe("createIntegrationService", () => {
                 hooks: [
                   {
                     type: "command",
-                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook claude`,
+                    command: `"${wrapperHookPath}"`,
                   },
                 ],
               },
@@ -319,7 +341,7 @@ describe("createIntegrationService", () => {
                 hooks: [
                   {
                     type: "command",
-                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook claude`,
+                    command: `"${wrapperHookPath}"`,
                   },
                 ],
               },
@@ -329,7 +351,7 @@ describe("createIntegrationService", () => {
                 hooks: [
                   {
                     type: "command",
-                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook claude`,
+                    command: `"${wrapperHookPath}"`,
                   },
                 ],
               },
@@ -339,7 +361,7 @@ describe("createIntegrationService", () => {
                 hooks: [
                   {
                     type: "command",
-                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook claude`,
+                    command: `"${wrapperHookPath}"`,
                   },
                 ],
               },
@@ -347,7 +369,7 @@ describe("createIntegrationService", () => {
           },
           statusLine: {
             type: "command",
-            command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${execPath}" "${appPath}" --codepal-hook claude-statusline`,
+            command: `"${wrapperStatusLinePath}"`,
           },
         },
         null,
@@ -373,6 +395,82 @@ describe("createIntegrationService", () => {
       hookInstalled: true,
       statusMessage: "已配置用户级 Claude hooks 与 statusLine",
       configPath,
+      checks: [
+        expect.objectContaining({ id: "hooks", ok: true }),
+        expect.objectContaining({ id: "statusLine", ok: true }),
+      ],
+    });
+  });
+
+  it("repairs Claude configs by migrating statusLine and adding wrapper hooks", () => {
+    const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const configPath = join(homeDir, ".claude", "settings.json");
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                matcher: "*",
+                hooks: [
+                  {
+                    type: "command",
+                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude`,
+                  },
+                ],
+              },
+            ],
+            UserPromptSubmit: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
+            Stop: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
+            Notification: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
+            SessionEnd: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
+          },
+          statusLine: {
+            type: "command",
+            command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude-statusline`,
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: false,
+      execPath,
+      appPath,
+      now: () => 88,
+    });
+
+    const before = service.getDiagnostics().agents.find((agent) => agent.id === "claude");
+    expect(before).toMatchObject({
+      health: "repair_needed",
+    });
+
+    const result = service.installHooks("claude");
+    const after = service.getDiagnostics().agents.find((agent) => agent.id === "claude");
+    const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+    const wrapperHookPath = join(homeDir, ".codepal", "bin", "claude-hook");
+    const wrapperStatusLinePath = join(homeDir, ".codepal", "bin", "claude-statusline");
+
+    expect(result.changed).toBe(true);
+    expect(parsed.statusLine.command).toBe(`"${wrapperStatusLinePath}"`);
+    expect(parsed.hooks.SessionStart).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          hooks: expect.arrayContaining([
+            expect.objectContaining({ command: `"${wrapperHookPath}"` }),
+          ]),
+        }),
+      ]),
+    );
+    expect(after).toMatchObject({
+      health: "active",
+      hookInstalled: true,
     });
   });
 
@@ -405,10 +503,11 @@ describe("createIntegrationService", () => {
 
     const result = service.installHooks("claude");
     const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+    const wrapperStatusLinePath = join(homeDir, ".codepal", "bin", "claude-statusline");
 
     expect(result.changed).toBe(true);
     expect(parsed.statusLine.type).toBe("command");
-    expect(parsed.statusLine.command).toContain("--codepal-hook claude-statusline");
+    expect(parsed.statusLine.command).toContain(`"${wrapperStatusLinePath}"`);
     expect(parsed.statusLine.command).toContain("/Users/demo/.vibe-island/bin/vibe-island-statusline");
   });
 
@@ -428,10 +527,10 @@ describe("createIntegrationService", () => {
     const codex = service.getDiagnostics().agents.find((agent) => agent.id === "codex");
     expect(codex).toMatchObject({
       id: "codex",
-      supported: false,
+      supported: true,
       health: "active",
       healthLabel: "正常",
-      actionLabel: "",
+      actionLabel: "修复",
       hookInstalled: false,
       statusMessage: "已接入 Codex 监控（基于 session 日志）",
       configPath: codexSessionsRoot,
@@ -441,14 +540,17 @@ describe("createIntegrationService", () => {
   it("reports active Codex diagnostics when hooks.json is configured", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
     const hooksPath = join(homeDir, ".codex", "hooks.json");
+    const wrapperPath = join(homeDir, ".codepal", "bin", "codex-hook");
+    writeExecutable(wrapperPath);
+    writeRuntimeWrapperEnv(homeDir, execPath, appPath);
     mkdirSync(dirname(hooksPath), { recursive: true });
     writeFileSync(
       hooksPath,
       JSON.stringify({
         hooks: {
-          SessionStart: [{ hooks: [{ type: "command", command: "vibe-island --source codex" }] }],
-          Stop: [{ hooks: [{ type: "command", command: "vibe-island --source codex" }] }],
-          UserPromptSubmit: [{ hooks: [{ type: "command", command: "vibe-island --source codex" }] }],
+          SessionStart: [{ hooks: [{ type: "command", command: `"${wrapperPath}"` }] }],
+          Stop: [{ hooks: [{ type: "command", command: `"${wrapperPath}"` }] }],
+          UserPromptSubmit: [{ hooks: [{ type: "command", command: `"${wrapperPath}"` }] }],
         },
       }),
     );
@@ -464,12 +566,12 @@ describe("createIntegrationService", () => {
     const codex = service.getDiagnostics().agents.find((agent) => agent.id === "codex");
     expect(codex).toMatchObject({
       id: "codex",
-      supported: false,
+      supported: true,
       health: "active",
       healthLabel: "正常",
-      actionLabel: "",
+      actionLabel: "修复",
       hookInstalled: true,
-      statusMessage: "已检测到 Codex 接入",
+      statusMessage: "已接入 Codex",
       configPath: hooksPath,
     });
   });
@@ -508,7 +610,7 @@ describe("createIntegrationService", () => {
     expect(second.changed).toBe(false);
     expect(text).toContain('model = "gpt-5.4"');
     expect(text).toContain(
-      `notify = ["${execPath}", "${appPath}", "--codepal-hook", "codex"]`,
+      `notify = ["${join(homeDir, ".codepal", "bin", "codex-hook")}"]`,
     );
     expect(text).toContain('[projects."/Users/demo"]');
     expect(text).toContain('trust_level = "trusted"');
@@ -516,13 +618,14 @@ describe("createIntegrationService", () => {
 
   it("reports active Codex diagnostics when notify hook is configured", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
-    const codexSessionsRoot = join(homeDir, ".codex", "sessions");
     const configPath = join(homeDir, ".codex", "config.toml");
-    mkdirSync(codexSessionsRoot, { recursive: true });
+    const wrapperPath = join(homeDir, ".codepal", "bin", "codex-hook");
+    writeExecutable(wrapperPath);
+    writeRuntimeWrapperEnv(homeDir, execPath, appPath);
     mkdirSync(dirname(configPath), { recursive: true });
     writeFileSync(
       configPath,
-      `notify = ["${execPath}", "${appPath}", "--codepal-hook", "codex"]\n`,
+      `notify = ["${wrapperPath}"]\n`,
     );
 
     const service = createIntegrationService({
@@ -536,12 +639,12 @@ describe("createIntegrationService", () => {
     const codex = service.getDiagnostics().agents.find((agent) => agent.id === "codex");
     expect(codex).toMatchObject({
       id: "codex",
-      supported: false,
+      supported: true,
       health: "active",
       healthLabel: "正常",
-      actionLabel: "",
+      actionLabel: "修复",
       hookInstalled: true,
-      statusMessage: "已增强 Codex 接入，并持续同步会话记录",
+      statusMessage: "已增强 Codex 接入",
       configPath,
     });
   });
@@ -677,6 +780,185 @@ describe("createIntegrationService", () => {
       health: "active",
       hookInstalled: true,
       healthLabel: "正常",
+    });
+  });
+
+  it("reports Cursor drift as repair_needed when packaged diagnostics only find a dev command", () => {
+    const { homeDir, hookScriptsRoot, appPath } = createFixtureLayout();
+    const configPath = join(homeDir, ".cursor", "hooks.json");
+    const packagedExecPath = "/Applications/CodePal.app/Contents/MacOS/CodePal";
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        hooks: Object.fromEntries(
+          [
+            "sessionStart",
+            "stop",
+            "beforeSubmitPrompt",
+            "afterAgentResponse",
+            "afterAgentThought",
+            "beforeReadFile",
+            "afterFileEdit",
+            "beforeMCPExecution",
+            "afterMCPExecution",
+            "beforeShellExecution",
+            "afterShellExecution",
+          ].map((eventName) => [
+            eventName,
+            [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
+          ]),
+        ),
+      }),
+    );
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: true,
+      execPath: packagedExecPath,
+      appPath,
+    });
+
+    const cursor = service.getDiagnostics().agents.find((agent) => agent.id === "cursor");
+    expect(cursor).toMatchObject({
+      health: "repair_needed",
+      hookInstalled: false,
+      statusMessage: "Cursor hooks.json 与当前 CodePal 要求不一致",
+    });
+  });
+
+  it("reports Codex hook drift as repair_needed when hooks exist but do not target CodePal", () => {
+    const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const hooksPath = join(homeDir, ".codex", "hooks.json");
+    mkdirSync(dirname(hooksPath), { recursive: true });
+    writeFileSync(
+      hooksPath,
+      JSON.stringify({
+        hooks: {
+          SessionStart: [{ hooks: [{ type: "command", command: "vibe-island --source codex" }] }],
+          Stop: [{ hooks: [{ type: "command", command: "vibe-island --source codex" }] }],
+          UserPromptSubmit: [{ hooks: [{ type: "command", command: "vibe-island --source codex" }] }],
+        },
+      }),
+    );
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: false,
+      execPath,
+      appPath,
+    });
+
+    const codex = service.getDiagnostics().agents.find((agent) => agent.id === "codex");
+    expect(codex).toMatchObject({
+      health: "repair_needed",
+      hookInstalled: false,
+      statusMessage: "Codex hooks.json 与当前 CodePal 要求不一致",
+      configPath: hooksPath,
+    });
+  });
+
+  it("auto-installs only missing supported integrations without modifying drifted configs", () => {
+    const { homeDir, hookScriptsRoot, appPath } = createFixtureLayout();
+    const packagedExecPath = "/Applications/CodePal.app/Contents/MacOS/CodePal";
+    const cursorConfigPath = join(homeDir, ".cursor", "hooks.json");
+    mkdirSync(dirname(cursorConfigPath), { recursive: true });
+    writeFileSync(
+      cursorConfigPath,
+      JSON.stringify({
+        version: 1,
+        hooks: {
+          sessionStart: [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
+          stop: [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
+        },
+      }),
+    );
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: true,
+      execPath: packagedExecPath,
+      appPath,
+      now: () => 123,
+    });
+
+    const result = service.autoInstallMissingSupportedHooks();
+
+    expect(result.map((item) => item.agentId)).toEqual(["claude", "cursor", "codebuddy", "codex"]);
+
+    const cursor = service.getDiagnostics().agents.find((agent) => agent.id === "cursor");
+    expect(cursor).toMatchObject({
+      health: "active",
+    });
+
+    const claudeConfigPath = join(homeDir, ".claude", "settings.json");
+    const codebuddyConfigPath = join(homeDir, ".codebuddy", "settings.json");
+    expect(readFileSync(claudeConfigPath, "utf8")).toContain(".codepal/bin/claude-hook");
+    expect(readFileSync(codebuddyConfigPath, "utf8")).toContain(".codepal/bin/codebuddy-hook");
+    expect(readFileSync(cursorConfigPath, "utf8")).toContain(".codepal/bin/cursor-hook");
+    expect(readFileSync(cursorConfigPath, "utf8")).not.toContain("/tmp/Electron.bin");
+  });
+
+  it("auto-migrates existing Claude CodePal commands to wrapper scripts on packaged startup", () => {
+    const { homeDir, hookScriptsRoot, appPath } = createFixtureLayout();
+    const packagedExecPath = "/Applications/CodePal.app/Contents/MacOS/CodePal";
+    const claudeConfigPath = join(homeDir, ".claude", "settings.json");
+    mkdirSync(dirname(claudeConfigPath), { recursive: true });
+    writeFileSync(
+      claudeConfigPath,
+      JSON.stringify(
+        {
+          hooks: {
+            SessionStart: [
+              {
+                matcher: "*",
+                hooks: [
+                  {
+                    type: "command",
+                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude`,
+                  },
+                ],
+              },
+            ],
+            UserPromptSubmit: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude` }] }],
+            Stop: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude` }] }],
+            Notification: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude` }] }],
+            SessionEnd: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude` }] }],
+          },
+          statusLine: {
+            type: "command",
+            command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude-statusline`,
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: true,
+      execPath: packagedExecPath,
+      appPath,
+      now: () => 456,
+    });
+
+    const result = service.autoInstallMissingSupportedHooks();
+    const parsed = JSON.parse(readFileSync(claudeConfigPath, "utf8"));
+
+    expect(result.map((item) => item.agentId)).toEqual(["claude", "cursor", "codebuddy", "codex"]);
+    expect(parsed.statusLine.command).toContain(".codepal/bin/claude-statusline");
+    expect(readFileSync(claudeConfigPath, "utf8")).toContain(".codepal/bin/claude-hook");
+
+    const claude = service.getDiagnostics().agents.find((agent) => agent.id === "claude");
+    expect(claude).toMatchObject({
+      health: "active",
+      hookInstalled: true,
     });
   });
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { defaultAppSettings, type AppSettings, type AppSettingsPatch } from "../shared/appSettings";
+import type { ClaudeQuotaDiagnostics } from "../shared/claudeQuotaTypes";
 import type { CodeBuddyQuotaDiagnostics } from "../shared/codebuddyQuotaTypes";
 import type { CursorDashboardDiagnostics } from "../shared/cursorDashboardTypes";
 import type { HistoryDiagnostics } from "../shared/historyTypes";
@@ -9,6 +10,7 @@ import type { UsageOverview } from "../shared/usageTypes";
 import { DisplayPreferencesPanel } from "./components/DisplayPreferencesPanel";
 import { CursorDashboardPanel } from "./components/CursorDashboardPanel";
 import { CodeBuddyQuotaPanel } from "./components/CodeBuddyQuotaPanel";
+import { ClaudeQuotaPanel } from "./components/ClaudeQuotaPanel";
 import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
 import { StatusBar } from "./components/StatusBar";
@@ -59,6 +61,9 @@ export function App() {
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("integrations");
   const [usageOverview, setUsageOverview] = useState<UsageOverview | null>(null);
+  const [claudeQuotaDiagnostics, setClaudeQuotaDiagnostics] =
+    useState<ClaudeQuotaDiagnostics | null>(null);
+  const [claudeQuotaLoading, setClaudeQuotaLoading] = useState(false);
   const [cursorDashboardDiagnostics, setCursorDashboardDiagnostics] =
     useState<CursorDashboardDiagnostics | null>(null);
   const [cursorDashboardLoading, setCursorDashboardLoading] = useState(false);
@@ -89,6 +94,7 @@ export function App() {
     appSettingsPath,
     homeDir,
     integrationDiagnostics,
+    claudeQuotaDiagnostics,
     cursorDashboardDiagnostics,
     codeBuddyQuotaDiagnostics,
     codeBuddyInternalQuotaDiagnostics,
@@ -140,6 +146,23 @@ export function App() {
       })
       .finally(() => {
         setSessionHistoryClearing(false);
+      });
+  }
+
+  function loadClaudeQuotaDiagnostics() {
+    return window.codepal
+      .getClaudeQuotaDiagnostics()
+      .then((diagnostics) => {
+        setClaudeQuotaDiagnostics(diagnostics);
+        return diagnostics;
+      })
+      .catch((error: unknown) => {
+        const diagnostics = {
+          state: "error" as const,
+          message: (error as Error).message,
+        };
+        setClaudeQuotaDiagnostics(diagnostics);
+        return diagnostics;
       });
   }
 
@@ -209,6 +232,30 @@ export function App() {
         const diagnostics = buildFallbackHistoryDiagnostics(enabled);
         setHistoryDiagnostics(diagnostics);
         return diagnostics;
+      });
+  }
+
+  function runClaudeQuotaRefresh() {
+    setClaudeQuotaLoading(true);
+    return window.codepal
+      .refreshClaudeQuota()
+      .then((result) => {
+        setClaudeQuotaDiagnostics(result.diagnostics);
+        return result;
+      })
+      .catch((error: unknown) => {
+        const diagnostics = {
+          state: "error" as const,
+          message: (error as Error).message,
+        };
+        setClaudeQuotaDiagnostics(diagnostics);
+        return {
+          diagnostics,
+          synced: false,
+        };
+      })
+      .finally(() => {
+        setClaudeQuotaLoading(false);
       });
   }
 
@@ -380,6 +427,7 @@ export function App() {
         setIntegrationLoading(false);
       });
 
+    void loadClaudeQuotaDiagnostics();
     void loadCursorDashboardDiagnostics();
     void loadCodeBuddyQuotaDiagnostics();
     void loadCodeBuddyInternalQuotaDiagnostics();
@@ -410,6 +458,7 @@ export function App() {
         setAppSettingsPath(settingsPath);
         setHomeDir(nextHomeDir);
         return Promise.all([
+          loadClaudeQuotaDiagnostics(),
           loadCodeBuddyQuotaDiagnostics(),
           loadCodeBuddyInternalQuotaDiagnostics(),
           loadHistoryDiagnostics(settings.history.persistenceEnabled),
@@ -440,6 +489,10 @@ export function App() {
       setRows(rowsFromSessions(sessions, resolvedLocale));
     });
   }, [resolvedLocale]);
+
+  useEffect(() => {
+    void loadClaudeQuotaDiagnostics();
+  }, []);
 
   useEffect(() => {
     void loadCursorDashboardDiagnostics();
@@ -795,6 +848,14 @@ export function App() {
               ) : null}
               {activeSettingsSection === "usage" ? (
                 <div className="settings-stack settings-stack--usage">
+                  <ClaudeQuotaPanel
+                    overview={usageOverview}
+                    diagnostics={claudeQuotaDiagnostics}
+                    loading={claudeQuotaLoading}
+                    onRefresh={() => {
+                      void runClaudeQuotaRefresh();
+                    }}
+                  />
                   <CodeBuddyQuotaPanel
                     diagnostics={codeBuddyQuotaDiagnostics}
                     loading={codeBuddyQuotaLoading}

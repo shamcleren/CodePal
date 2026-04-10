@@ -1,5 +1,9 @@
 import type { AppSettings, AppSettingsPatch } from "../shared/appSettings";
 import type {
+  ClaudeQuotaDiagnostics,
+  ClaudeQuotaSyncResult,
+} from "../shared/claudeQuotaTypes";
+import type {
   CodeBuddyQuotaConnectResult,
   CodeBuddyQuotaDiagnostics,
 } from "../shared/codebuddyQuotaTypes";
@@ -45,6 +49,8 @@ export type CodePalApi = {
   installIntegrationHooks: (
     agentId: "claude" | "cursor" | "codebuddy" | "codex",
   ) => Promise<IntegrationInstallResult>;
+  getClaudeQuotaDiagnostics: () => Promise<ClaudeQuotaDiagnostics>;
+  refreshClaudeQuota: () => Promise<ClaudeQuotaSyncResult>;
   getCodeBuddyQuotaDiagnostics: () => Promise<CodeBuddyQuotaDiagnostics>;
   getCodeBuddyInternalQuotaDiagnostics: () => Promise<CodeBuddyQuotaDiagnostics>;
   connectCodeBuddyQuota: () => Promise<CodeBuddyQuotaConnectResult>;

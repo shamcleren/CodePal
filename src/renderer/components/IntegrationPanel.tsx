@@ -2,6 +2,7 @@ import type {
   IntegrationAgentDiagnostics,
   IntegrationAgentId,
   IntegrationDiagnostics,
+  IntegrationAgentCheck,
 } from "../../shared/integrationTypes";
 import { useI18n } from "../i18n";
 
@@ -62,6 +63,10 @@ function compactPathLabel(pathValue: string): string {
     return pathValue;
   }
   return `…/${segments.slice(-2).join("/")}`;
+}
+
+function checkBadgeClass(check: IntegrationAgentCheck): string {
+  return check.ok ? "hook-badge hook-badge--active" : "hook-badge hook-badge--repair";
 }
 
 function shouldShowAction(agent: IntegrationAgentDiagnostics): boolean {
@@ -138,6 +143,14 @@ export function IntegrationPanel({
               </div>
               <div className="integration-panel__healthy-meta">
                 <span>{lastEventLabel(agent, i18n)}</span>
+                {agent.checks?.map((check) => (
+                  <span key={check.id} className="integration-panel__healthy-check">
+                    {`${i18n.translateMessage(check.label, check.labelKey)} ${i18n.translateMessage(
+                      check.statusLabel,
+                      check.statusLabelKey,
+                    )}`}
+                  </span>
+                ))}
               </div>
             </div>
           ))}
@@ -145,6 +158,12 @@ export function IntegrationPanel({
       ) : null}
 
       {allHealthy ? <div className="integration-panel__feedback">{i18n.t("integration.noActionNeeded")}</div> : null}
+
+      {!allHealthy ? (
+        <div className="integration-panel__feedback">
+          {i18n.t("integration.repairNotice")}
+        </div>
+      ) : null}
 
       <div className="integration-grid">
         {attentionAgents.map((agent) => {
@@ -163,6 +182,20 @@ export function IntegrationPanel({
               <div className="integration-card__path" title={agent.configPath}>
                 {compactPathLabel(agent.configPath)}
               </div>
+              {agent.checks?.length ? (
+                <div className="integration-card__checks">
+                  {agent.checks.map((check) => (
+                    <div key={check.id} className="integration-card__check">
+                      <span className="integration-card__check-label">
+                        {i18n.translateMessage(check.label, check.labelKey)}
+                      </span>
+                      <span className={checkBadgeClass(check)}>
+                        {i18n.translateMessage(check.statusLabel, check.statusLabelKey)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {agent.lastEventAt || agent.lastEventStatus ? (
                 <div className="integration-card__meta">{lastEventLabel(agent, i18n)}</div>
               ) : null}

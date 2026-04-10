@@ -18,6 +18,7 @@ describe("sessionWatchersBootstrap", () => {
     const applyEvent = vi.fn();
     const recordEvent = vi.fn();
     const broadcastSessions = vi.fn();
+    const onSessionEventAccepted = vi.fn();
     const applySnapshot = vi.fn();
     const broadcastUsageOverview = vi.fn();
 
@@ -112,6 +113,7 @@ describe("sessionWatchersBootstrap", () => {
       integrationService: { recordEvent } as never,
       broadcastSessions,
       broadcastUsageOverview,
+      onSessionEventAccepted,
       createCodexSessionWatcher: codexFactory,
       createClaudeSessionWatcher: claudeFactory,
       createCodeBuddySessionWatcher: codeBuddyFactory,
@@ -160,6 +162,10 @@ describe("sessionWatchersBootstrap", () => {
     expect(recordEvent).toHaveBeenCalledWith("claude", "completed", 222);
     expect(recordEvent).toHaveBeenCalledWith("codebuddy", "waiting", 333);
     expect(recordEvent).toHaveBeenCalledWith("goland", "error", 444);
+    expect(onSessionEventAccepted).toHaveBeenCalledWith(codexEvent);
+    expect(onSessionEventAccepted).toHaveBeenCalledWith(claudeEvent);
+    expect(onSessionEventAccepted).toHaveBeenCalledWith(codeBuddyEvent);
+    expect(onSessionEventAccepted).toHaveBeenCalledWith(jetbrainsEvent);
     expect(broadcastSessions).toHaveBeenCalledTimes(4);
     expect(applySnapshot).toHaveBeenCalledTimes(2);
     expect(broadcastUsageOverview).toHaveBeenCalledTimes(2);

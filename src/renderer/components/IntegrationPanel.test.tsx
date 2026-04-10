@@ -20,6 +20,41 @@ const diagnostics: IntegrationDiagnostics = {
   runtime: baseRuntime,
   agents: [
     {
+      id: "claude",
+      label: "Claude",
+      supported: true,
+      configPath: "/Users/demo/.claude/settings.json",
+      configExists: true,
+      hookScriptPath: "/Users/demo/.claude/settings.json",
+      hookScriptExists: true,
+      hookInstalled: false,
+      health: "repair_needed",
+      healthLabel: "需修复",
+      healthLabelKey: "integration.health.repair_needed",
+      actionLabel: "修复",
+      actionLabelKey: "integration.action.repair",
+      statusMessage: "Claude hooks 已配置，但缺少 CodePal statusLine",
+      statusMessageKey: "integration.message.claude.missingStatusLine",
+      checks: [
+        {
+          id: "hooks",
+          label: "Hooks",
+          labelKey: "integration.check.claude.hooks",
+          ok: true,
+          statusLabel: "正常",
+          statusLabelKey: "integration.check.ok",
+        },
+        {
+          id: "statusLine",
+          label: "StatusLine(quota)",
+          labelKey: "integration.check.claude.statusLine",
+          ok: false,
+          statusLabel: "异常",
+          statusLabelKey: "integration.check.error",
+        },
+      ],
+    },
+    {
       id: "cursor",
       label: "Cursor",
       supported: true,
@@ -131,15 +166,19 @@ describe("IntegrationPanel", () => {
     expect(html).not.toContain("python3:");
     expect(html).toContain("…/.cursor/hooks.json");
     expect(html).toContain("未配置");
+    expect(html).toContain("StatusLine(quota)");
+    expect(html).toContain("Hooks");
     expect(html).toContain("正常");
+    expect(html).toContain("异常");
     expect(html).toContain("未配置 CodePal Cursor hooks");
     expect(html).toContain("最近事件：running · 03/31");
     expect(html).toContain("配置已更新");
+    expect(html).toContain("点击修复或迁移前，CodePal 会先备份原配置，再写入变更。");
     expect(html).toContain(">启用<");
-    expect(html).not.toContain(">修复<");
-    expect(html).not.toContain(">修复<");
+    expect(html).toContain(">修复<");
     expect(html).toContain("CodeBuddy");
     expect(html).toContain("Codex");
+    expect(html).toContain("Claude");
     expect(html).toContain("integration-panel__healthy-item");
   });
 

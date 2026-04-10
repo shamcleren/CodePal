@@ -8,6 +8,11 @@ import { HoverDetails } from "./HoverDetails";
 const HISTORY_PAGE_LIMIT = 100;
 const HISTORY_SCROLL_TOP_THRESHOLD_PX = 72;
 const HISTORY_SCROLL_BOTTOM_THRESHOLD_PX = 32;
+const LOW_VALUE_LIFECYCLE_BODIES = new Set([
+  "Claude session started",
+  "Claude request finished",
+  "Claude session ended",
+]);
 
 function normalizeComparableText(text: string): string {
   return text
@@ -34,18 +39,25 @@ function appendUniqueHistoryItems(current: ActivityItem[], next: ActivityItem[])
   return merged;
 }
 
+function shouldHideLowValueLifecycleItem(item: Pick<ActivityItem, "kind" | "source" | "body">): boolean {
+  return (
+    (item.kind === "system" || item.kind === "note") &&
+    item.source === "system" &&
+    LOW_VALUE_LIFECYCLE_BODIES.has(item.body.trim())
+  );
+}
+
 export function mergeSessionTimelineItems(
   liveItems: TimelineItem[],
   persistedItems: ActivityItem[],
 ): TimelineItem[] {
-  if (persistedItems.length === 0) {
-    return liveItems;
-  }
-
   const seen = new Set<string>();
   const merged: TimelineItem[] = [];
 
   for (const item of liveItems) {
+    if (shouldHideLowValueLifecycleItem(item)) {
+      continue;
+    }
     if (seen.has(item.id)) {
       continue;
     }
@@ -54,6 +66,9 @@ export function mergeSessionTimelineItems(
   }
 
   for (const item of persistedItems) {
+    if (shouldHideLowValueLifecycleItem(item)) {
+      continue;
+    }
     if (seen.has(item.id)) {
       continue;
     }
@@ -62,6 +77,10 @@ export function mergeSessionTimelineItems(
       ...item,
       label: item.title,
     });
+  }
+
+  if (persistedItems.length === 0 && merged.length === liveItems.length) {
+    return liveItems;
   }
 
   return merged.sort((left, right) => {

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   IntegrationAgentDiagnostics,
+  IntegrationAgentCheck,
   IntegrationAgentId,
   IntegrationDiagnostics,
   IntegrationHealth,
@@ -9,16 +10,18 @@ import type {
   IntegrationListenerDiagnostics,
 } from "../../shared/integrationTypes";
 import {
-  buildClaudeHookCommand,
-  buildClaudeStatusLineCommand,
-  buildCodeBuddyHookCommand,
-  buildCodexHookArgv,
-  buildCursorHookCommand,
   detectCodePalHookCommand,
   detectLegacyHookCommand,
   type HookCommandContext,
 } from "../hook/commandBuilder";
 import type { SessionStatus } from "../../shared/sessionTypes";
+import {
+  buildWrapperCommand,
+  ensureAgentWrapperFiles,
+  wrapperFilesExist,
+  wrapperScriptPath,
+  type WrappedAgentKind,
+} from "./agentWrappers";
 
 type IntegrationServiceOptions = {
   homeDir: string;
@@ -120,11 +123,150 @@ function cursorHooksRecognizeCodePal(
   });
 }
 
+function isWrapperCommand(command: string, expectedCommand: string): boolean {
+  return command === expectedCommand || command.includes(expectedCommand);
+}
+
+function commandTargetsCurrentCodePal(
+  command: string,
+  hookName: string,
+  hookCtx: HookCommandContext,
+  expectedWrapperCommand?: string,
+): boolean {
+  if (expectedWrapperCommand && isWrapperCommand(command, expectedWrapperCommand)) {
+    return true;
+  }
+  if (!detectCodePalHookCommand(command, hookName)) {
+    return false;
+  }
+  if (!command.includes(hookCtx.execPath)) {
+    return false;
+  }
+  if (!hookCtx.packaged && !command.includes(hookCtx.appPath)) {
+    return false;
+  }
+  return true;
+}
+
 function cursorHooksEmpty(hooks: Record<string, unknown>, eventNames: string[]): boolean {
   return eventNames.every((eventName) => {
     const value = hooks[eventName];
     return !Array.isArray(value) || value.length === 0;
   });
+}
+
+function isCodePalOwnedAgentCommand(
+  command: string,
+  hookName: string,
+  expectedWrapperCommand?: string,
+): boolean {
+  if (expectedWrapperCommand && isWrapperCommand(command, expectedWrapperCommand)) {
+    return true;
+  }
+  return detectCodePalHookCommand(command, hookName) || detectLegacyHookCommand(command);
+}
+
+function normalizeFlatCommandEntries(
+  entries: unknown,
+  hookName: string,
+  desiredCommand: string,
+): {
+  entries: Array<Record<string, unknown>>;
+  changed: boolean;
+} {
+  const nextEntries = Array.isArray(entries)
+    ? entries.filter((entry): entry is Record<string, unknown> => {
+        if (!entry || typeof entry !== "object") {
+          return false;
+        }
+        const command = String((entry as Record<string, unknown>).command ?? "");
+        return !isCodePalOwnedAgentCommand(command, hookName, desiredCommand);
+      })
+    : [];
+
+  const hasDesired = nextEntries.some((entry) => entry.command === desiredCommand);
+  if (!hasDesired) {
+    nextEntries.push({ command: desiredCommand });
+  }
+
+  const currentEntries = Array.isArray(entries)
+    ? entries.filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
+    : [];
+
+  const changed =
+    currentEntries.length !== nextEntries.length ||
+    currentEntries.some((entry, index) => entry.command !== nextEntries[index]?.command);
+
+  return { entries: nextEntries, changed };
+}
+
+function normalizeCursorHookEntries(entries: unknown, desiredCommand: string): {
+  entries: Array<Record<string, unknown>>;
+  changed: boolean;
+} {
+  return normalizeFlatCommandEntries(entries, "cursor", desiredCommand);
+}
+
+function cursorConfigNeedsCleanup(
+  homeDir: string,
+  desiredCommand: string,
+): boolean {
+  const config = readOptionalJson(cursorConfigPath(homeDir));
+  if (!config.parsed) {
+    return false;
+  }
+  const hooksValue = config.parsed.hooks;
+  if (!hooksValue || typeof hooksValue !== "object" || Array.isArray(hooksValue)) {
+    return false;
+  }
+
+  return CURSOR_HOOK_EVENT_NAMES.some((eventName) => {
+    const normalized = normalizeCursorHookEntries(
+      (hooksValue as Record<string, unknown>)[eventName],
+      desiredCommand,
+    );
+    return normalized.changed;
+  });
+}
+
+function nestedHooksConfigNeedsCleanup(
+  configPath: string,
+  entriesByEvent: Record<string, CodeBuddyRequiredEntry[]>,
+  hookName: WrappedAgentKind,
+): boolean {
+  const config = readOptionalJson(configPath);
+  if (!config.parsed) {
+    return false;
+  }
+  const hooksValue = config.parsed.hooks;
+  if (!hooksValue || typeof hooksValue !== "object" || Array.isArray(hooksValue)) {
+    return false;
+  }
+
+  return Object.entries(entriesByEvent).some(([eventName, requiredEntries]) =>
+    requiredEntries.some((required) => {
+      const normalized = normalizeNestedCommandEntries(
+        (hooksValue as Record<string, unknown>)[eventName],
+        required,
+        hookName,
+      );
+      return normalized.changed;
+    }),
+  );
+}
+
+function codexConfigNeedsCleanup(homeDir: string): boolean {
+  const config = readOptionalText(codexConfigPath(homeDir));
+  if (config.error || config.text === undefined) {
+    return false;
+  }
+  const notify = readCodexNotifyConfig(config.text);
+  if (notify.kind !== "parsed") {
+    return false;
+  }
+  const desiredArgv = [wrapperScriptPath(homeDir, "codex")];
+  return !arraysEqual(notify.argv, desiredArgv) &&
+    notify.argv.some((arg) => isCodePalOwnedAgentCommand(arg, "codex", desiredArgv[0]));
 }
 
 function readOptionalJson(pathname: string): {
@@ -366,7 +508,8 @@ function inspectCodexConfig(
   const sessionsExist = fs.existsSync(sessionsPath);
   const hooksConfig = readOptionalJson(hooksPath);
   const config = readOptionalText(configPath);
-  const desiredNotifyArgv = buildCodexHookArgv(hookCtx);
+  const desiredNotifyArgv = [wrapperScriptPath(homeDir, "codex")];
+  const wrapperFilesReady = wrapperFilesExist(homeDir, ["codex"]);
 
   let health: IntegrationHealth = "not_configured";
   let hookInstalled = false;
@@ -406,9 +549,11 @@ function inspectCodexConfig(
                 (hook) =>
                   hook &&
                   typeof hook === "object" &&
-                  detectCodePalHookCommand(
+                  commandTargetsCurrentCodePal(
                     String((hook as Record<string, unknown>).command ?? ""),
                     "codex",
+                    hookCtx,
+                    buildWrapperCommand(homeDir, "codex"),
                   ),
               )
             );
@@ -417,21 +562,23 @@ function inspectCodexConfig(
       });
 
       if (hasAnyHooks) {
-        health = "active";
-        hookInstalled = true;
-        statusMessage = hasCodePalHooks
-          ? "已接入 Codex"
-          : "已检测到 Codex 接入";
-        statusMessageKey = hasCodePalHooks
-          ? "integration.message.codex.active"
-          : "integration.message.codex.detected";
-        if (sessionsExist) {
-          statusMessage += "，并持续同步会话记录";
-          statusMessageKey = hasCodePalHooks
-            ? "integration.message.codex.activeWithSessions"
-            : "integration.message.codex.detected";
+        if (hasCodePalHooks) {
+          health = "active";
+          hookInstalled = true;
+          statusMessage = "已接入 Codex";
+          statusMessageKey = "integration.message.codex.active";
+          if (sessionsExist) {
+            statusMessage += "，并持续同步会话记录";
+            statusMessageKey = "integration.message.codex.activeWithSessions";
+          }
+          displayPath = hooksPath;
+        } else {
+          health = "repair_needed";
+          hookInstalled = false;
+          statusMessage = "Codex hooks.json 与当前 CodePal 要求不一致";
+          statusMessageKey = "integration.message.codex.mismatch";
+          displayPath = hooksPath;
         }
-        displayPath = hooksPath;
       }
     } else {
       health = "repair_needed";
@@ -451,7 +598,11 @@ function inspectCodexConfig(
       health = "repair_needed";
       statusMessage = notify.message;
       displayPath = configPath;
-    } else if (notify.kind === "parsed" && arraysEqual(notify.argv, desiredNotifyArgv)) {
+    } else if (
+      notify.kind === "parsed" &&
+      arraysEqual(notify.argv, desiredNotifyArgv) &&
+      wrapperFilesReady
+    ) {
       health = "active";
       hookInstalled = true;
       statusMessage = sessionsExist
@@ -468,12 +619,12 @@ function inspectCodexConfig(
     health = "active";
   }
 
-  const { healthLabel, healthLabelKey } = labelsForHealth(health);
+  const { healthLabel, healthLabelKey, actionLabel, actionLabelKey } = labelsForHealth(health);
 
   return {
     id: "codex",
     label: AGENT_LABELS.codex,
-    supported: false,
+    supported: true,
     configPath: displayPath,
     configExists: fs.existsSync(displayPath),
     hookScriptPath: displayPath,
@@ -482,7 +633,8 @@ function inspectCodexConfig(
     health,
     healthLabel,
     healthLabelKey,
-    actionLabel: "",
+    actionLabel,
+    actionLabelKey,
     statusMessage,
     statusMessageKey,
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
@@ -499,8 +651,10 @@ function inspectCursorConfig(
   const hookScriptPath = cursorHookScriptPath(hookScriptsRoot);
   const hookScriptExists = fs.existsSync(hookScriptPath);
   const config = readOptionalJson(configPath);
+  const wrapperFilesReady = wrapperFilesExist(homeDir, ["cursor"]);
+  const wrapperCommand = buildWrapperCommand(homeDir, "cursor");
   const requiredNew = Object.fromEntries(
-    CURSOR_HOOK_EVENT_NAMES.map((eventName) => [eventName, buildCursorHookCommand(hookCtx)]),
+    CURSOR_HOOK_EVENT_NAMES.map((eventName) => [eventName, wrapperCommand]),
   ) as Record<string, string>;
   const requiredLegacy = {
     sessionStart: buildCursorCommand(hookScriptPath, "sessionStart"),
@@ -525,6 +679,23 @@ function inspectCursorConfig(
       const hooks = hooksValue as Record<string, unknown>;
       const hooksAreEmpty = cursorHooksEmpty(hooks, eventNames);
       const hasNew = cursorHooksMatch(hooks, requiredNew);
+      const targetsCurrentCodePal = eventNames.every((eventName) => {
+        const eventEntries = hooks[eventName];
+        return (
+          Array.isArray(eventEntries) &&
+          eventEntries.some(
+            (entry) =>
+              entry &&
+              typeof entry === "object" &&
+              commandTargetsCurrentCodePal(
+                String((entry as Record<string, unknown>).command ?? ""),
+                "cursor",
+                hookCtx,
+                wrapperCommand,
+              ),
+          )
+        );
+      });
       const hasRecognizedCodePal = cursorHooksRecognizeCodePal(hooks, eventNames);
       const hasLegacyExact = cursorHooksMatch(hooks, requiredLegacy);
       const hasLegacyDetect =
@@ -542,7 +713,7 @@ function inspectCursorConfig(
         }) && !hasNew;
       const hasLegacy = hasLegacyExact || hasLegacyDetect;
 
-      if (hasNew || hasRecognizedCodePal) {
+      if ((hasNew && wrapperFilesReady) || targetsCurrentCodePal) {
         health = "active";
         hookInstalled = true;
         statusMessage = "已配置用户级 Cursor hooks";
@@ -552,7 +723,7 @@ function inspectCursorConfig(
         hookInstalled = true;
         statusMessage = "检测到旧版 CodePal Cursor hook 命令，建议迁移";
         statusMessageKey = "integration.message.cursor.legacy";
-      } else if (!hooksAreEmpty) {
+      } else if (hasRecognizedCodePal || !hooksAreEmpty) {
         health = "repair_needed";
         statusMessage = "Cursor hooks.json 与当前 CodePal 要求不一致";
         statusMessageKey = "integration.message.cursor.mismatch";
@@ -611,8 +782,8 @@ function codeBuddyRequiredEntries(hookScriptPath: string): CodeBuddyRequiredEntr
   ];
 }
 
-function codeBuddyRequiredNewEntries(hookCtx: HookCommandContext): CodeBuddyRequiredEntry[] {
-  const command = buildCodeBuddyHookCommand(hookCtx);
+function codeBuddyRequiredWrapperEntries(homeDir: string): CodeBuddyRequiredEntry[] {
+  const command = buildWrapperCommand(homeDir, "codebuddy");
   return [
     { eventName: "SessionStart", command },
     { eventName: "UserPromptSubmit", command },
@@ -622,8 +793,8 @@ function codeBuddyRequiredNewEntries(hookCtx: HookCommandContext): CodeBuddyRequ
   ];
 }
 
-function claudeRequiredNewEntries(hookCtx: HookCommandContext): ClaudeRequiredEntry[] {
-  const command = buildClaudeHookCommand(hookCtx);
+function claudeRequiredEntriesForHome(homeDir: string): ClaudeRequiredEntry[] {
+  const command = buildWrapperCommand(homeDir, "claude");
   return [
     { eventName: "SessionStart", matcher: "*", command },
     { eventName: "UserPromptSubmit", command },
@@ -676,13 +847,13 @@ function firstString(payload: Record<string, unknown>, keys: readonly string[]):
   return undefined;
 }
 
-function hasClaudeStatusLine(config: Record<string, unknown>, hookCtx: HookCommandContext): boolean {
+function hasClaudeStatusLineForHome(config: Record<string, unknown>, homeDir: string): boolean {
   const command = readClaudeStatusLineCommand(config);
   if (!command) {
     return false;
   }
-  const expected = buildClaudeStatusLineCommand(hookCtx);
-  return command === expected || commandContainsCodePalSubcommand(command, "claude-statusline");
+  const expected = buildWrapperCommand(homeDir, "claude-statusline");
+  return isWrapperCommand(command, expected);
 }
 
 function codeBuddyEveryRequiredSatisfiedByDetectLegacy(
@@ -724,6 +895,60 @@ function codeBuddyHooksEmpty(hooks: Record<string, unknown>): boolean {
     const value = hooks[key];
     return !Array.isArray(value) || value.length === 0;
   });
+}
+
+function normalizeNestedCommandEntries(
+  entries: unknown,
+  required: CodeBuddyRequiredEntry,
+  hookName: WrappedAgentKind,
+): {
+  entries: Array<Record<string, unknown>>;
+  changed: boolean;
+} {
+  const nextEntries = Array.isArray(entries)
+    ? entries.filter((entry): entry is Record<string, unknown> => {
+        if (!entry || typeof entry !== "object") {
+          return false;
+        }
+        const record = entry as Record<string, unknown>;
+        if (required.matcher !== undefined && record.matcher !== required.matcher) {
+          return true;
+        }
+        if (required.matcher === undefined && "matcher" in record && record.matcher !== undefined) {
+          return true;
+        }
+        if (!Array.isArray(record.hooks)) {
+          return true;
+        }
+        const remainingHooks = record.hooks.filter((hook): hook is Record<string, unknown> => {
+          if (!hook || typeof hook !== "object") {
+            return false;
+          }
+          const hookRecord = hook as Record<string, unknown>;
+          if (hookRecord.type !== "command") {
+            return true;
+          }
+          const command = String(hookRecord.command ?? "");
+          return !isCodePalOwnedAgentCommand(command, hookName, required.command);
+        });
+        if (remainingHooks.length === 0) {
+          return false;
+        }
+        record.hooks = remainingHooks;
+        return true;
+      })
+    : [];
+
+  if (!hasCodeBuddyHookEntry(nextEntries, required)) {
+    nextEntries.push({
+      ...(required.matcher !== undefined ? { matcher: required.matcher } : {}),
+      hooks: [{ type: "command", command: required.command }],
+    });
+  }
+
+  const currentJson = JSON.stringify(Array.isArray(entries) ? entries : []);
+  const nextJson = JSON.stringify(nextEntries);
+  return { entries: nextEntries, changed: currentJson !== nextJson };
 }
 
 function hasCodeBuddyHookEntry(entries: unknown, required: CodeBuddyRequiredEntry): boolean {
@@ -781,6 +1006,13 @@ function claudeHooksEmpty(hooks: Record<string, unknown>): boolean {
   });
 }
 
+function normalizeClaudeHookEntries(entries: unknown, required: ClaudeRequiredEntry): {
+  entries: Array<Record<string, unknown>>;
+  changed: boolean;
+} {
+  return normalizeNestedCommandEntries(entries, required, "claude");
+}
+
 function inspectClaudeConfig(
   homeDir: string,
   hookCtx: HookCommandContext,
@@ -788,12 +1020,14 @@ function inspectClaudeConfig(
 ): IntegrationAgentDiagnostics {
   const configPath = claudeConfigPath(homeDir);
   const config = readOptionalJson(configPath);
-  const required = claudeRequiredNewEntries(hookCtx);
+  const required = claudeRequiredEntriesForHome(homeDir);
+  const wrapperFilesReady = wrapperFilesExist(homeDir, ["claude", "claude-statusline"]);
 
   let health: IntegrationHealth = "not_configured";
   let hookInstalled = false;
   let statusMessage = "未配置 CodePal Claude hooks";
   let statusMessageKey = "integration.message.claude.notConfigured";
+  let checks: IntegrationAgentCheck[] | undefined;
 
   if (config.error) {
     health = "repair_needed";
@@ -801,8 +1035,30 @@ function inspectClaudeConfig(
   } else if (!config.exists) {
     health = "not_configured";
   } else if (config.parsed) {
-    const hasStatusLine = hasClaudeStatusLine(config.parsed, hookCtx);
+    const hasStatusLine = hasClaudeStatusLineForHome(config.parsed, homeDir) && wrapperFilesReady;
     const hooksValue = config.parsed.hooks;
+    const hasMatchingHooks =
+      hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)
+        ? claudeHooksMatch(hooksValue as Record<string, unknown>, required) && wrapperFilesReady
+        : false;
+    checks = [
+      {
+        id: "hooks",
+        label: "Hooks",
+        labelKey: "integration.check.claude.hooks",
+        ok: hasMatchingHooks,
+        statusLabel: hasMatchingHooks ? "正常" : "异常",
+        statusLabelKey: hasMatchingHooks ? "integration.check.ok" : "integration.check.error",
+      },
+      {
+        id: "statusLine",
+        label: "StatusLine(quota)",
+        labelKey: "integration.check.claude.statusLine",
+        ok: hasStatusLine,
+        statusLabel: hasStatusLine ? "正常" : "异常",
+        statusLabelKey: hasStatusLine ? "integration.check.ok" : "integration.check.error",
+      },
+    ];
     if (hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)) {
       const hooks = hooksValue as Record<string, unknown>;
       if (claudeHooksMatch(hooks, required) && hasStatusLine) {
@@ -855,8 +1111,91 @@ function inspectClaudeConfig(
     actionLabelKey,
     statusMessage,
     statusMessageKey,
+    ...(checks ? { checks } : {}),
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
+}
+
+function isClaudeAutoMigrateCandidate(
+  homeDir: string,
+  hookCtx: HookCommandContext,
+): boolean {
+  const config = readOptionalJson(claudeConfigPath(homeDir));
+  if (!config.parsed) {
+    return false;
+  }
+
+  const wrapperFilesReady = wrapperFilesExist(homeDir, ["claude", "claude-statusline"]);
+  const hasWrapperStatusLine =
+    hasClaudeStatusLineForHome(config.parsed, homeDir) && wrapperFilesReady;
+  const hooksValue = config.parsed.hooks;
+  const hasWrapperHooks =
+    hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)
+      ? claudeHooksMatch(
+          hooksValue as Record<string, unknown>,
+          claudeRequiredEntriesForHome(homeDir),
+        ) && wrapperFilesReady
+      : false;
+  if (hasWrapperHooks && hasWrapperStatusLine) {
+    return false;
+  }
+
+  const hasOldCodePalStatusLine = Boolean(
+    readClaudeStatusLineCommand(config.parsed) &&
+      commandContainsCodePalSubcommand(
+        readClaudeStatusLineCommand(config.parsed) ?? "",
+        "claude-statusline",
+      ),
+  );
+
+  const hasOldCodePalHooks =
+    hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)
+      ? claudeRequiredEntriesForHome(homeDir).every((requiredEntry) => {
+          const entries = (hooksValue as Record<string, unknown>)[requiredEntry.eventName];
+          if (!Array.isArray(entries)) {
+            return false;
+          }
+          return entries.some((entry) => {
+            if (!entry || typeof entry !== "object") return false;
+            const record = entry as Record<string, unknown>;
+            if (requiredEntry.matcher !== undefined && record.matcher !== requiredEntry.matcher) {
+              return false;
+            }
+            if (requiredEntry.matcher === undefined && "matcher" in record && record.matcher !== undefined) {
+              return false;
+            }
+            if (!Array.isArray(record.hooks)) return false;
+            return record.hooks.some(
+              (hook) =>
+                hook &&
+                typeof hook === "object" &&
+                (hook as Record<string, unknown>).type === "command" &&
+                detectCodePalHookCommand(
+                  String((hook as Record<string, unknown>).command ?? ""),
+                  "claude",
+                ),
+            );
+          });
+        })
+      : false;
+
+  return hasOldCodePalHooks || hasOldCodePalStatusLine;
+}
+
+function codeBuddyConfigNeedsCleanup(homeDir: string): boolean {
+  const required = codeBuddyRequiredWrapperEntries(homeDir);
+  const entriesByEvent = Object.fromEntries(
+    required.map((entry) => [entry.eventName, required.filter((item) => item.eventName === entry.eventName)]),
+  ) as Record<string, CodeBuddyRequiredEntry[]>;
+  return nestedHooksConfigNeedsCleanup(codeBuddyConfigPath(homeDir), entriesByEvent, "codebuddy");
+}
+
+function claudeConfigNeedsCleanup(homeDir: string): boolean {
+  const required = claudeRequiredEntriesForHome(homeDir);
+  const entriesByEvent = Object.fromEntries(
+    required.map((entry) => [entry.eventName, required.filter((item) => item.eventName === entry.eventName)]),
+  ) as Record<string, CodeBuddyRequiredEntry[]>;
+  return nestedHooksConfigNeedsCleanup(claudeConfigPath(homeDir), entriesByEvent, "claude");
 }
 
 function inspectCodeBuddyConfig(
@@ -869,8 +1208,9 @@ function inspectCodeBuddyConfig(
   const hookScriptPath = codeBuddyHookScriptPath(hookScriptsRoot);
   const hookScriptExists = fs.existsSync(hookScriptPath);
   const config = readOptionalJson(configPath);
-  const requiredNew = codeBuddyRequiredNewEntries(hookCtx);
+  const requiredNew = codeBuddyRequiredWrapperEntries(homeDir);
   const requiredLegacy = codeBuddyRequiredEntries(hookScriptPath);
+  const wrapperFilesReady = wrapperFilesExist(homeDir, ["codebuddy"]);
 
   let health: IntegrationHealth = "not_configured";
   let hookInstalled = false;
@@ -893,7 +1233,7 @@ function inspectCodeBuddyConfig(
         !hasNew && codeBuddyEveryRequiredSatisfiedByDetectLegacy(hooks, requiredLegacy);
       const hasLegacy = hasLegacyExact || hasLegacyDetect;
 
-      if (hasNew) {
+      if (hasNew && wrapperFilesReady) {
         health = "active";
         hookInstalled = true;
         statusMessage = "已配置用户级 CodeBuddy hooks";
@@ -948,6 +1288,7 @@ function installCursorHooksFile(
   hookCtx: HookCommandContext,
   now: () => number,
 ): { changed: boolean; backupPath?: string } {
+  ensureAgentWrapperFiles(homeDir, hookCtx);
   const configPath = cursorConfigPath(homeDir);
   const current = readOptionalJson(configPath);
   if (current.error) {
@@ -968,7 +1309,7 @@ function installCursorHooksFile(
   const hooks = hooksValue ? ({ ...hooksValue } as Record<string, unknown>) : {};
 
   const requiredCommands = Object.fromEntries(
-    CURSOR_HOOK_EVENT_NAMES.map((eventName) => [eventName, buildCursorHookCommand(hookCtx)]),
+    CURSOR_HOOK_EVENT_NAMES.map((eventName) => [eventName, buildWrapperCommand(homeDir, "cursor")]),
   ) as Record<string, string>;
 
   let changed = current.exists === false;
@@ -978,18 +1319,11 @@ function installCursorHooksFile(
     if (existingEntries !== undefined && !Array.isArray(existingEntries)) {
       throw new Error(`Cursor hooks.json 中 ${eventName} 不是数组`);
     }
-    const entries = Array.isArray(existingEntries) ? [...existingEntries] : [];
-    const alreadyPresent = entries.some(
-      (entry) =>
-        entry &&
-        typeof entry === "object" &&
-        (entry as Record<string, unknown>).command === command,
-    );
-    if (!alreadyPresent) {
-      entries.push({ command });
+    const normalized = normalizeCursorHookEntries(existingEntries, command);
+    if (normalized.changed) {
       changed = true;
     }
-    hooks[eventName] = entries;
+    hooks[eventName] = normalized.entries;
   }
 
   next.hooks = hooks;
@@ -1011,6 +1345,7 @@ function installCodeBuddyHooksFile(
   hookCtx: HookCommandContext,
   now: () => number,
 ): { changed: boolean; backupPath?: string } {
+  const wrapperResult = ensureAgentWrapperFiles(homeDir, hookCtx);
   const configPath = codeBuddyConfigPath(homeDir);
   const current = readOptionalJson(configPath);
   if (current.error) {
@@ -1027,22 +1362,18 @@ function installCodeBuddyHooksFile(
   }
   const hooks = hooksValue ? ({ ...hooksValue } as Record<string, unknown>) : {};
 
-  let changed = current.exists === false;
+  let changed = current.exists === false || wrapperResult.changed;
 
-  for (const required of codeBuddyRequiredNewEntries(hookCtx)) {
+  for (const required of codeBuddyRequiredWrapperEntries(homeDir)) {
     const existingEntries = hooks[required.eventName];
     if (existingEntries !== undefined && !Array.isArray(existingEntries)) {
       throw new Error(`CodeBuddy hooks.${required.eventName} 不是数组`);
     }
-    const entries = Array.isArray(existingEntries) ? [...existingEntries] : [];
-    if (!hasCodeBuddyHookEntry(entries, required)) {
-      entries.push({
-        ...(required.matcher !== undefined ? { matcher: required.matcher } : {}),
-        hooks: [{ type: "command", command: required.command }],
-      });
+    const normalized = normalizeNestedCommandEntries(existingEntries, required, "codebuddy");
+    if (normalized.changed) {
       changed = true;
     }
-    hooks[required.eventName] = entries;
+    hooks[required.eventName] = normalized.entries;
   }
 
   next.hooks = hooks;
@@ -1064,6 +1395,7 @@ function installClaudeHooksFile(
   hookCtx: HookCommandContext,
   now: () => number,
 ): { changed: boolean; backupPath?: string } {
+  const wrapperResult = ensureAgentWrapperFiles(homeDir, hookCtx);
   const configPath = claudeConfigPath(homeDir);
   const current = readOptionalJson(configPath);
   if (current.error) {
@@ -1080,26 +1412,22 @@ function installClaudeHooksFile(
   }
   const hooks = hooksValue ? ({ ...hooksValue } as Record<string, unknown>) : {};
 
-  let changed = current.exists === false;
+  let changed = current.exists === false || wrapperResult.changed;
 
-  for (const required of claudeRequiredNewEntries(hookCtx)) {
+  for (const required of claudeRequiredEntriesForHome(homeDir)) {
     const existingEntries = hooks[required.eventName];
     if (existingEntries !== undefined && !Array.isArray(existingEntries)) {
       throw new Error(`Claude hooks.${required.eventName} 不是数组`);
     }
-    const entries = Array.isArray(existingEntries) ? [...existingEntries] : [];
-    if (!hasClaudeHookEntry(entries, required)) {
-      entries.push({
-        ...(required.matcher !== undefined ? { matcher: required.matcher } : {}),
-        hooks: [{ type: "command", command: required.command }],
-      });
+    const normalized = normalizeClaudeHookEntries(existingEntries, required);
+    if (normalized.changed) {
       changed = true;
     }
-    hooks[required.eventName] = entries;
+    hooks[required.eventName] = normalized.entries;
   }
 
   next.hooks = hooks;
-  const desiredStatusLineCommand = buildClaudeStatusLineCommand(hookCtx);
+  const desiredStatusLineCommand = buildWrapperCommand(homeDir, "claude-statusline");
   const existingStatusLineCommand = readClaudeStatusLineCommand(next);
   if (!existingStatusLineCommand) {
     next.statusLine = {
@@ -1107,7 +1435,15 @@ function installClaudeHooksFile(
       command: desiredStatusLineCommand,
     };
     changed = true;
-  } else if (!commandContainsCodePalSubcommand(existingStatusLineCommand, "claude-statusline")) {
+  } else if (existingStatusLineCommand === desiredStatusLineCommand) {
+    // already current
+  } else if (commandContainsCodePalSubcommand(existingStatusLineCommand, "claude-statusline")) {
+    next.statusLine = {
+      type: "command",
+      command: desiredStatusLineCommand,
+    };
+    changed = true;
+  } else {
     next.statusLine = {
       type: "command",
       command: buildChainedClaudeStatusLineCommand(
@@ -1135,16 +1471,17 @@ function installCodexHooksFile(
   hookCtx: HookCommandContext,
   now: () => number,
 ): { changed: boolean; backupPath?: string } {
+  const wrapperResult = ensureAgentWrapperFiles(homeDir, hookCtx);
   const configPath = codexConfigPath(homeDir);
   const current = readOptionalText(configPath);
   if (current.error) {
     throw new Error(current.error);
   }
 
-  const next = upsertCodexNotifyConfig(current.text ?? "", buildCodexHookArgv(hookCtx));
+  const next = upsertCodexNotifyConfig(current.text ?? "", [wrapperScriptPath(homeDir, "codex")]);
   let backupPath: string | undefined;
 
-  if (next.changed) {
+  if (next.changed || wrapperResult.changed) {
     ensureParentDir(configPath);
     if (current.exists) {
       backupPath = backupFile(configPath, now);
@@ -1152,7 +1489,7 @@ function installCodexHooksFile(
     fs.writeFileSync(configPath, next.text);
   }
 
-  return { changed: next.changed, backupPath };
+  return { changed: next.changed || wrapperResult.changed, backupPath };
 }
 
 function formatExecutableLabel(packaged: boolean, execPath: string): string {
@@ -1258,6 +1595,34 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
         messageParams: { label: diagnostics.label },
         diagnostics,
       };
+    },
+    autoInstallMissingSupportedHooks(): IntegrationInstallResult[] {
+      const results: IntegrationInstallResult[] = [];
+      for (const agentId of ["claude", "cursor", "codebuddy", "codex"] as const) {
+        const diagnostics = getAgentDiagnostics(agentId);
+        const desiredWrapperCommand = agentId === "cursor" ? buildWrapperCommand(options.homeDir, "cursor") : "";
+        const shouldInstall =
+          diagnostics.supported &&
+          (diagnostics.health === "not_configured" ||
+            diagnostics.health === "legacy_path" ||
+            (agentId === "claude" &&
+              diagnostics.health === "repair_needed" &&
+              (isClaudeAutoMigrateCandidate(options.homeDir, integrationHookContext()) ||
+                claudeConfigNeedsCleanup(options.homeDir))) ||
+            (agentId === "cursor" &&
+              cursorConfigNeedsCleanup(options.homeDir, desiredWrapperCommand)) ||
+            (agentId === "codebuddy" &&
+              diagnostics.health === "repair_needed" &&
+              codeBuddyConfigNeedsCleanup(options.homeDir)) ||
+            (agentId === "codex" &&
+              diagnostics.health === "repair_needed" &&
+              codexConfigNeedsCleanup(options.homeDir)));
+        if (!shouldInstall) {
+          continue;
+        }
+        results.push(this.installHooks(agentId));
+      }
+      return results;
     },
   };
 }

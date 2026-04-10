@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AppSettings, AppSettingsPatch } from "../../shared/appSettings";
 import type {
+  ClaudeQuotaDiagnostics,
+  ClaudeQuotaSyncResult,
+} from "../../shared/claudeQuotaTypes";
+import type {
   CodeBuddyQuotaConnectResult,
   CodeBuddyQuotaDiagnostics,
 } from "../../shared/codebuddyQuotaTypes";
@@ -135,6 +139,11 @@ contextBridge.exposeInMainWorld("codepal", {
       "codepal:get-codebuddy-quota-diagnostics",
     ) as Promise<CodeBuddyQuotaDiagnostics>;
   },
+  getClaudeQuotaDiagnostics() {
+    return ipcRenderer.invoke(
+      "codepal:get-claude-quota-diagnostics",
+    ) as Promise<ClaudeQuotaDiagnostics>;
+  },
   getCodeBuddyInternalQuotaDiagnostics() {
     return ipcRenderer.invoke(
       "codepal:get-codebuddy-internal-quota-diagnostics",
@@ -159,6 +168,11 @@ contextBridge.exposeInMainWorld("codepal", {
     return ipcRenderer.invoke(
       "codepal:refresh-cursor-dashboard-usage",
     ) as Promise<CursorDashboardConnectResult>;
+  },
+  refreshClaudeQuota() {
+    return ipcRenderer.invoke(
+      "codepal:refresh-claude-quota",
+    ) as Promise<ClaudeQuotaSyncResult>;
   },
   clearCursorDashboardAuth() {
     return ipcRenderer.invoke(

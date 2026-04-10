@@ -1,6 +1,6 @@
 {
   "name": "codepal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "main": "out/main/main.js",
@@ -19,6 +19,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "dist:mac": "npm run build && electron-builder --mac zip dmg --publish never",
+    "dist:mac:unsigned:test": "node scripts/dist-mac-unsigned-test.cjs",
     "preview": "electron-vite preview",
     "seed:history": "node scripts/seed-history.mjs",
     "test": "vitest run",

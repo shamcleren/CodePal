@@ -96,6 +96,49 @@ describe("mergeSessionTimelineItems", () => {
 
     expect(mergeSessionTimelineItems(live, [])).toBe(live);
   });
+
+  it("filters low-value Claude lifecycle notes from expanded history while keeping real content", () => {
+    const merged = mergeSessionTimelineItems(
+      [
+        timelineItem({
+          id: "assistant-1",
+          title: "Assistant",
+          label: "Assistant",
+          body: "还是你有其他想法？",
+          timestamp: 300,
+        }),
+      ],
+      [
+        activityItem({
+          id: "claude-stop-1",
+          kind: "system",
+          source: "system",
+          title: "Claude request finished",
+          body: "Claude request finished",
+          timestamp: 250,
+          tone: "completed",
+        }),
+        activityItem({
+          id: "claude-start-1",
+          kind: "system",
+          source: "system",
+          title: "Session started",
+          body: "Claude session started",
+          timestamp: 200,
+        }),
+        activityItem({
+          id: "user-1",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "帮我整理一下这里的状态",
+          timestamp: 150,
+        }),
+      ],
+    );
+
+    expect(merged.map((item) => item.id)).toEqual(["assistant-1", "user-1"]);
+  });
 });
 
 describe("shouldLoadNextHistoryPage", () => {

@@ -24,6 +24,15 @@ export interface IntegrationRuntimeDiagnostics {
   executableLabel: string;
 }
 
+export interface IntegrationAgentCheck {
+  id: string;
+  label: string;
+  labelKey?: string;
+  ok: boolean;
+  statusLabel: string;
+  statusLabelKey?: string;
+}
+
 export interface IntegrationAgentDiagnostics {
   id: IntegrationAgentId;
   label: string;
@@ -41,6 +50,7 @@ export interface IntegrationAgentDiagnostics {
   statusMessage: string;
   statusMessageKey?: string;
   statusMessageParams?: MessageParams;
+  checks?: IntegrationAgentCheck[];
   lastEventAt?: number;
   lastEventStatus?: SessionStatus;
 }

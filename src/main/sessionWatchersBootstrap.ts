@@ -28,6 +28,7 @@ type StartSessionWatchersOptions = {
   integrationService: IntegrationServiceLike;
   broadcastSessions: () => void;
   broadcastUsageOverview: () => void;
+  onSessionEventAccepted?: (event: SessionEvent) => void;
   createCodexSessionWatcher?: typeof createCodexSessionWatcher;
   createClaudeSessionWatcher?: typeof createClaudeSessionWatcher;
   createCodeBuddySessionWatcher?: typeof createCodeBuddySessionWatcher;
@@ -38,11 +39,13 @@ function routeSessionEvent(
   sessionStore: SessionStoreLike,
   integrationService: IntegrationServiceLike,
   broadcastSessions: () => void,
+  onSessionEventAccepted: ((event: SessionEvent) => void) | undefined,
   event: SessionEvent,
 ) {
   sessionStore.applyEvent(event);
   integrationService.recordEvent(event.tool, event.status, event.timestamp);
   broadcastSessions();
+  onSessionEventAccepted?.(event);
 }
 
 function routeUsageSnapshot(
@@ -98,6 +101,7 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
           options.sessionStore,
           options.integrationService,
           options.broadcastSessions,
+          options.onSessionEventAccepted,
           event,
         ),
       onUsageSnapshot: (snapshot) =>
@@ -111,6 +115,7 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
           options.sessionStore,
           options.integrationService,
           options.broadcastSessions,
+          options.onSessionEventAccepted,
           event,
         ),
       onUsageSnapshot: (snapshot) =>
@@ -131,6 +136,7 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
           options.sessionStore,
           options.integrationService,
           options.broadcastSessions,
+          options.onSessionEventAccepted,
           event,
         ),
     }),
@@ -139,11 +145,12 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
           logRoot: jetBrainsLogRoot,
           onEvent: (event) =>
             routeSessionEvent(
-              options.sessionStore,
-              options.integrationService,
-              options.broadcastSessions,
-              event,
-            ),
+            options.sessionStore,
+            options.integrationService,
+            options.broadcastSessions,
+            options.onSessionEventAccepted,
+            event,
+          ),
         })
       : null,
   };

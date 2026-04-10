@@ -746,6 +746,10 @@ body {
   text-align: right;
 }
 
+.integration-panel__healthy-check {
+  color: color-mix(in srgb, var(--muted) 88%, white 12%);
+}
+
 .integration-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -824,6 +828,24 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
   color: color-mix(in srgb, var(--muted) 84%, white 6%);
+}
+
+.integration-card__checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.integration-card__check {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.integration-card__check-label {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--text) 80%, var(--muted));
 }
 
 .hook-badge {

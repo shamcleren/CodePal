@@ -3,7 +3,7 @@
   <span valign="middle">CodePal</span>
 </h1>
 
-<p align="center"><strong>Monitor all your AI coding agents in one floating panel — sessions, quotas, activity.</strong></p>
+<p align="center"><strong>One floating panel for all your AI coding agents — sessions, activity, and quota always in view.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
@@ -20,14 +20,14 @@
 
 ## Why CodePal
 
-AI coding work gets fragmented fast:
+Running multiple AI coding agents means your attention is constantly split:
 
 - one session is running in Cursor
 - another is waiting for approval in a terminal
 - quota lives in a browser tab
 - recent activity is buried inside different tools
 
-CodePal turns that into one compact desktop panel.
+CodePal pulls it all into one floating panel that stays visible while you work.
 
 ## Preview
 
@@ -35,11 +35,12 @@ CodePal turns that into one compact desktop panel.
 
 ## What You Get
 
-- **Unified session view**: active, waiting, completed, and errored sessions in one list
-- **Readable activity flow**: assistant, tool, and system activity without the worst noise
-- **Quota and usage awareness**: keep token and rate-limit signals visible while you work
-- **Low-friction setup**: repair supported local integrations from inside the app
-- **Bilingual UI**: English and Simplified Chinese, with system-language follow mode
+- **Unified session view**: active, waiting, completed, and errored sessions across all agents in one list
+- **Focused activity timeline**: see what each agent is doing — replies, tool calls, and status changes — without the noise
+- **Quota and usage awareness**: token usage and rate-limit signals always visible, with compact and detailed density modes
+- **Session history persistence**: full activity history stored locally and restored across app restarts
+- **One-click integration repair**: fix supported local agent configurations from inside the app
+- **Bilingual UI**: English and Simplified Chinese, following your system language by default
 
 ## Supported Agents
 
@@ -51,35 +52,22 @@ CodePal turns that into one compact desktop panel.
 | **CodeBuddy** | ✅ | ✅ |
 | **GoLand / PyCharm*** | ✅ | ✅ |
 
-\* GoLand and PyCharm currently flow through the shared CodeBuddy JetBrains plugin path, including usage visibility.
-
-Coverage still differs in how upstream signals are sourced, but the session / usage baseline above is currently supported across these paths.
+\* GoLand and PyCharm flow through the shared CodeBuddy JetBrains plugin path.
 
 ## Install
 
 1. Open [Releases](https://github.com/shamcleren/CodePal/releases).
 2. Download the latest `.dmg` or `.zip` for macOS.
 3. Move `CodePal.app` into `Applications`.
-4. Launch the app and allow it in macOS Security settings if prompted.
+4. Launch — connected agents are picked up automatically.
 
-Release builds use `electron-builder`'s native app notarization flow, then explicitly notarize the final DMG and finish with app-level `codesign` plus notarization validation checks.
-
-## Best For
-
-- developers juggling multiple AI coding agents who want one glanceable status panel
-- anyone who cares about recent activity, quota pressure, and session state across tools
-
-## Current Scope
-
-CodePal v1 is intentionally **monitoring-first**: unified session / activity / quota visibility with a bilingual desktop UI (`system` / `en` / `zh-CN`) and bounded approval handling.
-
-It is not trying to be a general chat console, a full IDE navigation layer, or a deep terminal controller.
+Release builds are signed and notarized by Apple. No security prompt on open.
 
 ## What's Next
 
-- Improve usage / quota coverage where upstream sources are still partial
-- Expand real-world payload calibration across supported agents
-- Polish diagnostics, empty states, and degraded-state messaging
+- **Approval and control loop**: richer approval flow with structured single/multi-choice handling across agents
+- **Send message to agent**: outbound message delivery from CodePal directly into an active agent session
+- **Dynamic Island presence**: lightweight ambient surface on macOS for glanceable running/waiting state and approval nudges
 
 See [docs/roadmap-next.md](docs/roadmap-next.md) for the full planning direction.
 
@@ -98,23 +86,20 @@ To produce a signed and notarized build, set `APPLE_ID`, `APPLE_APP_SPECIFIC_PAS
 
 ## Troubleshooting
 
-**macOS blocks the app on first launch**
-Open **System Settings → Privacy & Security**, scroll to the bottom, and click **Open Anyway** next to the CodePal warning.
-
 **Sessions not showing up**
 Make sure the corresponding agent (Cursor / Claude Code / Codex / CodeBuddy) is actually running a session. Use the in-app diagnostics page to verify the integration path is healthy.
 
-## Privacy And Support
+## Privacy and Support
 
 - [Privacy and Data Boundaries](docs/privacy-and-data.md)
 - [Support Scope](docs/support-scope.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Report an Issue](https://github.com/shamcleren/CodePal/issues/new/choose)
 
-## Contributors
+## Development
 
 <details>
-<summary>Project docs for contributors</summary>
+<summary>Internal docs</summary>
 
 - [AGENTS.md](AGENTS.md) — agent coding conventions
 - [docs/design-overview.md](docs/design-overview.md) — architecture overview
