@@ -27,7 +27,7 @@
 
 - [ ] `npm run test:e2e`
 - [ ] `npm run dist:mac`
-  - 预期已自动串起 notarization、DMG `staple + validate`，以及 app 级别 `codesign` / `spctl` 校验
+  - 预期已自动串起 app notarization、最终 DMG notarization，以及 app 级别 `codesign` / notarization 校验
 
 如果是通过 GitHub 流程发版，还应确认：
 
@@ -93,8 +93,8 @@
 - [ ] `npm run dist:mac` 产物不再回退到 ad-hoc，并且自动收尾脚本没有报错
 - [ ] `codesign --display --verbose=4` 确认签名身份正确
 - [ ] notarization 已提交并通过
-- [ ] 最终 `.dmg` 已 `staple` 且 `stapler validate` 通过
-- [ ] `spctl` / `codesign --verify` 本机验证通过
+- [ ] 最终 `.dmg` 已 `notarytool submit --wait` 并返回 `Accepted`
+- [ ] `codesign --verify` 与 app 级别 notarization 校验通过
 - [ ] README / release notes / current-status 已去掉签名前测试分发表述
 
 如果这一节有任意一项没完成，就不要把它叫“完整 1.0.0 正式签名版”。

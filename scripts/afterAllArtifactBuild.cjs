@@ -33,6 +33,44 @@ function hasNotarizationCredentials() {
   return hasAppleIdFlow || hasApiKeyFlow || hasKeychainFlow;
 }
 
+function getNotaryAuthArgs() {
+  if (process.env.APPLE_KEYCHAIN_PROFILE) {
+    return ["--keychain-profile", process.env.APPLE_KEYCHAIN_PROFILE];
+  }
+
+  if (
+    process.env.APPLE_ID &&
+    process.env.APPLE_APP_SPECIFIC_PASSWORD &&
+    process.env.APPLE_TEAM_ID
+  ) {
+    return [
+      "--apple-id",
+      process.env.APPLE_ID,
+      "--password",
+      process.env.APPLE_APP_SPECIFIC_PASSWORD,
+      "--team-id",
+      process.env.APPLE_TEAM_ID,
+    ];
+  }
+
+  if (
+    process.env.APPLE_API_KEY &&
+    process.env.APPLE_API_KEY_ID &&
+    process.env.APPLE_API_ISSUER
+  ) {
+    return [
+      "--key",
+      process.env.APPLE_API_KEY,
+      "--key-id",
+      process.env.APPLE_API_KEY_ID,
+      "--issuer",
+      process.env.APPLE_API_ISSUER,
+    ];
+  }
+
+  throw new Error("Missing Apple notarization credentials.");
+}
+
 function findFirstApp(outDir) {
   const entries = fs.readdirSync(outDir, { withFileTypes: true });
   for (const entry of entries) {
@@ -77,13 +115,11 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   }
 
   run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]);
+  run("xcrun", ["stapler", "validate", "-v", appPath]);
 
   for (const dmgPath of dmgPaths) {
-    run("xcrun", ["stapler", "staple", "-v", dmgPath]);
-    run("xcrun", ["stapler", "validate", "-v", dmgPath]);
+    run("xcrun", ["notarytool", "submit", dmgPath, ...getNotaryAuthArgs(), "--wait"]);
   }
-
-  run("spctl", ["--assess", "--type", "execute", "--verbose=4", appPath]);
 
   console.log("[release] macOS release validation finished.");
   return [];

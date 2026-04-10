@@ -62,7 +62,7 @@ CodePal 的目标，就是把这些状态收拢成一个可持续挂在桌面的
 3. 把 `CodePal.app` 移到 `Applications`。
 4. 启动应用；如果 macOS 拦截，按系统提示手动放行即可。
 
-正式发布构建走 `electron-builder` 原生 notarization 流程，并在结束时自动补上 DMG 的 `staple + validate` 以及 app 级别的 `codesign` / `spctl` 校验。
+正式发布构建先走 `electron-builder` 原生 app notarization 流程，再显式提交最终 DMG 做 notarization，最后补 app 级别的 `codesign` 与 notarization 校验。
 
 ## 适合谁
 

@@ -62,7 +62,7 @@ Coverage still differs in how upstream signals are sourced, but the session / us
 3. Move `CodePal.app` into `Applications`.
 4. Launch the app and allow it in macOS Security settings if prompted.
 
-Release builds use `electron-builder`'s native notarization flow and finish with automatic DMG `staple + validate` plus app-level `codesign` / `spctl` checks.
+Release builds use `electron-builder`'s native app notarization flow, then explicitly notarize the final DMG and finish with app-level `codesign` plus notarization validation checks.
 
 ## Best For
 

@@ -181,7 +181,7 @@ xcrun notarytool store-credentials "codepal-notary" \
 
 ### 第 6 步：优先走构建后自动 notarize
 
-当前仓库已经接到 `electron-builder` 原生 notarization 流程，默认会在签名后自动 notarize，并由 `@electron/notarize` 自动 staple `.app`。构建完成后，`afterAllArtifactBuild` 还会继续对最终 `.dmg` 执行 `staple + validate`，并补一轮 `codesign` / `spctl` 校验。
+当前仓库已经接到 `electron-builder` 原生 notarization 流程，默认会在签名后自动 notarize `.app`。构建完成后，`afterAllArtifactBuild` 会继续对最终 `.dmg` 显式执行 `notarytool submit --wait`，并补一轮 app 级别的 `codesign` 与 notarization 校验。
 
 推荐优先使用下面 3 种凭据入口中的任意一种：
 
@@ -218,11 +218,11 @@ export APPLE_TEAM_ID="YOUR_TEAM_ID"
 npm run dist:mac
 ```
 
-如果配置完整，构建日志里应出现 `notarization successful`，然后继续执行 DMG 的 `staple + validate`，而不再是 `skipped macOS notarization`。
+如果配置完整，构建日志里应出现 `notarization successful`，然后继续执行最终 DMG 的 `notarytool submit --wait`，而不再是 `skipped macOS notarization`。
 
 ### 第 7 步：必要时手动提交 notarization
 
-更稳的排障方式仍然是：当自动 notarization 或自动 `staple + validate` 没跑通时，再退回手动 `notarytool submit`。
+更稳的排障方式仍然是：当自动 notarization 或最终 DMG notarization 没跑通时，再退回手动 `notarytool submit`。
 
 先找到构建出来的 `.dmg` 或 `.zip`，然后手动提交：
 
@@ -257,30 +257,21 @@ xcrun notarytool log <submission-id> --keychain-profile "codepal-notary"
 
 这一阶段最容易浪费时间的方式，就是“不看日志直接猜”。
 
-## 第三阶段：staple 和本地验证
+## 第三阶段：本地验证
 
 当 notarization 已通过，再做本地收尾。
 
-### 第 9 步：staple
-
-如果你已经走了自动闭环，这一步通常已经由构建脚本完成。手动排障时，再对最终产物执行：
-
-```bash
-xcrun stapler staple "release/CodePal-1.0.0.dmg"
-```
-
-如果你最终发布的是 `.app` 或其他载体，也按实际产物执行对应 staple。
-
-### 第 10 步：验证签名和 Gatekeeper
+### 第 9 步：验证签名和 notarization
 
 如果你已经走了自动闭环，这一步通常也已经由构建脚本完成。手动排障时，至少做这几项：
 
 ```bash
 codesign --verify --deep --strict --verbose=2 "release/mac/CodePal.app"
-spctl --assess --type execute --verbose=4 "release/mac/CodePal.app"
+xcrun stapler validate -v "release/mac/CodePal.app"
+xcrun notarytool submit "release/CodePal-1.0.0.dmg" \
+  --keychain-profile "codepal-notary" \
+  --wait
 ```
-
-如果你最终是从 `.dmg` 安装后再验证，最好也验证安装后的 `Applications/CodePal.app`。
 
 ## 第四阶段：收口到仓库流程
 
