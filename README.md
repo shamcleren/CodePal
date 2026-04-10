@@ -3,11 +3,7 @@
   <span valign="middle">CodePal</span>
 </h1>
 
-<p align="center"><strong>AI coding is getting fragmented.
-
-Sessions, approvals, quota, activity — all scattered across tools.
-
-CodePal puts everything into one panel.</strong></p>
+<p align="center"><strong>Monitor all your AI coding agents in one floating panel — sessions, quotas, activity.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
