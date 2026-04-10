@@ -406,20 +406,20 @@ test("tool artifact interactions: expand/collapse changes body height", async ()
     await summary.click();
 
     const artifactSummary = page.locator(".session-stream__artifact-summary").first();
-    const expandButton = page.getByRole("button", { name: "展开" });
+    const expandButton = page.getByRole("button", { name: /展开|Expand/ });
     await expect(expandButton).toBeVisible();
     await expect(artifactSummary).toContainText("renjinming 67781");
 
     const collapsedHeight = await artifactSummary.evaluate((node) => node.clientHeight);
     await expandButton.click();
-    await expect(page.getByRole("button", { name: "收起" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /收起|Collapse/ })).toBeVisible();
     const artifactBody = page.locator(".session-stream__artifact-body").first();
     await expect(artifactBody).toBeVisible();
     const expandedHeight = await artifactBody.evaluate((node) => node.clientHeight);
     expect(expandedHeight).toBeGreaterThan(collapsedHeight);
 
-    await page.getByRole("button", { name: "收起" }).click();
-    await expect(page.getByRole("button", { name: "展开" })).toBeVisible();
+    await page.getByRole("button", { name: /收起|Collapse/ }).click();
+    await expect(page.getByRole("button", { name: /展开|Expand/ })).toBeVisible();
     const recollapsedHeight = await artifactSummary.evaluate((node) => node.clientHeight);
     expect(recollapsedHeight).toBeLessThan(expandedHeight);
   } finally {
