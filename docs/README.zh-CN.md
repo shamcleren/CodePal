@@ -14,9 +14,13 @@
 - `docs/release-notes-v1.0.3.zh-CN.md`
   当前 1.0.3 版本的中文 release notes。
 - `docs/release-notes-v1.0.4.md`
-  当前 patch 级 v1.0.4 candidate 的英文 release notes 草稿。
+  v1.0.4 patch candidate 的英文 release notes 草稿。
 - `docs/release-notes-v1.0.4.zh-CN.md`
-  当前 patch 级 v1.0.4 candidate 的中文 release notes 草稿。
+  v1.0.4 patch candidate 的中文 release notes 草稿。
+- `docs/release-notes-v1.0.5.md`
+  当前 patch 级 v1.0.5 candidate 的英文 release notes 草稿。
+- `docs/release-notes-v1.0.5.zh-CN.md`
+  当前 patch 级 v1.0.5 candidate 的中文 release notes 草稿。
 - `docs/release-assets.md`
   README 和 GitHub Release 所需截图 / 媒体资产的英文清单。
 - `docs/release-assets.zh-CN.md`
@@ -43,7 +47,7 @@
 建议你按这个顺序使用：
 
 1. 先看 `release-checklist.zh-CN.md`
-2. 再看当前目标版本对应的 release notes；本轮 patch 测试优先看 `release-notes-v1.0.4.zh-CN.md`
+2. 再看当前目标版本对应的 release notes；本轮 patch 测试优先看 `release-notes-v1.0.5.zh-CN.md`
 3. 如果卡在签名、公证或 DMG 收尾校验，再看 `macos-signing-runbook.zh-CN.md`
 
 ## 如果你要看未来规划

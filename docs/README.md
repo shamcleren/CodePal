@@ -14,9 +14,13 @@ Use this directory by purpose rather than trying to read everything in one pass.
 - `docs/release-notes-v1.0.3.zh-CN.md`
   Chinese release notes for the current 1.0.3 release.
 - `docs/release-notes-v1.0.4.md`
-  English draft release notes for the current patch-level v1.0.4 candidate.
+  English release notes draft for the v1.0.4 patch candidate.
 - `docs/release-notes-v1.0.4.zh-CN.md`
-  Chinese draft release notes for the current patch-level v1.0.4 candidate.
+  Chinese release notes draft for the v1.0.4 patch candidate.
+- `docs/release-notes-v1.0.5.md`
+  English draft release notes for the current patch-level v1.0.5 candidate.
+- `docs/release-notes-v1.0.5.zh-CN.md`
+  Chinese draft release notes for the current patch-level v1.0.5 candidate.
 - `docs/release-assets.md`
   Asset checklist for README and GitHub Release screenshots / media.
 - `docs/release-assets.zh-CN.md`

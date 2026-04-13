@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
 import { launchCodePal } from "./helpers/launchCodePal";
 import { sendStatusChange } from "./helpers/sendStatusChange";
@@ -7,8 +10,10 @@ const TARGET_SESSION_ID = "expand-scroll-target-session";
 
 test("keeps the session list pinned to the expanded row bottom", async () => {
   const collector = await startActionResponseCollector();
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "codepal-expand-scroll-home-"));
   const codepal = await launchCodePal({
     actionResponseTarget: collector.responseTarget,
+    homeDir,
   });
 
   try {
@@ -93,5 +98,6 @@ test("keeps the session list pinned to the expanded row bottom", async () => {
   } finally {
     await codepal.close().catch(() => undefined);
     await collector.close().catch(() => undefined);
+    await fs.rm(homeDir, { recursive: true, force: true }).catch(() => undefined);
   }
 });

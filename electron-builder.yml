@@ -14,7 +14,7 @@ publish:
   owner: shamcleren
   repo: CodePal
 mac:
-  icon: build/icon.icns
+  icon: build/icon.png
   artifactName: ${productName}-${version}-${arch}.${ext}
   category: public.app-category.developer-tools
   hardenedRuntime: true

@@ -20,7 +20,7 @@
 - Repository now also includes a separate macOS GitHub Actions workflow for Electron E2E runs on `main` and manual dispatch
 - Release workflow validates macOS updater assets, including `latest-mac.yml`, dmg / zip artifacts, and blockmap files
 - v1.0.3 release work is complete; release-facing docs should now treat v1.0.3 as the current shipped baseline rather than pending work
-- A patch-level v1.0.4 candidate is accumulating after v1.0.3; current scope is limited to tray visual polish, expanded-session scroll behavior, and Cursor / CodeBuddy payload calibration
+- A patch-level v1.0.5 candidate is accumulating after v1.0.3; current scope is limited to icon polish, expanded-session scroll behavior, Cursor / CodeBuddy payload calibration, CI stability, and local test-build ergonomics
 
 ## What Already Exists
 
@@ -73,10 +73,12 @@
   - clearing persisted history only removes CodePal-managed SQLite history, not upstream logs
 - Expanded session rows now keep the outer session list pinned to the expanded row bottom while the details panel grows, so opening a lower row does not leave the newest details below the visible viewport
 - The post-v1.0.3 patch candidate currently includes:
-  - Retina-scale macOS menu bar template icon rendering
+  - refreshed brighter app icon artwork
+  - Retina-scale and larger-mask macOS menu bar template icon rendering
   - CodeBuddy `conversation_id` / `conversationId` session identity support
   - CodeBuddy CN app follow-up JSON cleanup
   - Cursor MCP-style `response.result.content[].text` tool-result extraction
+  - fast unsigned `.app` generation through `npm run dist:mac:dir`
 
 ### Integration Settings
 
@@ -107,6 +109,7 @@
 ### Release Build
 
 - A macOS release build can be produced via `npm run dist:mac`
+- A faster local unsigned `.app` test build can be produced via `npm run dist:mac:dir`
 - Release artifacts include dmg, zip, blockmap files, and `latest-mac.yml`
 - Signed / notarized distribution is the expected public release path when Apple credentials are configured
 - v1.0.3 release assets are treated as shipped; future release work should preserve updater metadata and signing / notarization verification rather than re-describing v1.0.3 as pending
@@ -226,6 +229,6 @@ For release-facing and forward-looking work, use:
 
 - `docs/context/2026-04-13-post-v1.0.3-handoff.md` for the post-v1.0.3 handoff and current patch-candidate context
 - `docs/release-notes-v1.0.3.md` for release-facing summary
-- `docs/release-notes-v1.0.4.md` for the current patch-level candidate summary while local testing is in progress
+- `docs/release-notes-v1.0.5.md` for the current patch-level candidate summary while local testing is in progress
 - `docs/roadmap-next.md` for forward-looking prioritization
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
