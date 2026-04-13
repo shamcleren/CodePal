@@ -55,8 +55,9 @@
 
 - [ ] `README.md` 已对齐当前产品状态
 - [ ] `README.zh-CN.md` 已对齐当前产品状态
-- [ ] `docs/release-notes-v1.0.0.md` 可直接用于 GitHub Release
-- [ ] `docs/release-notes-v1.0.0.zh-CN.md` 可直接用于中文说明
+- [ ] 本次版本的 `docs/release-notes-vX.Y.Z.md` 可直接用于 GitHub Release
+- [ ] release notes 使用 Markdown 正文，不要把 HTML 片段直接暴露给应用内更新面板
+- [ ] release notes 中的下载文件名与实际版本号一致
 
 特别注意：
 
@@ -80,6 +81,13 @@
 
 - [ ] `npm run dist:mac` 产物已生成
 - [ ] `release/` 中 `.zip` / `.dmg` 可正常产出
+- [ ] `release/` 中包含 `.zip.blockmap` / `.dmg.blockmap`
+- [ ] `release/` 中包含 `latest-mac.yml`
+- [ ] GitHub Release assets 中包含 `.zip` / `.dmg` / blockmap / `latest-mac.yml`
+- [ ] 从上一稳定版客户端执行应用内更新检查，能发现本次版本
+- [ ] 主界面更新按钮会在发现更新、下载中、已下载或失败时出现，无更新时不常驻
+- [ ] 设置页已完成实机视觉检查：接入、显示、用量、维护、支持都没有明显过满或过空
+- [ ] macOS 菜单栏 tray icon 尺寸正常，暗色 / 亮色模式下清晰可见
 - [ ] 本次明确使用了 `CODEPAL_SKIP_RELEASE_FINISH=1`，或你接受本次不走正式收尾校验
 - [ ] 你知道本次仍然处于签名前测试分发状态
 - [ ] README / release notes 没有错误地把它写成“已签名 / 已公证”

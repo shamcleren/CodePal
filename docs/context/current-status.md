@@ -10,18 +10,20 @@
   - `npm test`
   - `npm run lint`
   - `npm run build`
-- Extended validation also verified on 2026-04-08:
+- Extended validation last fully verified on 2026-04-08:
   - `npm run test:e2e`
   - `npm run dist:mac`
+- Local unit / lint / build / E2E verification was refreshed on 2026-04-13.
 - Repository now also includes a minimal GitHub Actions CI workflow for `lint + test + build`
 - Repository now also includes a separate macOS GitHub Actions workflow for Electron E2E runs on `main` and manual dispatch
+- Release workflow validates macOS updater assets, including `latest-mac.yml`, dmg / zip artifacts, and blockmap files
 
 ## What Already Exists
 
 ### App Shell
 
 - CodePal desktop main process, preload bridge, tray, and floating window shell
-- Renderer monitoring panel with status bar, session rows, recent-activity hover details, plus a separate settings window for integrations
+- Renderer monitoring panel with status bar, session rows, recent-activity hover details, a conditional update status button, and a full settings drawer for integrations, display, usage, maintenance, and support
 - Shared session and payload types in `src/shared/`
 
 ### Monitoring Flow
@@ -79,14 +81,20 @@
 - CodeBuddy usage now has its own网页登录 + cookie-backed sync path for `CodeBuddy Code(app)` monthly quota, separate from the internal aggregate quota page
 - Settings layout is now grouped into:
   - `接入与诊断`
-  - `显示与用量`
-  - `实验功能`
+  - `面板显示`
+  - `用量与登录`
+  - `维护与历史`
+  - `支持与诊断`
+- Settings navigation now favors short labels and section summaries instead of long repeated explanations
+- Main panel now exposes actionable update states through a conditional update button; idle / up-to-date states do not permanently occupy header space
+- The Maintenance update panel remains the detailed update control surface
 
 ### Test Build
 
 - A macOS internal test build can be produced via `npm run dist:mac`
+- Release artifacts include dmg, zip, blockmap files, and `latest-mac.yml`
 - Current artifacts still need the final signing / notarization pass and land under `release/`
-- Current local packaging verification is green on 2026-04-08
+- Current local unit / lint / build / E2E verification is green on 2026-04-13
 
 ### Pending Action Loop
 
@@ -154,6 +162,7 @@ npm run dist:mac
 - Claude Code still lacks an authoritative quota/reset source; current coverage remains token-usage-first, with last-known statusline quota snapshots now retained locally when available
 - CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset, and the separate internal aggregate quota source is still being polished in-product
 - The current macOS test build has moved to the executable hook path, but still does not include formal signing / notarization
+- macOS tray icon sizing is normalized in code, but full icon-system redesign remains a future polish item
 - CodePal -> codeagent message sending is still missing; current product is intentionally stronger on monitoring than on active conversation control
 - GitHub Project creation is blocked until `gh auth refresh -s project,read:project` is completed
 
@@ -173,7 +182,7 @@ npm run dist:mac
 - Integration diagnostics and repair flow are already in place for Cursor and CodeBuddy user-level hook config
 - Cursor dashboard login and spend sync are already in place, including session-expired handling
 - CodeBuddy IDE/app monthly quota login and sync are now also in place through the settings panel, including session-expired handling
-- Header usage display, usage density switching, and settings regrouping are already in place
+- Header usage display, update status visibility, usage density switching, compact settings navigation, and settings regrouping are already in place
 - Session ordering and expiration now follow dashboard-oriented defaults
 - Persisted session history is now available across app restarts, while the main list remains summary-first
 
@@ -198,6 +207,6 @@ These items are not part of the current accepted V1 baseline, but they still bel
 
 For release-facing and forward-looking work, use:
 
-- `docs/release-notes-v1.0.0.md` for release-facing summary
+- `docs/release-notes-v1.0.3.md` for release-facing summary
 - `docs/roadmap-next.md` for forward-looking prioritization
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
