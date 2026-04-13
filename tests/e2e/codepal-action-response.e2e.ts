@@ -51,8 +51,9 @@ test("cursor phase1: installs cursor hooks and surfaces degraded unsupported act
     const installed = JSON.parse(await fs.readFile(configPath, "utf8")) as {
       hooks: { sessionStart: Array<{ command: string }>; stop: Array<{ command: string }> };
     };
-    expect(installed.hooks.sessionStart[0]?.command).toContain("--codepal-hook cursor");
-    expect(installed.hooks.stop[0]?.command).toContain("--codepal-hook cursor");
+    const cursorWrapperCommand = `"${path.join(homeDir, ".codepal", "bin", "cursor-hook")}"`;
+    expect(installed.hooks.sessionStart[0]?.command).toBe(cursorWrapperCommand);
+    expect(installed.hooks.stop[0]?.command).toBe(cursorWrapperCommand);
 
     await sendStatusChange(
       {
