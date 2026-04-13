@@ -86,7 +86,9 @@ function writeFileIfChanged(filePath: string, contents: string, mode?: number): 
       }
       return false;
     }
-  } catch {}
+  } catch {
+    // Missing or unreadable files are treated as needing a rewrite.
+  }
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, contents, "utf8");
@@ -129,4 +131,3 @@ export function wrapperFilesExist(
   const { runtimeEnvPath } = codePalWrapperPaths(homeDir);
   return fs.existsSync(runtimeEnvPath) && kinds.every((kind) => fs.existsSync(wrapperScriptPath(homeDir, kind)));
 }
-

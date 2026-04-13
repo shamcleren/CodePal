@@ -1116,10 +1116,7 @@ function inspectClaudeConfig(
   };
 }
 
-function isClaudeAutoMigrateCandidate(
-  homeDir: string,
-  hookCtx: HookCommandContext,
-): boolean {
+function isClaudeAutoMigrateCandidate(homeDir: string): boolean {
   const config = readOptionalJson(claudeConfigPath(homeDir));
   if (!config.parsed) {
     return false;
@@ -1607,7 +1604,7 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
             diagnostics.health === "legacy_path" ||
             (agentId === "claude" &&
               diagnostics.health === "repair_needed" &&
-              (isClaudeAutoMigrateCandidate(options.homeDir, integrationHookContext()) ||
+              (isClaudeAutoMigrateCandidate(options.homeDir) ||
                 claudeConfigNeedsCleanup(options.homeDir))) ||
             (agentId === "cursor" &&
               cursorConfigNeedsCleanup(options.homeDir, desiredWrapperCommand)) ||

@@ -32,7 +32,9 @@ export function installMainProcessFileLogger(logsDir: string): { logFilePath: st
     const line = `${new Date().toISOString()} [${level}] ${args.map(formatArg).join(" ")}\n`;
     try {
       fs.appendFileSync(logFilePath, line, "utf8");
-    } catch {}
+    } catch {
+      // Logging must never interrupt the main process.
+    }
   }
 
   console.log = (...args: unknown[]) => {
