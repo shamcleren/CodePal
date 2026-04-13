@@ -43,4 +43,59 @@ describe("normalizeCodeBuddyUiMessage", () => {
       ],
     });
   });
+
+  it("keeps JSON-only followup completion messages out of the visible timeline", () => {
+    const normalized = normalizeCodeBuddyUiMessage(
+      {
+        ts: 1759217457000,
+        type: "ask",
+        ask: "followup",
+        text: JSON.stringify({
+          question: "",
+          conversationId: "c-8619-1759217450870",
+        }),
+      },
+      context,
+    );
+
+    expect(normalized).toMatchObject({
+      sessionId: "codebuddy-ui:1759217450870",
+      tool: "codebuddy",
+      status: "completed",
+      task: "CodeBuddy response finished",
+      meta: expect.objectContaining({
+        conversation_id: "c-8619-1759217450870",
+      }),
+    });
+    expect(normalized?.activityItems).toBeUndefined();
+  });
+
+  it("uses a followup question as the completion note when it is present", () => {
+    const normalized = normalizeCodeBuddyUiMessage(
+      {
+        ts: 1759217458000,
+        type: "ask",
+        ask: "followup",
+        text: JSON.stringify({
+          question: "还要继续吗？",
+          conversationId: "c-8619-1759217450870",
+        }),
+      },
+      context,
+    );
+
+    expect(normalized).toMatchObject({
+      status: "completed",
+      task: "还要继续吗？",
+      activityItems: [
+        expect.objectContaining({
+          kind: "note",
+          source: "system",
+          title: "Follow-up",
+          body: "还要继续吗？",
+          tone: "completed",
+        }),
+      ],
+    });
+  });
 });

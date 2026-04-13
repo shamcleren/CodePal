@@ -134,6 +134,14 @@ function toolBody(payload: Record<string, unknown>): string {
   );
 }
 
+function followupBody(text: string | undefined): string | undefined {
+  const parsed = parseJsonText(text);
+  if (parsed) {
+    return fullText(typeof parsed.question === "string" ? parsed.question : undefined);
+  }
+  return text;
+}
+
 export function extractConversationId(entry: CodeBuddyUiMessage): string | undefined {
   const parsedText = parseJsonText(entry.text);
   const direct =
@@ -235,22 +243,23 @@ export function normalizeCodeBuddyUiMessage(
   }
 
   if (type === "ask" && ask === "followup") {
+    const body = followupBody(text);
     return {
       type: "status_change",
       sessionId: context.sessionId,
       tool: "codebuddy",
       status: "completed",
-      task: firstLine(text, "CodeBuddy response finished"),
+      task: firstLine(body, "CodeBuddy response finished"),
       timestamp,
       meta,
-      activityItems: text
+      activityItems: body
         ? [
             {
               id: `codebuddy-ui:${context.taskId}:${timestamp}:followup`,
               kind: "note",
               source: "system",
               title: "Follow-up",
-              body: text,
+              body,
               timestamp,
               tone: "completed",
             },
