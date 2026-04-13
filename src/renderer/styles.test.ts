@@ -18,6 +18,9 @@ describe("renderer layout styles", () => {
     const css = fs.readFileSync(stylesPath, "utf8");
 
     expect(css).toMatch(/\.status-bar\s*\{[\s\S]*align-items:\s*center;/);
+    expect(css).toMatch(/\.app-header__actions\s*\{/);
+    expect(css).toMatch(/\.app-update-button\s*\{/);
+    expect(css).toMatch(/\.app-update-button--error\s*\{/);
     expect(css).toMatch(/\.status-bar\s*\{[\s\S]*justify-content:\s*space-between;/);
     expect(css).toMatch(/\.status-bar\s*\{[\s\S]*padding:\s*10px 12px;/);
     expect(css).toMatch(/\.status-bar__group\s*\{/);

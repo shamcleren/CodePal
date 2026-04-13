@@ -19,6 +19,7 @@ describe("SupportPanel", () => {
     );
 
     expect(html).toContain("Support &amp; Diagnostics");
+    expect(html).toContain("support-panel__actions");
     expect(html).toContain("Copy Diagnostics");
     expect(html).toContain("Report Issue");
     expect(html).toContain("Privacy");

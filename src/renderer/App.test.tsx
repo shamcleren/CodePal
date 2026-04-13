@@ -15,15 +15,18 @@ describe("App", () => {
     expect(html).toContain("Panel Display");
     expect(html).toContain("app-shell");
     expect(html).toContain("app-header__meta");
+    expect(html).toContain("app-header__actions");
     expect(html).toContain("app-settings-drawer");
     expect(html).toContain("app-settings-drawer__content");
     expect(html).toContain("settings-nav");
     expect(html).toContain("settings-content");
     expect(html).toContain("Integrations");
     expect(html).toContain("Integrations &amp; Diagnostics");
-    expect(html).toContain("Usage &amp; Sign-ins");
-    expect(html).toContain("Maintenance &amp; History");
-    expect(html).toContain("Support &amp; Diagnostics");
+    expect(html).toContain("Panel Display");
+    expect(html).not.toContain("Handle listener state, hook repairs, and login issues in one place.");
+    expect(html).not.toContain(
+      "Keep Claude, Cursor, and CodeBuddy sign-ins plus quota sync together.",
+    );
     expect(html).toContain("aria-label=\"Open settings\"");
     expect(html).toContain("aria-label=\"Integrations\"");
   });

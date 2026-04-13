@@ -42,10 +42,12 @@ describe("UpdatePanel", () => {
     );
 
     expect(html).toContain("App Updates");
+    expect(html).toContain("update-panel__status");
     expect(html).toContain("Update 1.0.1 is available");
     expect(html).toContain("Download Update");
     expect(html).toContain("Skip This Version");
     expect(html).toContain("Bug fixes");
+    expect(html).toContain("update-panel__notes");
   });
 
   it("renders downloaded install state in Chinese", () => {

@@ -55,7 +55,7 @@ export function UpdatePanel({
       <div className="display-panel__header">
         <div className="display-panel__title">{t("update.title")}</div>
         <div className="display-panel__subtitle">{t("update.subtitle")}</div>
-        <div className="display-panel__subtitle">{summary}</div>
+        <div className="update-panel__status">{summary}</div>
         {releaseNotes ? (
           <div className="update-panel__notes">
             <div className="update-panel__notes-title">{t("update.notes")}</div>

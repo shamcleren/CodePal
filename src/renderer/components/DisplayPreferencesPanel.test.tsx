@@ -19,6 +19,9 @@ describe("DisplayPreferencesPanel", () => {
     );
 
     expect(html).toContain("面板显示");
+    expect(html).toContain("display-panel__grid");
+    expect(html).toContain("display-panel__card");
+    expect(html).toContain("面板");
     expect(html).toContain("显示的 Agent");
     expect(html).toContain("用量显示密度");
     expect(html).toContain("简洁");

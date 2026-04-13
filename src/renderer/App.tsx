@@ -13,6 +13,7 @@ import { CodeBuddyQuotaPanel } from "./components/CodeBuddyQuotaPanel";
 import { ClaudeQuotaPanel } from "./components/ClaudeQuotaPanel";
 import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
+import { MainUpdateButton } from "./components/MainUpdateButton";
 import { StatusBar } from "./components/StatusBar";
 import { SessionList } from "./components/SessionList";
 import { UpdatePanel } from "./components/UpdatePanel";
@@ -35,7 +36,7 @@ type SettingsSection = {
   id: SettingsSectionId;
   label: string;
   eyebrow: string;
-  description: string;
+  summary: string;
 };
 
 export function buildFallbackHistoryDiagnostics(enabled: boolean): HistoryDiagnostics {
@@ -106,31 +107,31 @@ export function App() {
       id: "integrations",
       label: i18n.t("integration.title"),
       eyebrow: i18n.t("settings.nav.integrations.eyebrow"),
-      description: i18n.t("settings.nav.integrations.description"),
+      summary: i18n.t("settings.summary.integrations"),
     },
     {
       id: "display",
       label: i18n.t("display.title"),
       eyebrow: i18n.t("settings.nav.display.eyebrow"),
-      description: i18n.t("settings.nav.display.description"),
+      summary: i18n.t("settings.summary.display"),
     },
     {
       id: "usage",
       label: i18n.t("usage.section"),
       eyebrow: i18n.t("settings.nav.usage.eyebrow"),
-      description: i18n.t("settings.nav.usage.description"),
+      summary: i18n.t("settings.summary.usage"),
     },
     {
       id: "maintenance",
       label: i18n.t("maintenance.section"),
       eyebrow: i18n.t("settings.nav.maintenance.eyebrow"),
-      description: i18n.t("settings.nav.maintenance.description"),
+      summary: i18n.t("settings.summary.maintenance"),
     },
     {
       id: "support",
       label: i18n.t("support.title"),
       eyebrow: i18n.t("settings.nav.support.eyebrow"),
-      description: i18n.t("settings.nav.support.description"),
+      summary: i18n.t("settings.summary.support"),
     },
   ];
   const activeSettingsSectionConfig =
@@ -434,10 +435,18 @@ export function App() {
     void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
   }
 
-  function openSettingsDrawer() {
-    setActiveSettingsSection("integrations");
+  function openSettingsSection(section: SettingsSectionId) {
+    setActiveSettingsSection(section);
     setSettingsOpen(true);
     refreshIntegrations();
+  }
+
+  function openSettingsDrawer() {
+    openSettingsSection("integrations");
+  }
+
+  function openMaintenanceSettings() {
+    openSettingsSection("maintenance");
   }
 
   function closeSettingsDrawer() {
@@ -704,14 +713,24 @@ export function App() {
         <div className="app-header__meta">
           <h1 className="app-title">CodePal</h1>
         </div>
-        <button
-          type="button"
-          className="app-settings-trigger"
-          aria-label={i18n.t("app.openSettings")}
-          onClick={openSettingsDrawer}
-        >
-          {i18n.t("app.settings")}
-        </button>
+        <div className="app-header__actions">
+          <MainUpdateButton
+            state={updateState}
+            busy={updateBusy}
+            onOpenMaintenance={openMaintenanceSettings}
+            onInstall={() => {
+              void runUpdateAction(() => window.codepal.installUpdate());
+            }}
+          />
+          <button
+            type="button"
+            className="app-settings-trigger"
+            aria-label={i18n.t("app.openSettings")}
+            onClick={openSettingsDrawer}
+          >
+            {i18n.t("app.settings")}
+          </button>
+        </div>
       </div>
       <StatusBar
         usage={<UsageStatusStrip overview={usageOverview} settings={appSettings.display} />}
@@ -765,7 +784,6 @@ export function App() {
               >
                 <span className="settings-nav__eyebrow">{section.eyebrow}</span>
                 <span className="settings-nav__label">{section.label}</span>
-                <span className="settings-nav__description">{section.description}</span>
               </button>
             ))}
           </nav>
@@ -777,7 +795,7 @@ export function App() {
                 </span>
                 <h3 className="settings-section-shell__title">{activeSettingsSectionConfig.label}</h3>
                 <p className="settings-section-shell__subtitle">
-                  {activeSettingsSectionConfig.description}
+                  {activeSettingsSectionConfig.summary}
                 </p>
               </header>
               {activeSettingsSection === "integrations" ? (

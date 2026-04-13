@@ -29,7 +29,7 @@ export function SupportPanel({
           <div className="display-panel__subtitle">{t("support.subtitle")}</div>
         </div>
       ) : null}
-      <div className="display-panel__actions">
+      <div className="display-panel__actions support-panel__actions">
         <button type="button" className="integration-panel__refresh" onClick={onCopyDiagnostics}>
           {t("support.copyDiagnostics")}
         </button>
@@ -44,7 +44,7 @@ export function SupportPanel({
       <div className="display-panel__summary">
         <span>{t("support.summary")}</span>
       </div>
-      <div className="display-panel__actions">
+      <div className="display-panel__actions support-panel__actions">
         <button
           type="button"
           className="integration-panel__refresh integration-panel__refresh--secondary"

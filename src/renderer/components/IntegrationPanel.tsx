@@ -125,37 +125,22 @@ export function IntegrationPanel({
       {feedbackMessage ? <p className="integration-panel__feedback">{feedbackMessage}</p> : null}
       {errorMessage ? <p className="integration-panel__error">{errorMessage}</p> : null}
 
-      {healthyAgents.length > 0 ? (
-        <div className="integration-panel__healthy" aria-label={i18n.t("integration.healthy")}>
-          {healthyAgents.map((agent) => (
-            <div
-              key={agent.id}
-              className="integration-panel__healthy-item"
-              title={i18n.translateMessage(
-                agent.statusMessage,
-                agent.statusMessageKey,
-                agent.statusMessageParams,
-              )}
-            >
-              <div className="integration-panel__healthy-main">
-                <span className="integration-panel__healthy-name">{agent.label}</span>
-                <span className={hookBadgeClass(agent)}>{i18n.translateMessage(agent.healthLabel, agent.healthLabelKey)}</span>
-              </div>
-              <div className="integration-panel__healthy-meta">
-                <span>{lastEventLabel(agent, i18n)}</span>
-                {agent.checks?.map((check) => (
-                  <span key={check.id} className="integration-panel__healthy-check">
-                    {`${i18n.translateMessage(check.label, check.labelKey)} ${i18n.translateMessage(
-                      check.statusLabel,
-                      check.statusLabelKey,
-                    )}`}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
+      <div className="integration-panel__status-grid">
+        <div className="display-panel__card">
+          <div className="display-panel__title">{i18n.t("integration.listener.title")}</div>
+          <div className="integration-panel__summary">
+            {allHealthy ? i18n.t("integration.allHealthy") : listenerLabel(diagnostics, i18n.t)}
+          </div>
         </div>
-      ) : null}
+        <div className="display-panel__card">
+          <div className="display-panel__title">{i18n.t("integration.status.ready")}</div>
+          <div className="integration-panel__summary">{healthyAgents.length}</div>
+        </div>
+        <div className="display-panel__card">
+          <div className="display-panel__title">{i18n.t("integration.status.attention")}</div>
+          <div className="integration-panel__summary">{attentionAgents.length}</div>
+        </div>
+      </div>
 
       {allHealthy ? <div className="integration-panel__feedback">{i18n.t("integration.noActionNeeded")}</div> : null}
 
@@ -165,56 +150,91 @@ export function IntegrationPanel({
         </div>
       ) : null}
 
-      <div className="integration-grid">
-        {attentionAgents.map((agent) => {
-          const isInstalling = installingAgentId === agent.id;
-          return (
-            <article key={agent.id} className="integration-card" aria-label={agent.label}>
-              <div className="integration-card__header">
-                <div>
-                  <div className="integration-card__name">{agent.label}</div>
-                  <div className="integration-card__message">
-                    {i18n.translateMessage(agent.statusMessage, agent.statusMessageKey, agent.statusMessageParams)}
-                  </div>
+      <details className="integration-panel__details" open={!allHealthy}>
+        <summary>{i18n.t("integration.details")}</summary>
+        {healthyAgents.length > 0 ? (
+          <div className="integration-panel__healthy" aria-label={i18n.t("integration.healthy")}>
+            {healthyAgents.map((agent) => (
+              <div
+                key={agent.id}
+                className="integration-panel__healthy-item"
+                title={i18n.translateMessage(
+                  agent.statusMessage,
+                  agent.statusMessageKey,
+                  agent.statusMessageParams,
+                )}
+              >
+                <div className="integration-panel__healthy-main">
+                  <span className="integration-panel__healthy-name">{agent.label}</span>
+                  <span className={hookBadgeClass(agent)}>{i18n.translateMessage(agent.healthLabel, agent.healthLabelKey)}</span>
                 </div>
-                <span className={hookBadgeClass(agent)}>{i18n.translateMessage(agent.healthLabel, agent.healthLabelKey)}</span>
-              </div>
-              <div className="integration-card__path" title={agent.configPath}>
-                {compactPathLabel(agent.configPath)}
-              </div>
-              {agent.checks?.length ? (
-                <div className="integration-card__checks">
-                  {agent.checks.map((check) => (
-                    <div key={check.id} className="integration-card__check">
-                      <span className="integration-card__check-label">
-                        {i18n.translateMessage(check.label, check.labelKey)}
-                      </span>
-                      <span className={checkBadgeClass(check)}>
-                        {i18n.translateMessage(check.statusLabel, check.statusLabelKey)}
-                      </span>
-                    </div>
+                <div className="integration-panel__healthy-meta">
+                  <span>{lastEventLabel(agent, i18n)}</span>
+                  {agent.checks?.map((check) => (
+                    <span key={check.id} className="integration-panel__healthy-check">
+                      {`${i18n.translateMessage(check.label, check.labelKey)} ${i18n.translateMessage(
+                        check.statusLabel,
+                        check.statusLabelKey,
+                      )}`}
+                    </span>
                   ))}
                 </div>
-              ) : null}
-              {agent.lastEventAt || agent.lastEventStatus ? (
-                <div className="integration-card__meta">{lastEventLabel(agent, i18n)}</div>
-              ) : null}
-              {shouldShowAction(agent) ? (
-                <button
-                  type="button"
-                  className="integration-card__action"
-                  disabled={isInstalling}
-                  onClick={() => onInstall(agent.id)}
-                >
-                  {isInstalling
-                    ? i18n.t("integration.action.applying")
-                    : i18n.translateMessage(agent.actionLabel, agent.actionLabelKey)}
-                </button>
-              ) : null}
-            </article>
-          );
-        })}
-      </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="integration-grid">
+          {attentionAgents.map((agent) => {
+            const isInstalling = installingAgentId === agent.id;
+            return (
+              <article key={agent.id} className="integration-card" aria-label={agent.label}>
+                <div className="integration-card__header">
+                  <div>
+                    <div className="integration-card__name">{agent.label}</div>
+                    <div className="integration-card__message">
+                      {i18n.translateMessage(agent.statusMessage, agent.statusMessageKey, agent.statusMessageParams)}
+                    </div>
+                  </div>
+                  <span className={hookBadgeClass(agent)}>{i18n.translateMessage(agent.healthLabel, agent.healthLabelKey)}</span>
+                </div>
+                <div className="integration-card__path" title={agent.configPath}>
+                  {compactPathLabel(agent.configPath)}
+                </div>
+                {agent.checks?.length ? (
+                  <div className="integration-card__checks">
+                    {agent.checks.map((check) => (
+                      <div key={check.id} className="integration-card__check">
+                        <span className="integration-card__check-label">
+                          {i18n.translateMessage(check.label, check.labelKey)}
+                        </span>
+                        <span className={checkBadgeClass(check)}>
+                          {i18n.translateMessage(check.statusLabel, check.statusLabelKey)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {agent.lastEventAt || agent.lastEventStatus ? (
+                  <div className="integration-card__meta">{lastEventLabel(agent, i18n)}</div>
+                ) : null}
+                {shouldShowAction(agent) ? (
+                  <button
+                    type="button"
+                    className="integration-card__action"
+                    disabled={isInstalling}
+                    onClick={() => onInstall(agent.id)}
+                  >
+                    {isInstalling
+                      ? i18n.t("integration.action.applying")
+                      : i18n.translateMessage(agent.actionLabel, agent.actionLabelKey)}
+                  </button>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      </details>
     </section>
   );
 }

@@ -159,7 +159,9 @@ describe("IntegrationPanel", () => {
     );
 
     expect(html).toContain("接入与诊断");
-    expect(html).toContain("正常接入也会保留一层简洁状态");
+    expect(html).toContain("integration-panel__status-grid");
+    expect(html).toContain("integration-panel__details");
+    expect(html).toContain("接入详情");
     expect(html).toContain("接收入口：本机端口 17371");
     expect(html).toContain("CodePal 开发构建");
     expect(html).not.toContain("node:");

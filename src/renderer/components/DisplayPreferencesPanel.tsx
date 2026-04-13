@@ -39,63 +39,75 @@ export function DisplayPreferencesPanel({
         </div>
       ) : null}
 
-      <label className="display-panel__toggle">
-        <input
-          type="checkbox"
-          checked={settings.showInStatusBar}
-          onChange={(event) => onToggleStrip(event.target.checked)}
-        />
-        <span>{t("display.showQuota")}</span>
-      </label>
-
-      <div className="display-panel__title">{t("display.agents.title")}</div>
-      <div className="display-panel__agents">
-        {AGENTS.map((agent) => (
-          <label key={agent.id} className="display-panel__toggle">
+      <div className="display-panel__grid">
+        <div className="display-panel__card">
+          <div className="display-panel__title">{t("display.panel.title")}</div>
+          <label className="display-panel__toggle">
             <input
               type="checkbox"
-              checked={!settings.hiddenAgents.includes(agent.id)}
-              onChange={() => onToggleAgent(agent.id)}
+              checked={settings.showInStatusBar}
+              onChange={(event) => onToggleStrip(event.target.checked)}
             />
-            <span>{agent.label}</span>
+            <span>{t("display.showQuota")}</span>
           </label>
-        ))}
-      </div>
+        </div>
 
-      <div className="display-panel__title">{t("display.density.title")}</div>
-      <div className="display-panel__agents">
-        <label className="display-panel__toggle">
-          <input
-            type="radio"
-            name="usage-density"
-            checked={settings.density === "compact"}
-            onChange={() => onDensityChange("compact")}
-          />
-          <span>{t("display.density.compact")}</span>
-        </label>
-        <label className="display-panel__toggle">
-          <input
-            type="radio"
-            name="usage-density"
-            checked={settings.density === "detailed"}
-            onChange={() => onDensityChange("detailed")}
-          />
-          <span>{t("display.density.detailed")}</span>
-        </label>
-      </div>
-      <div className="display-panel__title">{t("display.language.title")}</div>
-      <div className="display-panel__agents">
-        {(["system", "en", "zh-CN"] as const).map((locale) => (
-          <label key={locale} className="display-panel__toggle">
-            <input
-              type="radio"
-              name="app-locale"
-              checked={localeSetting === locale}
-              onChange={() => onLocaleChange(locale)}
-            />
-            <span>{t(`display.language.${locale}`)}</span>
-          </label>
-        ))}
+        <div className="display-panel__card">
+          <div className="display-panel__title">{t("display.agents.title")}</div>
+          <div className="display-panel__agents">
+            {AGENTS.map((agent) => (
+              <label key={agent.id} className="display-panel__toggle">
+                <input
+                  type="checkbox"
+                  checked={!settings.hiddenAgents.includes(agent.id)}
+                  onChange={() => onToggleAgent(agent.id)}
+                />
+                <span>{agent.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="display-panel__card">
+          <div className="display-panel__title">{t("display.density.title")}</div>
+          <div className="display-panel__agents">
+            <label className="display-panel__toggle">
+              <input
+                type="radio"
+                name="usage-density"
+                checked={settings.density === "compact"}
+                onChange={() => onDensityChange("compact")}
+              />
+              <span>{t("display.density.compact")}</span>
+            </label>
+            <label className="display-panel__toggle">
+              <input
+                type="radio"
+                name="usage-density"
+                checked={settings.density === "detailed"}
+                onChange={() => onDensityChange("detailed")}
+              />
+              <span>{t("display.density.detailed")}</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="display-panel__card">
+          <div className="display-panel__title">{t("display.language.title")}</div>
+          <div className="display-panel__agents">
+            {(["system", "en", "zh-CN"] as const).map((locale) => (
+              <label key={locale} className="display-panel__toggle">
+                <input
+                  type="radio"
+                  name="app-locale"
+                  checked={localeSetting === locale}
+                  onChange={() => onLocaleChange(locale)}
+                />
+                <span>{t(`display.language.${locale}`)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );
