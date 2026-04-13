@@ -72,7 +72,7 @@ describe("createTray", () => {
     );
   });
 
-  it("uses the bundled template image at its authored size", () => {
+  it("uses the bundled @2x template image without resampling", () => {
     (createTray as unknown as (options: {
       onOpenMain: () => void;
       onOpenSettings: () => void;
@@ -81,7 +81,7 @@ describe("createTray", () => {
       onOpenSettings: vi.fn(),
     });
 
-    expect(mocks.createFromBuffer).toHaveBeenCalledOnce();
+    expect(mocks.createFromBuffer).toHaveBeenCalledWith(expect.any(Buffer), { scaleFactor: 2 });
     expect(mocks.resize).not.toHaveBeenCalled();
     expect(mocks.setTemplateImage).toHaveBeenCalledWith(true);
   });
