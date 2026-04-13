@@ -58,4 +58,7 @@ jobs:
           draft: true
           files: |
             release/*.dmg
+            release/*.dmg.blockmap
             release/*.zip
+            release/*.zip.blockmap
+            release/latest-mac.yml
