@@ -84,6 +84,24 @@ describe("createUpdateService", () => {
     });
   });
 
+  it("normalizes HTML release notes from GitHub into readable text", () => {
+    const service = createUpdateService({
+      isPackaged: true,
+      currentVersion: "1.0.0",
+      stateFilePath,
+    });
+
+    emit("update-available", {
+      version: "1.0.1",
+      releaseNotes:
+        '<h2>CodePal v1.0.1</h2><h3>Fixed</h3><ul><li>Fixed &amp; verified updater metadata.</li><li>See <a href="https://example.com">changelog</a>.</li></ul>',
+    });
+
+    expect(service.getState().releaseNotes).toBe(
+      "CodePal v1.0.1\n\nFixed\n\n- Fixed & verified updater metadata.\n- See changelog (https://example.com).",
+    );
+  });
+
   it("persists skipped version and restores available state when cleared", () => {
     const service = createUpdateService({
       isPackaged: true,

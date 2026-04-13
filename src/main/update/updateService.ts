@@ -18,18 +18,57 @@ type UpdateInfoLike = {
   releaseNotes?: unknown;
 };
 
+const HTML_ENTITY_MAP: Record<string, string> = {
+  amp: "&",
+  gt: ">",
+  lt: "<",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, entity: string) => {
+    if (entity.startsWith("#x") || entity.startsWith("#X")) {
+      const codePoint = Number.parseInt(entity.slice(2), 16);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+    if (entity.startsWith("#")) {
+      const codePoint = Number.parseInt(entity.slice(1), 10);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+    return HTML_ENTITY_MAP[entity] ?? match;
+  });
+}
+
+function normalizeHtmlReleaseNotes(value: string): string {
+  return decodeHtmlEntities(
+    value
+      .replace(/<\s*br\s*\/?\s*>/gi, "\n")
+      .replace(/<\s*\/\s*(p|div|h[1-6]|ul|ol)\s*>/gi, "\n\n")
+      .replace(/<\s*li\b[^>]*>/gi, "- ")
+      .replace(/<\s*\/\s*li\s*>/gi, "\n")
+      .replace(/<\s*a\b[^>]*href="([^"]+)"[^>]*>(.*?)<\s*\/\s*a\s*>/gis, "$2 ($1)")
+      .replace(/<[^>]+>/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+  );
+}
+
 function normalizeReleaseNotes(value: unknown): string | null {
   if (typeof value === "string" && value.trim()) {
-    return value.trim();
+    const trimmed = value.trim();
+    return /<\/?[a-z][\s\S]*>/i.test(trimmed) ? normalizeHtmlReleaseNotes(trimmed) : trimmed;
   }
   if (Array.isArray(value)) {
     const combined = value
       .map((item) => {
         if (typeof item === "string") {
-          return item.trim();
+          return normalizeReleaseNotes(item) ?? "";
         }
         if (item && typeof item === "object" && typeof (item as { note?: unknown }).note === "string") {
-          return (item as { note: string }).note.trim();
+          return normalizeReleaseNotes((item as { note: string }).note) ?? "";
         }
         return "";
       })
