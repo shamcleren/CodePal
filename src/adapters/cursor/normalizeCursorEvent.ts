@@ -29,7 +29,7 @@ function firstNestedText(
   preferredKeys: readonly string[],
   depth = 0,
 ): string | undefined {
-  if (depth > 2 || value === null || value === undefined) {
+  if (depth > 4 || value === null || value === undefined) {
     return undefined;
   }
 

@@ -54,6 +54,7 @@
 - CodeBuddy transcript watching now also feeds the shared monitoring model by reading `~/.codebuddy/projects/**/*.jsonl`, including user / assistant / tool activity for the first confirmed transcript shape
 - CodeBuddy CN app `ui_messages.json` watching also suppresses JSON-only follow-up completion payloads while preserving real follow-up questions and `conversationId` metadata
 - Cursor and Codex now both have shared fixture-backed calibration baselines under `tests/fixtures/cursor/` and `tests/fixtures/codex/`, and those samples are exercised through adapter plus ingress / watcher tests
+- Cursor tool-result calibration now covers MCP-style `response.result.content[].text` payloads, so richer tool output does not fall back to just the tool name
 - Timeline and row presentation are now aligned to a dashboard-first baseline:
   - unified message / tool / sideband visual hierarchy
   - lower-noise suppression for duplicate or low-information rows

@@ -1,0 +1,15 @@
+{
+  "hook_event_name": "PostToolUse",
+  "session_id": "cursor-fixture-110",
+  "tool_name": "fetch_docs",
+  "response": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Found 2 docs for Electron Tray"
+        }
+      ]
+    }
+  }
+}

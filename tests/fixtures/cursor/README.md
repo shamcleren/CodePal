@@ -22,11 +22,12 @@
 | `hook-after-shell-execution-mixed-result-priority.json` | quasi-real | `afterShellExecution` 同时有 `stdout/stderr/summary` 时优先选 concise summary |
 | `hook-after-shell-execution-output-over-summary.json` | quasi-real | `afterShellExecution` 同时有 `output` 和 `tool_result.summary` 时优先显式 output |
 | `hook-post-tool-use-response-result-output.json` | quasi-real | `PostToolUse` 从 `response.result.output` 提取 tool result |
+| `hook-post-tool-use-response-content-array.json` | quasi-real | `PostToolUse` 从 MCP 风格 `response.result.content[].text` 提取 tool result |
 | `hook-status-change-usage.json` | quasi-real | `StatusChange` 携带 `usage / context / rate_limits` 时进入统一 usage 提取路径 |
 
 ## 当前结论
 
 - Cursor tool call/result 的 richer body 提取应该优先吃结构化字段，而不是退回到 `tool_name`。
 - `Notification` 必须区分 `permission_prompt` 和 `idle_prompt`，不能一律压成 `waiting`。
-- 对于 richer tool result，`response/result/tool_result/stdout/stderr` 都要参与有限递归提取。
+- 对于 richer tool result，`response/result/tool_result/stdout/stderr` 和 MCP 风格 `content[].text` 都要参与有限递归提取。
 - Cursor usage 不应塞进 timeline 事件语义里，应该走独立 usage 提取路径并与 session 视图解耦。

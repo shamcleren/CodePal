@@ -6,6 +6,7 @@ import hookAfterShellExecutionToolResultSummary from "./hook-after-shell-executi
 import hookBeforeMCPExecutionUri from "./hook-before-mcp-execution-uri.json";
 import hookBeforeReadFile from "./hook-before-read-file.json";
 import hookNotificationIdlePrompt from "./hook-notification-idle-prompt.json";
+import hookPostToolUseResponseContentArray from "./hook-post-tool-use-response-content-array.json";
 import hookPostToolUseResponseResultOutput from "./hook-post-tool-use-response-result-output.json";
 import hookStatusChangeUsage from "./hook-status-change-usage.json";
 
@@ -270,6 +271,30 @@ export const CURSOR_FIXTURES: readonly CursorFixtureDescriptor[] = [
       meta: {
         hook_event_name: "PostToolUse",
         tool_name: "Edit",
+      },
+    },
+  },
+  {
+    id: "hook-post-tool-use-response-content-array",
+    source: "quasi-real",
+    description: "PostToolUse 应从 response.result.content[] 中提取 MCP 风格文本结果",
+    payload: hookPostToolUseResponseContentArray,
+    expectation: {
+      sessionId: "cursor-fixture-110",
+      status: "running",
+      activityItems: [
+        {
+          kind: "tool",
+          source: "tool",
+          title: "fetch_docs",
+          body: "Found 2 docs for Electron Tray",
+          toolName: "fetch_docs",
+          toolPhase: "result",
+        },
+      ],
+      meta: {
+        hook_event_name: "PostToolUse",
+        tool_name: "fetch_docs",
       },
     },
   },
