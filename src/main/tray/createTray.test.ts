@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const buildFromTemplate = vi.fn((template) => template);
   const setTemplateImage = vi.fn();
-  const resize = vi.fn(() => ({
-    setTemplateImage,
-  }));
+  const resize = vi.fn();
   const createFromBuffer = vi.fn(() => ({
     resize,
     setTemplateImage,
@@ -74,7 +72,7 @@ describe("createTray", () => {
     );
   });
 
-  it("marks the bundled tray icon as a macOS template image", () => {
+  it("uses the bundled template image at its authored size", () => {
     (createTray as unknown as (options: {
       onOpenMain: () => void;
       onOpenSettings: () => void;
@@ -84,7 +82,7 @@ describe("createTray", () => {
     });
 
     expect(mocks.createFromBuffer).toHaveBeenCalledOnce();
-    expect(mocks.resize).toHaveBeenCalledWith({ width: 16, height: 16, quality: "best" });
+    expect(mocks.resize).not.toHaveBeenCalled();
     expect(mocks.setTemplateImage).toHaveBeenCalledWith(true);
   });
 });

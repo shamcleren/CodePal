@@ -72,6 +72,8 @@ These are local working artifacts, not the current product contract. They can be
 
 - `docs/icon.png`
   App icon used in the repository README
+- `design/codepal-icon-redesign/`
+  Source artwork, previews, and export notes for the refreshed CodePal app and macOS menu bar icons
 - `docs/hero-main.png`
   Primary dashboard screenshot for README and release-facing material
 - `docs/index.png`

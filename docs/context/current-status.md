@@ -162,7 +162,7 @@ npm run dist:mac
 - Claude Code still lacks an authoritative quota/reset source; current coverage remains token-usage-first, with last-known statusline quota snapshots now retained locally when available
 - CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset, and the separate internal aggregate quota source is still being polished in-product
 - The current macOS test build has moved to the executable hook path, but still does not include formal signing / notarization
-- macOS tray icon sizing is normalized in code, but full icon-system redesign remains a future polish item
+- CodePal-owned app, docs, packaged macOS, and tray icon assets now use the refreshed centered monitoring-panel mark; third-party agent icon normalization remains future polish
 - CodePal -> codeagent message sending is still missing; current product is intentionally stronger on monitoring than on active conversation control
 - GitHub Project creation is blocked until `gh auth refresh -s project,read:project` is completed
 

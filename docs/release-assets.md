@@ -122,9 +122,12 @@ If the GIF exists, place it after the static screenshots or only on the Release 
 
 Current files:
 
+- `docs/icon.png`
 - `docs/index.png`
 - `docs/setting.png`
 
-These are useful references, but they are still closer to engineering screenshots than polished release assets.
+`docs/icon.png` now uses the refreshed CodePal app icon. The source artwork and menu bar glyph live under `design/codepal-icon-redesign/`.
+
+The screenshots are useful references, but they are still closer to engineering screenshots than polished release assets.
 
 The main gap is not resolution. The main gap is focus, especially around making the dashboard the clear visual hero.

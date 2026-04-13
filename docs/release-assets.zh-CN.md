@@ -122,9 +122,12 @@
 
 当前已有文件：
 
+- `docs/icon.png`
 - `docs/index.png`
 - `docs/setting.png`
 
-它们可以作为参考，但现在还更像工程截图，而不是打磨过的发版资产。
+`docs/icon.png` 已经使用新版 CodePal 应用图标。源稿和菜单栏 glyph 放在 `design/codepal-icon-redesign/`。
+
+截图可以作为参考，但现在还更像工程截图，而不是打磨过的发版资产。
 
 当前主要缺口不是分辨率，而是聚焦程度，尤其是要让 dashboard 明确成为视觉主角。

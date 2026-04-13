@@ -6,10 +6,11 @@
 - Made Settings easier to scan by replacing long navigation descriptions with short section summaries.
 - Rebalanced Settings pages with compact, status-first cards and details sections for lower-frequency diagnostics.
 - Improved the Maintenance and Support panels so update status and support actions are easier to find.
+- Refreshed CodePal-owned app, README, packaged macOS, and menu bar icon assets around a centered monitoring-panel mark.
 
 ### Fixed
 
-- Resized the macOS tray template image before creating the menu bar item so the status bar icon renders at the expected size.
+- Removed forced macOS tray icon downscaling and switched the menu bar asset to a backgroundless template glyph.
 - Added automated icon asset checks for bundled app, tray, docs, and renderer icons.
 
 ### Release Validation

@@ -1,0 +1,47 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>CodePal app icon concept</title>
+  <defs>
+    <linearGradient id="surface" x1="168" y1="112" x2="856" y2="912" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17202D" />
+      <stop offset="0.52" stop-color="#253142" />
+      <stop offset="1" stop-color="#0E141D" />
+    </linearGradient>
+    <linearGradient id="edge" x1="214" y1="144" x2="810" y2="884" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.32" />
+      <stop offset="0.42" stop-color="#FFFFFF" stop-opacity="0.08" />
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.18" />
+    </linearGradient>
+    <linearGradient id="panelStroke" x1="246" y1="272" x2="778" y2="752" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC" />
+      <stop offset="1" stop-color="#CBD5E1" />
+    </linearGradient>
+    <linearGradient id="statusDots" x1="332" y1="398" x2="692" y2="564" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399" />
+      <stop offset="0.5" stop-color="#38BDF8" />
+      <stop offset="1" stop-color="#FBBF24" />
+    </linearGradient>
+    <filter id="lift" x="132" y="128" width="760" height="784" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix" />
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" />
+      <feOffset dy="38" />
+      <feGaussianBlur stdDeviation="40" />
+      <feComposite in2="hardAlpha" operator="out" />
+      <feColorMatrix type="matrix" values="0 0 0 0 0.02 0 0 0 0 0.03 0 0 0 0 0.05 0 0 0 0.34 0" />
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow" />
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape" />
+    </filter>
+  </defs>
+
+  <rect x="96" y="96" width="832" height="832" rx="190" fill="url(#surface)" />
+  <rect x="118" y="118" width="788" height="788" rx="172" stroke="url(#edge)" stroke-width="18" />
+  <path d="M204 704C344 786 520 820 724 746C794 720 846 668 868 598V736C868 812 806 874 730 874H294C218 874 156 812 156 736V592C168 640 184 676 204 704Z" fill="#090E16" fill-opacity="0.22" />
+
+  <g filter="url(#lift)">
+    <rect x="256" y="292" width="512" height="440" rx="118" stroke="url(#panelStroke)" stroke-width="58" />
+    <path d="M360 610H664" stroke="#E2E8F0" stroke-width="42" stroke-linecap="round" />
+    <path d="M360 408H664" stroke="#E2E8F0" stroke-opacity="0.72" stroke-width="34" stroke-linecap="round" />
+    <path d="M392 506V506.5" stroke="url(#statusDots)" stroke-width="70" stroke-linecap="round" />
+    <path d="M512 506V506.5" stroke="url(#statusDots)" stroke-width="70" stroke-linecap="round" />
+    <path d="M632 506V506.5" stroke="url(#statusDots)" stroke-width="70" stroke-linecap="round" />
+  </g>
+</svg>

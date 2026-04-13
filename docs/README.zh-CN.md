@@ -77,6 +77,8 @@
 
 - `docs/icon.png`
   README 使用的应用图标
+- `design/codepal-icon-redesign/`
+  新版 CodePal 应用图标和 macOS 菜单栏图标的源稿、预览和导出说明
 - `docs/hero-main.png`
   README 和 Release 材料优先使用的主 dashboard 截图
 - `docs/index.png`

@@ -105,6 +105,7 @@ Make sure the corresponding agent (Cursor / Claude Code / Codex / CodeBuddy) is 
 - [docs/design-overview.md](docs/design-overview.md) — architecture overview
 - [docs/context/current-status.md](docs/context/current-status.md) — current status
 - [docs/README.md](docs/README.md) — doc map
+- [design/codepal-icon-redesign](design/codepal-icon-redesign) — refreshed app and macOS menu bar icon source artwork
 
 </details>
 

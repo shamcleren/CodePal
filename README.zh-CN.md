@@ -105,6 +105,7 @@ npm run dist:mac   # 构建 .dmg / .zip（需要 Apple 签名凭据）
 - [docs/design-overview.md](docs/design-overview.md) — 架构概览
 - [docs/context/current-status.md](docs/context/current-status.md) — 当前状态
 - [docs/README.md](docs/README.md) — 文档索引
+- [design/codepal-icon-redesign](design/codepal-icon-redesign) — 新版应用图标和 macOS 菜单栏图标源稿
 
 </details>
 
