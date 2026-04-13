@@ -9,10 +9,10 @@ Use this directory by purpose rather than trying to read everything in one pass.
 
 ## If You Need Release-Facing Material
 
-- `docs/release-notes-v1.0.0.md`
-  English release notes for the current 1.0.0 release target.
-- `docs/release-notes-v1.0.0.zh-CN.md`
-  Chinese release notes for the current 1.0.0 release target.
+- `docs/release-notes-v1.0.3.md`
+  English release notes for the current 1.0.3 release.
+- `docs/release-notes-v1.0.3.zh-CN.md`
+  Chinese release notes for the current 1.0.3 release.
 - `docs/release-assets.md`
   Asset checklist for README and GitHub Release screenshots / media.
 - `docs/release-assets.zh-CN.md`
@@ -20,7 +20,7 @@ Use this directory by purpose rather than trying to read everything in one pass.
 - `docs/macos-signing-runbook.zh-CN.md`
   Chinese maintainer runbook for macOS signing, notarization, and DMG `staple + validate`.
 - `docs/operational-readiness-v1.0.0.zh-CN.md`
-  Chinese checklist for what still needs to be in place before treating `1.0.0` as a fully operated release.
+  Historical Chinese checklist from the original v1.0.0 readiness pass.
 - `docs/privacy-and-data.md`
   English privacy and local data-boundary statement for the current monitoring-first release.
 - `docs/privacy-and-data.zh-CN.md`

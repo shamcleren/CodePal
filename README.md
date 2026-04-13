@@ -37,7 +37,7 @@ CodePal pulls it all into one floating panel that stays visible while you work.
 
 - **Unified session view**: active, waiting, completed, and errored sessions across all agents in one list
 - **Focused activity timeline**: see what each agent is doing — replies, tool calls, and status changes — without the noise
-- **Quota and usage awareness**: token usage and rate-limit signals always visible, with compact and detailed density modes
+- **Quota and usage awareness**: token usage and available rate-limit signals stay visible, with compact and detailed density modes
 - **Session history persistence**: full activity history stored locally and restored across app restarts
 - **One-click integration repair**: fix supported local agent configurations from inside the app
 - **Bilingual UI**: English and Simplified Chinese, following your system language by default
@@ -65,9 +65,9 @@ Release builds are signed and notarized by Apple. No security prompt on open.
 
 ## What's Next
 
-- **Approval and control loop**: richer approval flow with structured single/multi-choice handling across agents
-- **Send message to agent**: outbound message delivery from CodePal directly into an active agent session
-- **Dynamic Island presence**: lightweight ambient surface on macOS for glanceable running/waiting state and approval nudges
+- **Monitoring depth**: broader real-world payload calibration for Cursor, CodeBuddy, Claude Code, and JetBrains-backed flows
+- **Release reliability**: keep signed / notarized macOS releases and in-app update discovery predictable across versions
+- **Product polish**: clearer degraded states, quieter timelines, and better notifications for important task transitions
 
 See [docs/roadmap-next.md](docs/roadmap-next.md) for the full planning direction.
 

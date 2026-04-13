@@ -24,7 +24,7 @@ CodePal 仍然应该先继续夯实 monitoring-first 基线，再考虑往更强
 
 ### 1. 监控深度
 
-- 更完整的 Claude usage / quota 可见性
+- 在现有 token usage 和 statusLine `rate_limits` 快照之外，继续校准 Claude quota 来源
 - 更广泛的 Cursor 真实 payload 校准
 - 更广泛的 CodeBuddy payload / transcript-shape 校准
 - 在共享监控路径上继续加深 JetBrains 覆盖
@@ -33,9 +33,9 @@ CodePal 仍然应该先继续夯实 monitoring-first 基线，再考虑往更强
 ### 2. 分发与发布体验
 
 - 更顺滑的 macOS 安装和首次启动引导
-- 更清晰的 release artifact 与 release notes
-- 已签名 / 已公证的 macOS 分发
-- 在签名与公证完成后接入内置更新
+- 在 patch release 之间保持 release artifact、release notes 和 updater metadata 一致
+- 持续验证已签名 / 已公证的 macOS 分发
+- 当 release 缺失、过期或格式异常时，让应用内更新发现与恢复更可预期
 
 ### 3. 产品打磨
 
@@ -47,20 +47,20 @@ CodePal 仍然应该先继续夯实 monitoring-first 基线，再考虑往更强
 
 ## 分发与更新
 
-macOS 内置更新值得做，但不应该脱离当前签名前分发流程单独硬塞进去。
+macOS 内置更新已经进入发布链路，但它应该继续绑定分发可信度和 artifact 校验，而不是单独扩成一个孤立功能。
 
-更合理的顺序是：
+从现在开始，更合理的顺序是：
 
-1. 先把当前 release 流程跑顺
-2. 再补签名和公证
-3. 再确认稳定的 macOS 分发路径
-4. 最后在这套分发基础上接内置更新
+1. 保持已签名 / 已公证 release 流程稳定
+2. 每个 patch release 都继续校验 updater metadata 和 blockmap
+3. 改进 release 缺失、登录过期、metadata 异常时的首启和更新状态表达
+4. 等当前 release 节奏稳定后，再扩展更新 UX
 
 原因很直接：
 
-- 用户对二进制可信度有基本保障后，自动更新的价值才会真正放大
-- 签名 / 公证会先降低安装摩擦
-- 当 release 节奏变稳定后，更新基础设施也更值得投入
+- 自动更新的可信度取决于二进制和 metadata 持续正确
+- 发布校验可以在用户遇到更新失败前先挡住分发问题
+- 当 release 节奏保持稳定后，更新 UX 投入才更值得扩大
 
 ## 潜在 Team / Pro 功能
 
@@ -160,7 +160,7 @@ Windows 支持也是一个明确值得记录的未来方向，但它应该排在
 这些事情虽然诱人，但不应该跳到当前基线工作前面：
 
 - 在监控可靠性还没成熟前，强推完整跨 agent 控制
-- 在分发可信度还没解决前，先上 auto-update
+- 在分发可信度和校验链路还不稳定时，继续扩大 updater 复杂度
 - 在用户留存价值还没验证前，先上 billing
 - 在 README 或 release 文案里堆太多投机式路线图承诺
 
@@ -169,7 +169,7 @@ Windows 支持也是一个明确值得记录的未来方向，但它应该排在
 如果规划精力有限，推荐的决策顺序是：
 
 1. 继续做深监控能力
-2. 提升 macOS 分发可信度和发布体验
-3. 再做内置更新
+2. 保持 macOS 分发可信度和发布体验稳定
+3. 改进更新状态 UX 与异常恢复
 4. 验证持续使用模式
 5. 基于真实使用证据设计 paid / team 扩展

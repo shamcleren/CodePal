@@ -75,9 +75,9 @@
 
 如果这些边界发生变化，先改文档，再发版。
 
-## E. macOS 当前测试分发
+## E. macOS 测试 / 应急分发
 
-如果本次仍然还是签名前的测试分发，只需要确认：
+只有当你明确在做非正式测试分发，或因为凭据问题临时跳过正式收尾校验时，才使用这一节。
 
 - [ ] `npm run dist:mac` 产物已生成
 - [ ] `release/` 中 `.zip` / `.dmg` 可正常产出
@@ -88,13 +88,12 @@
 - [ ] 主界面更新按钮会在发现更新、下载中、已下载或失败时出现，无更新时不常驻
 - [ ] 设置页已完成实机视觉检查：接入、显示、用量、维护、支持都没有明显过满或过空
 - [ ] macOS 菜单栏 tray icon 尺寸正常，暗色 / 亮色模式下清晰可见
-- [ ] 本次明确使用了 `CODEPAL_SKIP_RELEASE_FINISH=1`，或你接受本次不走正式收尾校验
-- [ ] 你知道本次仍然处于签名前测试分发状态
-- [ ] README / release notes 没有错误地把它写成“已签名 / 已公证”
+- [ ] 如果使用了 `CODEPAL_SKIP_RELEASE_FINISH=1`，release notes 和 README 明确标注这不是正式可信分发
+- [ ] 你接受本次不是当前正式发布基线，只用于内部测试或应急验证
 
 ## F. macOS 正式可信分发
 
-只有当你准备把“签名前测试分发”正式升级成可信正式分发时，才需要完整检查这一节。
+正式发布或对外分发时，完整检查这一节。
 
 - [ ] `Developer ID Application` 证书已可见
   - 验证命令：`security find-identity -v -p codesigning`
@@ -103,9 +102,9 @@
 - [ ] notarization 已提交并通过
 - [ ] 最终 `.dmg` 已 `notarytool submit --wait` 并返回 `Accepted`
 - [ ] `codesign --verify` 与 app 级别 notarization 校验通过
-- [ ] README / release notes / current-status 已去掉签名前测试分发表述
+- [ ] README / release notes / current-status 没有保留测试分发或待签名表述
 
-如果这一节有任意一项没完成，就不要把它叫“完整 1.0.0 正式签名版”。
+如果这一节有任意一项没完成，就不要把本次构建叫作正式签名 / 公证版本。
 
 ## G. 发布后回收
 
@@ -120,12 +119,14 @@
 
 在今天这个项目状态下：
 
-- 工程验证、README、Release 文案、CI / E2E 入口，已经基本收齐
-- 正式发布主要取决于 Apple notarization 队列是否及时返回 `Accepted`
+- v1.0.3 已经完成，后续不要再把它写成待发或签名前测试分发
+- 工程验证、README、Release 文案、CI / E2E 入口、updater metadata 校验，已经是当前发布基线的一部分
+- 正式分发仍然依赖 Developer ID 与 notary 凭据保持可用，并且每次 release 都应重新验证 `Accepted`
 
-所以如果你正在判断“下一个最值得投入的发布工作是什么”，答案仍然是：
+所以如果你正在判断“下一个最值得投入的发布工作是什么”，答案是：
 
 1. 保持 `Developer ID Application` 和 notary 凭据可用
-2. 跑通 `npm run dist:mac`
-3. 等 notarization 返回 `Accepted`
-4. 再把分发表述升级成正式签名版
+2. 每次 release 都跑通 `npm run dist:mac` 并确认 notarization 返回 `Accepted`
+3. 确认 `.dmg` / `.zip` / blockmap / `latest-mac.yml` 与版本号一致
+4. 用上一稳定版客户端验证应用内更新发现和升级
+5. 发布后同步 `docs/context/current-status.md`，避免功能与文档再次脱节

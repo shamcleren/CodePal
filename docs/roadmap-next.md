@@ -24,7 +24,7 @@ These are the most reasonable next steps after the current V1 release baseline:
 
 ### 1. Monitoring Depth
 
-- better Claude usage and quota visibility
+- broader Claude quota calibration beyond the current token usage and statusLine-derived `rate_limits` snapshots
 - broader Cursor real-world payload calibration
 - broader CodeBuddy payload and transcript-shape calibration
 - deeper JetBrains coverage on the shared monitoring path
@@ -33,9 +33,9 @@ These are the most reasonable next steps after the current V1 release baseline:
 ### 2. Distribution And Release Ergonomics
 
 - smoother installation and first-run onboarding on macOS
-- clearer release artifacts and release notes
-- signed and notarized macOS distribution
-- a built-in app update path once signing and notarization are in place
+- consistent release artifacts, release notes, and updater metadata across patch releases
+- continued verification of signed and notarized macOS distribution
+- more predictable in-app update discovery and recovery when a release is unavailable or malformed
 
 ### 3. Product Polish
 
@@ -47,20 +47,20 @@ These are the most reasonable next steps after the current V1 release baseline:
 
 ## Distribution And Updates
 
-Built-in macOS updates are worth doing, but not as an isolated feature bolted onto the current pre-signing build flow.
+Built-in macOS updates are now part of the release story, but they should stay tied to release trust and artifact validation rather than growing as an isolated feature.
 
-The recommended order is:
+The recommended order from here is:
 
-1. keep the current release loop working reliably
-2. add signing and notarization
-3. confirm a stable macOS distribution channel
-4. add built-in app updates on top of that release foundation
+1. keep the signed / notarized release loop working reliably
+2. keep updater metadata and blockmap validation in every patch release
+3. improve first-run and update-state messaging around missing, expired, or malformed releases
+4. expand update UX only after the current release cadence stays stable
 
 Why this order:
 
-- auto-update is much more valuable once users can trust the app binary
-- signing and notarization reduce install friction before update UX is layered on top
-- update infrastructure is easier to justify once release cadence becomes regular
+- auto-update trust depends on the binary and metadata staying correct
+- release validation catches distribution failures before they become user-facing update failures
+- update UX work is easier to justify once release cadence remains predictable
 
 ## Potential Team / Pro Features
 
@@ -160,7 +160,7 @@ The recommended posture is:
 The following are attractive, but should not jump ahead of the current baseline work:
 
 - forcing full cross-agent control before monitoring reliability is mature
-- shipping auto-update before distribution trust is solved
+- expanding updater complexity before release trust and validation stay reliable
 - implementing billing before user-value retention is validated
 - overloading README or release messaging with speculative roadmap promises
 
@@ -169,7 +169,7 @@ The following are attractive, but should not jump ahead of the current baseline 
 If planning effort is limited, the recommended decision order is:
 
 1. strengthen monitoring depth
-2. improve macOS distribution trust and release ergonomics
-3. add built-in updates
+2. keep macOS distribution trust and release ergonomics reliable
+3. improve update-state UX and recovery
 4. validate sustained usage patterns
 5. design paid / team expansion from real usage evidence

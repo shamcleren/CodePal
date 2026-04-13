@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { forwardRef, memo } from "react";
 import claudeAppIcon from "../assets/claude-app-icon.png";
 import codebuddyAppIcon from "../assets/codebuddy-app-icon.png";
 import codexAppIcon from "../assets/codex-app-icon.png";
@@ -111,14 +111,14 @@ type SessionRowProps = {
   onRespond: (sessionId: string, actionId: string, option: string) => void;
 };
 
-export const SessionRow = memo(function SessionRow({
+export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function SessionRow({
   session,
   historyVersion = 0,
   expanded,
   showExperimentalControls = true,
   onToggleExpanded,
   onRespond,
-}: SessionRowProps) {
+}, ref) {
   const i18n = useI18n();
   const meta = toolDisplay(session.tool);
   const { className: stateClass, label: stateLabel } = statusPresentation(session.status);
@@ -127,6 +127,7 @@ export const SessionRow = memo(function SessionRow({
 
   return (
     <article
+      ref={ref}
       className={`session-row session-row--${session.status} ${expanded ? "session-row--expanded" : ""}`}
     >
       <button
@@ -170,4 +171,4 @@ export const SessionRow = memo(function SessionRow({
       ) : null}
     </article>
   );
-});
+}));

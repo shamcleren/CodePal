@@ -2,34 +2,31 @@
 
 这份文档是给当前维护者自己执行的 runbook，不是对外发布说明。
 
-目标是把 CodePal 从当前的签名前测试构建，推进到：
+这份 runbook 记录的是签名 / notarization 链路的准备和排障方式。当前 v1.0.3 已经完成发布；后续使用它时，重点是恢复或验证凭据、排查签名 / 公证失败，而不是重新描述当前产品状态。
+
+目标是保证 CodePal release 构建持续满足：
 
 - 已签名
 - 已 notarize
 - 已 staple
 - 可以作为后续内置更新和正式分发的基础
 
-## 当前现状
+## 当前基线
 
 当前仓库已经具备这些基础：
 
 - `npm run build` 可通过
 - `npm run dist:mac` 可生成 macOS `.zip` / `.dmg`
 - 产物落在 `release/`
+- release 流程已经接入签名 / notarization / updater metadata 校验路径
 
-当前仍缺少的关键能力：
-
-- Apple Developer 签名证书接入
-- notarization 流程接入
-- 产物验证与发布前检查
-
-当前仓库已经有了第一版 mac 签名骨架：
+仓库内的 mac 签名配置包括：
 
 - `electron-builder.yml` 已补 `hardenedRuntime`
 - 已有 `build/entitlements.mac.plist`
 - 已有 `build/entitlements.mac.inherit.plist`
 
-这意味着证书就位后，可以先直接尝试签名构建，不需要再从零搭配置入口。
+这意味着如果换机器、换账号或凭据失效，优先排查证书 / notary 凭据，而不是从零搭配置入口。
 
 ## 目标完成定义
 
@@ -39,7 +36,7 @@
 2. `.dmg` 或 `.zip` 对应的 app 已通过 notarization
 3. 最终产物已执行 `staple`
 4. 本机可通过 `spctl` / `codesign` 基本校验
-5. README / release notes 不再需要强调“签名前测试分发”
+5. README / release notes / current-status 没有把当前正式版本写成待签名或测试分发
 
 ## 建议落地顺序
 
@@ -49,7 +46,7 @@
 2. 先让本地签名成功
 3. 再接 notarization
 4. 再补 staple 和验证
-5. 最后再调整 release 流程和文档
+5. 最后再确认 release 流程和文档没有回退到旧阶段表述
 
 ## 你需要准备的东西
 
@@ -360,8 +357,8 @@ xcrun notarytool submit "release/CodePal-1.0.0.dmg" \
 
 - `README.md`
 - `README.zh-CN.md`
-- `docs/release-notes-v1.0.0.md`
-- `docs/release-notes-v1.0.0.zh-CN.md`
+- `docs/release-notes-vX.Y.Z.md`
+- `docs/release-notes-vX.Y.Z.zh-CN.md`（如果本次维护中文 release notes）
 - `docs/context/current-status.md`
 
-届时要把签名前测试分发相关表述改掉，避免文档落后于实际发布状态。
+届时要把待签名、待公证或测试分发相关表述改掉，避免文档落后于实际发布状态。

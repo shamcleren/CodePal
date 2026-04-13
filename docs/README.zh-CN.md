@@ -9,10 +9,10 @@
 
 ## 如果你要看发版材料
 
-- `docs/release-notes-v1.0.0.md`
-  当前 1.0.0 发布目标的英文 release notes。
-- `docs/release-notes-v1.0.0.zh-CN.md`
-  当前 1.0.0 发布目标的中文 release notes。
+- `docs/release-notes-v1.0.3.md`
+  当前 1.0.3 版本的英文 release notes。
+- `docs/release-notes-v1.0.3.zh-CN.md`
+  当前 1.0.3 版本的中文 release notes。
 - `docs/release-assets.md`
   README 和 GitHub Release 所需截图 / 媒体资产的英文清单。
 - `docs/release-assets.zh-CN.md`
@@ -22,7 +22,7 @@
 - `docs/release-checklist.zh-CN.md`
   最终发版前使用的中文检查清单。
 - `docs/operational-readiness-v1.0.0.zh-CN.md`
-  `1.0.0` 走向正式运营前仍需补齐的缺口清单。
+  原始 v1.0.0 readiness 阶段留下的历史检查清单。
 - `docs/privacy-and-data.md`
   当前 monitoring-first 发布基线的英文隐私与数据边界说明。
 - `docs/privacy-and-data.zh-CN.md`
@@ -39,7 +39,7 @@
 建议你按这个顺序使用：
 
 1. 先看 `release-checklist.zh-CN.md`
-2. 再看 `release-notes-v1.0.0.zh-CN.md`
+2. 再看 `release-notes-v1.0.3.zh-CN.md`
 3. 如果卡在签名、公证或 DMG 收尾校验，再看 `macos-signing-runbook.zh-CN.md`
 
 ## 如果你要看未来规划
