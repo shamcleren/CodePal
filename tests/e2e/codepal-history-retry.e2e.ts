@@ -9,10 +9,6 @@ import { sendStatusChange } from "./helpers/sendStatusChange";
 
 const SESSION_ID = "history-retry-session";
 
-function firstCursorRow(page: import("@playwright/test").Page) {
-  return page.getByLabel(/Cursor (WAITING|RUNNING|DONE|IDLE|OFFLINE|ERROR)/).first();
-}
-
 test("retries session history without requiring the row to close", async () => {
   const collector = await startActionResponseCollector();
   const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "codepal-history-retry-home-"));
@@ -83,7 +79,9 @@ test("retries session history without requiring the row to close", async () => {
       codepal.ipcTarget,
     );
 
-    const rowButton = firstCursorRow(page);
+    const rowButton = page
+      .getByText("history retry session")
+      .locator("xpath=ancestor::button[1]");
     await expect(rowButton).toBeVisible({ timeout: 15_000 });
     await rowButton.click();
 
