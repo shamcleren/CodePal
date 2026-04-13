@@ -20,6 +20,7 @@
 - Repository now also includes a separate macOS GitHub Actions workflow for Electron E2E runs on `main` and manual dispatch
 - Release workflow validates macOS updater assets, including `latest-mac.yml`, dmg / zip artifacts, and blockmap files
 - v1.0.3 release work is complete; release-facing docs should now treat v1.0.3 as the current shipped baseline rather than pending work
+- A patch-level v1.0.4 candidate is accumulating after v1.0.3; current scope is limited to tray visual polish, expanded-session scroll behavior, and Cursor / CodeBuddy payload calibration
 
 ## What Already Exists
 
@@ -71,6 +72,11 @@
   - full history is read on demand in the existing expanded session details view
   - clearing persisted history only removes CodePal-managed SQLite history, not upstream logs
 - Expanded session rows now keep the outer session list pinned to the expanded row bottom while the details panel grows, so opening a lower row does not leave the newest details below the visible viewport
+- The post-v1.0.3 patch candidate currently includes:
+  - Retina-scale macOS menu bar template icon rendering
+  - CodeBuddy `conversation_id` / `conversationId` session identity support
+  - CodeBuddy CN app follow-up JSON cleanup
+  - Cursor MCP-style `response.result.content[].text` tool-result extraction
 
 ### Integration Settings
 
@@ -218,7 +224,8 @@ These items are not part of the current accepted V1 baseline, but they still bel
 
 For release-facing and forward-looking work, use:
 
-- `docs/context/2026-04-13-post-v1.0.3-handoff.md` for the immediate uncommitted handoff and recommended next development task
+- `docs/context/2026-04-13-post-v1.0.3-handoff.md` for the post-v1.0.3 handoff and current patch-candidate context
 - `docs/release-notes-v1.0.3.md` for release-facing summary
+- `docs/release-notes-v1.0.4.md` for the current patch-level candidate summary while local testing is in progress
 - `docs/roadmap-next.md` for forward-looking prioritization
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
