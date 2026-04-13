@@ -85,7 +85,7 @@ describe("icon assets", () => {
     }
   });
 
-  it("ships a valid macOS iconset inside build/icon.icns", () => {
+  it.skipIf(process.platform !== "darwin")("ships a valid macOS iconset inside build/icon.icns", () => {
     const tempDir = fs.mkdtempSync(path.join("/tmp", "codepal-icon-assets-"));
     const outputDir = path.join(tempDir, "icon.iconset");
 

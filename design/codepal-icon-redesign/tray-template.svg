@@ -1,13 +1,13 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
   <title>CodePal tray template icon</title>
-  <g stroke="#000000" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="6.75" y="8.25" width="18.5" height="15.5" rx="4.5" />
-    <path d="M11.25 20H20.75" />
-    <path d="M11.25 12.75H20.75" />
+  <g stroke="#000000" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.5" y="5.5" width="25" height="21" rx="6" />
+    <path d="M9.6 21.4H22.4" />
+    <path d="M9.6 11.6H22.4" />
   </g>
   <g fill="#000000">
-    <circle cx="11.75" cy="16" r="1.25" />
-    <circle cx="16" cy="15.5" r="1.25" />
-    <circle cx="20.25" cy="16" r="1.25" />
+    <circle cx="10.25" cy="16" r="1.7" />
+    <circle cx="16" cy="15.3" r="1.7" />
+    <circle cx="21.75" cy="16" r="1.7" />
   </g>
 </svg>
