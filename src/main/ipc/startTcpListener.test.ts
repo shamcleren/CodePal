@@ -38,17 +38,21 @@ afterEach(async () => {
 
 describe("startTcpListener", () => {
   it("starts listening on a free port", async () => {
-    const port = await listenEphemeral(createServer());
     const server = createServer();
+    const freePort = await listenEphemeral(createServer());
+    // Release the port so startTcpListener can bind it; this avoids
+    // port+1 collisions with other processes on shared CI runners.
+    const holder = servers.pop()!;
+    await new Promise<void>((r) => holder.close(() => r()));
 
-    const result = await startTcpListener(server, "127.0.0.1", port + 1);
+    const result = await startTcpListener(server, "127.0.0.1", freePort);
 
     expect(result).toEqual({
       status: "listening",
       diagnostics: {
         mode: "tcp",
         host: "127.0.0.1",
-        port: port + 1,
+        port: freePort,
       },
     });
   });
