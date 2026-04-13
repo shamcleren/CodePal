@@ -45,6 +45,17 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      - name: Verify release assets
+        run: |
+          set -euo pipefail
+          test -f release/latest-mac.yml || { echo "::error::Missing release/latest-mac.yml"; exit 1; }
+          for pattern in "release/*.dmg" "release/*.dmg.blockmap" "release/*.zip" "release/*.zip.blockmap"; do
+            if ! compgen -G "$pattern" > /dev/null; then
+              echo "::error::Missing release asset matching $pattern"
+              exit 1
+            fi
+          done
+
       - name: Extract version from tag
         id: version
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
@@ -54,7 +65,7 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: CodePal ${{ steps.version.outputs.tag }}
-          generate_release_notes: true
+          body_path: docs/release-notes-${{ steps.version.outputs.tag }}.md
           draft: true
           files: |
             release/*.dmg
