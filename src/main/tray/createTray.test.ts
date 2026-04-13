@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const buildFromTemplate = vi.fn((template) => template);
   const setTemplateImage = vi.fn();
+  const resize = vi.fn(() => ({
+    setTemplateImage,
+  }));
   const createFromBuffer = vi.fn(() => ({
+    resize,
     setTemplateImage,
   }));
   const setContextMenu = vi.fn();
@@ -16,6 +20,7 @@ const mocks = vi.hoisted(() => {
   return {
     buildFromTemplate,
     createFromBuffer,
+    resize,
     setTemplateImage,
     setContextMenu,
     setToolTip,
@@ -39,6 +44,7 @@ describe("createTray", () => {
   beforeEach(() => {
     mocks.buildFromTemplate.mockClear();
     mocks.createFromBuffer.mockClear();
+    mocks.resize.mockClear();
     mocks.setTemplateImage.mockClear();
     mocks.setContextMenu.mockClear();
     mocks.setToolTip.mockClear();
@@ -78,6 +84,7 @@ describe("createTray", () => {
     });
 
     expect(mocks.createFromBuffer).toHaveBeenCalledOnce();
+    expect(mocks.resize).toHaveBeenCalledWith({ width: 16, height: 16, quality: "best" });
     expect(mocks.setTemplateImage).toHaveBeenCalledWith(true);
   });
 });

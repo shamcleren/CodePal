@@ -12,7 +12,9 @@ type CreateTrayOptions = {
 };
 
 function createTrayIcon() {
-  const icon = nativeImage.createFromBuffer(TRAY_TEMPLATE_PNG);
+  const icon = nativeImage
+    .createFromBuffer(TRAY_TEMPLATE_PNG)
+    .resize({ width: 16, height: 16, quality: "best" });
   icon.setTemplateImage(true);
   return icon;
 }
