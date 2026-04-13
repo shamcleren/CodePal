@@ -42,6 +42,8 @@ These are the most reasonable next steps after the current V1 release baseline:
 - more predictable settings and diagnostics UX
 - stronger empty / degraded / expired state messaging
 - better resilience around last-known usage and login-state handling
+- refreshed macOS menu bar and in-app icon assets so size, sharpness, and dark-mode rendering stay consistent
+- macOS notifications and optional sounds for important task state transitions, starting with completed, waiting-for-decision, and error states
 
 ## Distribution And Updates
 
@@ -111,6 +113,24 @@ It would affect:
 - notification behavior
 - interaction entry points
 - which states deserve ambient exposure versus full-panel detail
+
+### macOS Notifications And Sounds
+
+Task state transitions are worth tracking as a separate experience improvement rather than mixing them into the current settings-layout pass.
+
+Initial candidate states:
+
+- session completed
+- session waiting for a decision
+- session errored
+- long-running session became active again
+
+The design should decide:
+
+- whether notifications are enabled by default
+- whether sounds can be disabled independently
+- which states should stay silent and only update the main panel
+- how to avoid repeated notifications when one state flickers
 
 ### Windows Adaptation
 
