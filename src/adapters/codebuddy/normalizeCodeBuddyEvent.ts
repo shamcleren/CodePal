@@ -107,7 +107,12 @@ function pickTask(payload: Record<string, unknown>): string | undefined {
 }
 
 function pickSessionId(payload: Record<string, unknown>): string | null {
-  const direct = firstString(payload, ["session_id", "sessionId"]);
+  const direct = firstString(payload, [
+    "session_id",
+    "sessionId",
+    "conversation_id",
+    "conversationId",
+  ]);
   return direct ?? null;
 }
 

@@ -16,6 +16,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `agent-session-update-state-current-task.json` | quasi-real | `session_id` | `state` | `current_task` | `timestamp` | `hook_event_name=AgentSessionUpdate` | 当前已支持主链路；ingress 也接受裸 `AgentSessionUpdate` |
 | `agent-session-update-status-message.json` | quasi-real | `sessionId` | `status` | `message` | `ts` | `tool=codebuddy` | 覆盖 camelCase 与 `message` 兜底 |
+| `agent-session-update-conversation-id.json` | quasi-real | `conversation_id` | `state` | `current_task` | `timestamp` | `source=codebuddy` | 覆盖只带 conversation id 的真实状态更新形状 |
 | `hook-session-start-source-startup.json` | official-doc | `session_id` | `hook_event_name=SessionStart -> running` | `source=startup` | 无，回退 `Date.now()` | `hook_event_name=SessionStart` | 官方 `source` 表示启动来源，不应覆盖厂商路由标识 |
 | `hook-notification-permission-prompt.json` | official-doc | `session_id` | `notification_type=permission_prompt -> waiting` | `message` | 无，回退 `Date.now()` | `hook_event_name=Notification` | 代表等待用户授权 |
 | `hook-notification-idle-prompt.json` | official-doc | `session_id` | `notification_type=idle_prompt -> idle` | `message` | 无，回退 `Date.now()` | `hook_event_name=Notification` | 代表空闲提醒，不应误判为等待授权 |
@@ -27,6 +28,7 @@
 
 ## 当前结论
 
+- `session_id/sessionId/conversation_id/conversationId` 都可以作为 CodeBuddy 状态类 payload 的会话标识。
 - `status/state/agent_status` 仍是最高优先级的显式状态字段。
 - 当显式状态字段缺失时，需要允许从 `hook_event_name` 和 `notification_type` 推导受限状态集合；`Notification` 缺少细分类型时默认按 `waiting` 降级，而不是误判为 `offline`。
 - `task/current_task/message/prompt/tool_name/reason/source` 需要建立分层优先级，而不是仅靠 `message` 宽松兜底。

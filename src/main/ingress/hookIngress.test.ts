@@ -155,6 +155,24 @@ describe("lineToSessionEvent", () => {
     expect(ev?.status).toBe("error");
   });
 
+  it("normalizes CodeBuddy payloads that use conversation_id as the session key", () => {
+    const ev = lineToSessionEvent(
+      JSON.stringify({
+        source: "codebuddy",
+        conversation_id: "cb-conv-003",
+        state: "running",
+        current_task: "sync conversation status",
+      }),
+    );
+
+    expect(ev).toMatchObject({
+      sessionId: "cb-conv-003",
+      tool: "codebuddy",
+      status: "running",
+      task: "sync conversation status",
+    });
+  });
+
   it("drops CodeBuddy payloads when session identity is absent", () => {
     const ev = lineToSessionEvent(
       JSON.stringify({

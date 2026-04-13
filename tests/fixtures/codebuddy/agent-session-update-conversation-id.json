@@ -1,0 +1,8 @@
+{
+  "source": "codebuddy",
+  "conversation_id": "cb-conv-003",
+  "state": "running",
+  "current_task": "sync conversation status",
+  "timestamp": 1710000000003,
+  "cwd": "/workspace/demo"
+}

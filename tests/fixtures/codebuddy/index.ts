@@ -1,5 +1,6 @@
 import agentSessionUpdateStateCurrentTask from "./agent-session-update-state-current-task.json";
 import agentSessionUpdateStatusMessage from "./agent-session-update-status-message.json";
+import agentSessionUpdateConversationId from "./agent-session-update-conversation-id.json";
 import hookNotificationIdlePrompt from "./hook-notification-idle-prompt.json";
 import hookNotificationPermissionPrompt from "./hook-notification-permission-prompt.json";
 import hookPostToolUseWriteResult from "./hook-post-tool-use-write-result.json";
@@ -96,6 +97,35 @@ export const CODEBUDDY_FIXTURES: readonly CodeBuddyFixtureDescriptor[] = [
       ],
       meta: {
         hook_event_name: "AgentSessionUpdate",
+        cwd: "/workspace/demo",
+      },
+    },
+  },
+  {
+    id: "agent-session-update-conversation-id",
+    source: "quasi-real",
+    description: "兼容只提供 conversation_id 的 CodeBuddy 状态更新",
+    sessionIdFields: ["conversation_id"],
+    statusSignals: ["state"],
+    taskSignals: ["current_task"],
+    timestampSignals: ["timestamp"],
+    hookSignal: "AgentSessionUpdate",
+    payload: agentSessionUpdateConversationId,
+    expectation: {
+      sessionId: "cb-conv-003",
+      status: "running",
+      task: "sync conversation status",
+      timestamp: 1710000000003,
+      activityItems: [
+        {
+          kind: "note",
+          source: "system",
+          title: "Running",
+          body: "sync conversation status",
+          tone: "running",
+        },
+      ],
+      meta: {
         cwd: "/workspace/demo",
       },
     },

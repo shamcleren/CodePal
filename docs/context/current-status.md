@@ -47,7 +47,7 @@
 
 - Codex session-log adapter now reads `~/.codex/sessions/**/*.jsonl` and maps recent active session files into the shared session model
 - Cursor normalizer plus executable hook bridge remain in-repo for ongoing calibration
-- CodeBuddy now has both hook normalization and local transcript watching under `~/.codebuddy/projects/**/*.jsonl`, so assistant replies and tool activity can enter the shared dashboard timeline
+- CodeBuddy now has both hook normalization and local transcript watching under `~/.codebuddy/projects/**/*.jsonl`, so assistant replies and tool activity can enter the shared dashboard timeline; state payloads may identify sessions with `session_id` / `sessionId` or `conversation_id` / `conversationId`
 - GoLand and PyCharm integrate through the shared CodeBuddy JetBrains plugin watcher/framework rather than separate adapters, and they now participate in the same usage-visible baseline; other JetBrains IDEs may reuse the same framework, but they are not part of the current V1 calibrated / accepted scope
 - Cursor and Codex activity flow now normalize into shared `ActivityItem[]` session activity records before render
 - Claude Code now also feeds the shared monitoring model by reading `~/.claude/projects/**/*.jsonl`, including user/assistant/tool activity plus first-pass token usage
