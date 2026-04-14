@@ -58,7 +58,48 @@ describe("notificationService", () => {
     expect(mockShow).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to session task when title is missing", () => {
+  it("prefers lastUserMessage over title in notification body", () => {
+    service.onSessionStateChange({
+      sessionId: "s1",
+      tool: "cursor",
+      prevStatus: "running",
+      nextStatus: "completed",
+      title: "Fix bug",
+      lastUserMessage: "帮我修一下登录页面的样式问题",
+    });
+    expect(MockNotification).toHaveBeenCalledTimes(1);
+    expect(MockNotification.mock.calls[0][0]).toMatchObject({
+      body: "帮我修一下登录页面的样式问题",
+    });
+  });
+
+  it("truncates long lastUserMessage to 120 chars", () => {
+    const longMessage = "a".repeat(200);
+    service.onSessionStateChange({
+      sessionId: "s1",
+      tool: "cursor",
+      prevStatus: "running",
+      nextStatus: "completed",
+      lastUserMessage: longMessage,
+    });
+    expect(MockNotification).toHaveBeenCalledTimes(1);
+    const body = MockNotification.mock.calls[0][0].body;
+    expect(body).toHaveLength(120);
+    expect(body).toMatch(/\.\.\.$/);
+  });
+
+  it("falls back to title when lastUserMessage is missing", () => {
+    service.onSessionStateChange({
+      sessionId: "s1",
+      tool: "cursor",
+      prevStatus: "running",
+      nextStatus: "completed",
+      title: "Fix bug",
+    });
+    expect(MockNotification.mock.calls[0][0].body).toBe("Fix bug");
+  });
+
+  it("falls back to session task when title is also missing", () => {
     service.onSessionStateChange({
       sessionId: "s1",
       tool: "cursor",

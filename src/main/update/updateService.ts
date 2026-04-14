@@ -9,6 +9,7 @@ type UpdateServiceOptions = {
   currentVersion: string;
   stateFilePath: string;
   onStateChange?: (state: AppUpdateState) => void;
+  onBeforeInstall?: () => void;
 };
 
 type UpdateInfoLike = {
@@ -219,6 +220,7 @@ export function createUpdateService(options: UpdateServiceOptions) {
     if (!ensureSupported()) {
       return state;
     }
+    options.onBeforeInstall?.();
     autoUpdater.quitAndInstall();
     return state;
   }

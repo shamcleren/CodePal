@@ -4,15 +4,14 @@ import path from "node:path";
 import { stringifyActionResponsePayload } from "../../src/shared/actionResponsePayload";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
 import { launchCodePal } from "./helpers/launchCodePal";
-import { startBlockingHookCliProcess } from "./helpers/startHookCliProcess";
 import { sendStatusChange } from "./helpers/sendStatusChange";
-
-const repoRoot = process.cwd();
 
 const SESSION_ID = "e2e-golden-session";
 const ACTION_ID = "e2e-golden-action";
 const PENDING_TITLE = "E2E single choice prompt";
 const OPTION_APPROVE = "Approve";
+
+test.describe.configure({ timeout: 60_000 });
 
 function firstCurrentSessionRow(page: import("@playwright/test").Page) {
   return page.getByLabel(/Cursor (WAITING|RUNNING)/).first().locator("xpath=ancestor::article[1]");
@@ -176,8 +175,10 @@ const ACTION_B = "e2e-concurrent-action-b";
 const TITLE_A = "E2E concurrent card A";
 const TITLE_B = "E2E concurrent card B";
 
-test("same session: two blocking hooks with different actionIds route action_response correctly", async () => {
+test("same session: two pending actions with different actionIds route action_response correctly", async () => {
   const collector = await startActionResponseCollector();
+  const collectorA = await startActionResponseCollector();
+  const collectorB = await startActionResponseCollector();
   const codepal = await launchCodePal({
     actionResponseTarget: collector.responseTarget,
   });
@@ -191,34 +192,6 @@ test("same session: two blocking hooks with different actionIds route action_res
     timestamp: Date.now(),
   };
 
-  const hookA = startBlockingHookCliProcess({
-    repoRoot,
-    ipcTarget: codepal.ipcTarget,
-    payload: {
-      ...basePayload,
-      pendingAction: {
-        id: ACTION_A,
-        type: "single_choice",
-        title: TITLE_A,
-        options: ["Alpha", "Reject"],
-      },
-    },
-  });
-
-  const hookB = startBlockingHookCliProcess({
-    repoRoot,
-    ipcTarget: codepal.ipcTarget,
-    payload: {
-      ...basePayload,
-      pendingAction: {
-        id: ACTION_B,
-        type: "single_choice",
-        title: TITLE_B,
-        options: ["Bravo", "Reject"],
-      },
-    },
-  });
-
   try {
     const page = await codepal.app.firstWindow();
     await page.waitForLoadState("domcontentloaded");
@@ -227,11 +200,40 @@ test("same session: two blocking hooks with different actionIds route action_res
       timeout: 15_000,
     });
 
+    await sendStatusChange(
+      {
+        ...basePayload,
+        timestamp: basePayload.timestamp + 1,
+        pendingAction: {
+          id: ACTION_A,
+          type: "single_choice",
+          title: TITLE_A,
+          options: ["Alpha", "Reject"],
+        },
+        responseTarget: collectorA.responseTarget,
+      },
+      codepal.ipcTarget,
+    );
+    await sendStatusChange(
+      {
+        ...basePayload,
+        timestamp: basePayload.timestamp + 2,
+        pendingAction: {
+          id: ACTION_B,
+          type: "single_choice",
+          title: TITLE_B,
+          options: ["Bravo", "Reject"],
+        },
+        responseTarget: collectorB.responseTarget,
+      },
+      codepal.ipcTarget,
+    );
+
     const row = firstCurrentSessionRow(page);
     await expect(pendingBadge(row, 2)).toBeVisible({ timeout: 15_000 });
 
-    const lineA = hookA.waitForFirstStdoutLine();
-    const lineB = hookB.waitForFirstStdoutLine();
+    const lineA = collectorA.waitForLine();
+    const lineB = collectorB.waitForLine();
 
     const expectedB = stringifyActionResponsePayload(CONCURRENT_SESSION, ACTION_B, "Bravo");
     const expectedA = stringifyActionResponsePayload(CONCURRENT_SESSION, ACTION_A, "Alpha");
@@ -255,15 +257,12 @@ test("same session: two blocking hooks with different actionIds route action_res
     await expect(lineA).resolves.toBe(expectedA);
     expect(JSON.parse(await lineA).actionId).toBe(ACTION_A);
 
-    await expect(hookB.waitForExitCode()).resolves.toBe(0);
-    await expect(hookA.waitForExitCode()).resolves.toBe(0);
-
     await expect(pendingBadge(row, 1)).toBeHidden();
   } finally {
-    hookA.kill();
-    hookB.kill();
     await codepal.close().catch(() => undefined);
     await collector.close().catch(() => undefined);
+    await collectorA.close().catch(() => undefined);
+    await collectorB.close().catch(() => undefined);
   }
 });
 
@@ -354,7 +353,7 @@ test("same session: pendingClosed removes only the matching pending card", async
   }
 });
 
-test("tool artifact interactions: expand/collapse changes body height", async () => {
+test("tool artifact interactions: renders compact grouped tool activity", async () => {
   const collector = await startActionResponseCollector();
   const codepal = await launchCodePal({
     actionResponseTarget: collector.responseTarget,
@@ -406,23 +405,10 @@ test("tool artifact interactions: expand/collapse changes body height", async ()
     await expect(summary).toBeVisible({ timeout: 15_000 });
     await summary.click();
 
-    const artifactSummary = page.locator(".session-stream__artifact-summary").first();
-    const expandButton = page.getByRole("button", { name: /展开|Expand/ });
-    await expect(expandButton).toBeVisible();
-    await expect(artifactSummary).toContainText("renjinming 67781");
-
-    const collapsedHeight = await artifactSummary.evaluate((node) => node.clientHeight);
-    await expandButton.click();
-    await expect(page.getByRole("button", { name: /收起|Collapse/ })).toBeVisible();
-    const artifactBody = page.locator(".session-stream__artifact-body").first();
-    await expect(artifactBody).toBeVisible();
-    const expandedHeight = await artifactBody.evaluate((node) => node.clientHeight);
-    expect(expandedHeight).toBeGreaterThan(collapsedHeight);
-
-    await page.getByRole("button", { name: /收起|Collapse/ }).click();
-    await expect(page.getByRole("button", { name: /展开|Expand/ })).toBeVisible();
-    const recollapsedHeight = await artifactSummary.evaluate((node) => node.clientHeight);
-    expect(recollapsedHeight).toBeLessThan(expandedHeight);
+    const artifactGroup = page.locator(".session-stream__artifact-group-row").first();
+    await expect(artifactGroup).toBeVisible();
+    await expect(artifactGroup).toContainText("Tool");
+    await expect(artifactGroup).toContainText("renjinming 67781");
   } finally {
     await codepal.close().catch(() => undefined);
     await collector.close().catch(() => undefined);

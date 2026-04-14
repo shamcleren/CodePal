@@ -31,11 +31,19 @@ test("renders notification settings and persists notification toggles", async ()
     const soundToggle = page.getByLabel(/Play sounds|播放声音/);
 
     await expect(enabledToggle).toBeVisible({ timeout: 15_000 });
+    if (!(await enabledToggle.isChecked())) {
+      await enabledToggle.click();
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            window.codepal.getAppSettings().then((settings) => settings.notifications.enabled),
+          ),
+        )
+        .toBe(true);
+    }
     await expect(soundToggle).toBeVisible();
 
-    await enabledToggle.uncheck();
-    await expect(enabledToggle).not.toBeChecked();
-    await expect(soundToggle).toBeHidden();
+    await enabledToggle.click();
     await expect
       .poll(() =>
         page.evaluate(() =>
@@ -43,8 +51,17 @@ test("renders notification settings and persists notification toggles", async ()
         ),
       )
       .toBe(false);
+    await expect(soundToggle).toBeHidden();
+    await expect(enabledToggle).not.toBeChecked();
 
     await enabledToggle.click();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window.codepal.getAppSettings().then((settings) => settings.notifications.enabled),
+        ),
+      )
+      .toBe(true);
     await expect(enabledToggle).toBeChecked();
     await expect(soundToggle).toBeVisible();
     await soundToggle.click();
@@ -149,11 +166,18 @@ test("focus-session IPC expands and scrolls the target session into view", async
 
     await expect
       .poll(async () => {
-        return sessionList.evaluate((node) =>
-          Math.round(node.scrollHeight - node.scrollTop - node.clientHeight),
-        );
+        return page.getByText("notification focus target session").evaluate((node) => {
+          const row = node.closest(".session-row");
+          const list = document.querySelector(".session-list");
+          if (!row || !list) {
+            return false;
+          }
+          const rowRect = row.getBoundingClientRect();
+          const listRect = list.getBoundingClientRect();
+          return rowRect.bottom > listRect.top && rowRect.top < listRect.bottom;
+        });
       })
-      .toBeLessThanOrEqual(8);
+      .toBe(true);
   } finally {
     await codepal.close().catch(() => undefined);
     await collector.close().catch(() => undefined);

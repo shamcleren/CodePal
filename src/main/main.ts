@@ -35,8 +35,14 @@ import {
 } from "./history/historyRuntime";
 import { installMainProcessFileLogger } from "./logging/appLogger";
 import { createNotificationService } from "./notification/notificationService";
+import type { NotificationService } from "./notification/notificationService";
 
-const sessionStore = createSessionStore();
+let notificationServiceRef: NotificationService | null = null;
+const sessionStore = createSessionStore({
+  onStatusChange: (change) => {
+    notificationServiceRef?.onSessionStateChange(change);
+  },
+});
 const usageStore = createUsageStore();
 const actionResponseTransport = createActionResponseTransport(process.env);
 const CLAUDE_QUOTA_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -303,7 +309,6 @@ function getOrCreateMainWindow(): BrowserWindow {
 async function wireIpcHub(
   integrationService: ReturnType<typeof createIntegrationService>,
   settingsService: ReturnType<typeof createSettingsService>,
-  notificationService: ReturnType<typeof createNotificationService>,
   currentHistoryStore: ReturnType<typeof createAppHistoryStore>,
   usageSnapshotCache?: ReturnType<typeof createUsageSnapshotCache>,
 ): Promise<"listening" | "already_running" | "error"> {
@@ -322,23 +327,10 @@ async function wireIpcHub(
     }
     const event = lineToSessionEvent(line);
     if (event) {
-      const prevSession = sessionStore.getSession(event.sessionId);
-      const prevStatus = prevSession?.status;
       sessionStore.applyEvent(event);
       integrationService.recordEvent(event.tool, event.status, event.timestamp);
       sessionBroadcastScheduler.request();
-      const nextSession = sessionStore.getSession(event.sessionId);
-      if (nextSession && prevStatus !== nextSession.status) {
-        notificationService.onSessionStateChange({
-          sessionId: event.sessionId,
-          tool: event.tool,
-          prevStatus,
-          nextStatus: nextSession.status,
-          title: nextSession.title,
-          task: nextSession.task,
-        });
-      }
-      const session = nextSession ?? undefined;
+      const session = sessionStore.getSession(event.sessionId) ?? undefined;
       if (!historyWriter) {
         return;
       }
@@ -493,6 +485,26 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         },
       });
       applyHistorySettingsAtRuntime(historyStore, appSettings);
+      if (appSettings.history.persistenceEnabled && historyStore) {
+        const RESTORE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+        const MAX_RESTORE_COUNT = 150;
+        try {
+          const recentSessions = historyStore.getRecentSessions({
+            maxAgeMs: RESTORE_MAX_AGE_MS,
+            limit: MAX_RESTORE_COUNT,
+          });
+          for (const record of recentSessions) {
+            sessionStore.seedFromHistory(record);
+          }
+          if (recentSessions.length > 0) {
+            console.log(
+              `[CodePal] Restored ${recentSessions.length} session(s) from history`,
+            );
+          }
+        } catch (error) {
+          console.error("[CodePal] Failed to restore sessions from history:", error);
+        }
+      }
       const usageSnapshotCache = createUsageSnapshotCache({
         filePath: path.join(app.getPath("userData"), "usage-snapshot-cache.json"),
       });
@@ -535,11 +547,15 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         currentVersion: app.getVersion(),
         stateFilePath: path.join(app.getPath("userData"), "update-state.json"),
         onStateChange: broadcastUpdateState,
+        onBeforeInstall: () => {
+          historyWriter?.close();
+        },
       });
       const notificationService = createNotificationService({
         getNotificationSettings: () => settingsService.getSettings().notifications,
         getMainWindow: () => mainWindow,
       });
+      notificationServiceRef = notificationService;
 
       wireActionResponseIpc(
         settingsService,
@@ -554,7 +570,6 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       const ipcResult = await wireIpcHub(
         integrationService,
         settingsService,
-        notificationService,
         historyStore,
         usageSnapshotCache,
       );

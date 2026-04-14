@@ -20,7 +20,7 @@ That means:
 
 ## v1.1.0 Planned Features
 
-These four features define the v1.1.0 release scope. They move CodePal from monitoring-only toward lightweight interaction and awareness.
+These five features define the v1.1.0 release scope. They move CodePal from monitoring-only toward lightweight interaction and awareness.
 
 ### 1. macOS Notifications And Sounds
 
@@ -82,6 +82,20 @@ Preconditions:
 - Cursor and JetBrains IDEs may support window activation via CLI or AppleScript
 - terminal-based agents (Claude Code, Codex) need a reliable pane-focus mechanism
 - must degrade gracefully when navigation is unavailable
+
+### 5. Session Restore on App Update
+
+**Priority: high — directly improves update experience, no external blockers.**
+
+Restore recent sessions from SQLite history on app startup so the dashboard is not empty after an update or restart.
+
+Design decisions (resolved):
+
+- restore scope: user-initiated sessions updated within the last 24 hours, capped at 150
+- restore depth: session metadata only (activity items lazy-loaded on expand as before)
+- stale status normalization: `running` / `waiting` demoted to `idle` on restore
+- pre-install flush: history writer explicitly flushed before `quitAndInstall()` to prevent data loss
+- merge safety: live hook events always take precedence over restored state
 
 ## Ongoing Priorities
 

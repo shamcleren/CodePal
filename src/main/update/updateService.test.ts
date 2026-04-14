@@ -177,4 +177,38 @@ describe("createUpdateService", () => {
     });
     expect(updaterMocks.checkForUpdates).not.toHaveBeenCalled();
   });
+
+  it("runs onBeforeInstall before quitting to install", () => {
+    const calls: string[] = [];
+    updaterMocks.quitAndInstall.mockImplementationOnce(() => {
+      calls.push("quitAndInstall");
+    });
+    const service = createUpdateService({
+      isPackaged: true,
+      currentVersion: "1.0.0",
+      stateFilePath,
+      onBeforeInstall: () => {
+        calls.push("onBeforeInstall");
+      },
+    });
+
+    service.installUpdate();
+
+    expect(calls).toEqual(["onBeforeInstall", "quitAndInstall"]);
+  });
+
+  it("does not run onBeforeInstall when update install is unsupported", () => {
+    const onBeforeInstall = vi.fn();
+    const service = createUpdateService({
+      isPackaged: false,
+      currentVersion: "1.0.0",
+      stateFilePath,
+      onBeforeInstall,
+    });
+
+    service.installUpdate();
+
+    expect(onBeforeInstall).not.toHaveBeenCalled();
+    expect(updaterMocks.quitAndInstall).not.toHaveBeenCalled();
+  });
 });

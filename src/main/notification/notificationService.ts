@@ -57,14 +57,21 @@ export interface NotificationService {
     nextStatus: SessionStatus;
     title?: string;
     task?: string;
+    lastUserMessage?: string;
   }): void;
 }
 
 function buildNotificationBody(params: {
+  lastUserMessage?: string;
   title?: string;
   task?: string;
   nextStatus: SessionStatus;
 }): string {
+  const userMsg = params.lastUserMessage?.trim();
+  if (userMsg) {
+    return userMsg.length > 120 ? `${userMsg.slice(0, 117)}...` : userMsg;
+  }
+
   const title = params.title?.trim();
   if (title) {
     return title;
@@ -96,7 +103,7 @@ export function createNotificationService(deps: {
   const lastNotified = new Map<string, number>();
 
   return {
-    onSessionStateChange({ sessionId, tool, prevStatus, nextStatus, title, task }) {
+    onSessionStateChange({ sessionId, tool, prevStatus, nextStatus, title, task, lastUserMessage }) {
       const settings = deps.getNotificationSettings();
       if (!settings.enabled) return;
 
@@ -113,7 +120,7 @@ export function createNotificationService(deps: {
       const label = toolLabel(tool);
       const notification = new Notification({
         title: `${label} ${transition.titleZh}`,
-        body: buildNotificationBody({ title, task, nextStatus }),
+        body: buildNotificationBody({ lastUserMessage, title, task, nextStatus }),
         silent: true,
       });
 

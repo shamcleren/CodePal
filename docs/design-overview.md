@@ -75,6 +75,8 @@ CodePal follows a shared monitoring pipeline:
 
 `integration source -> main ingress -> normalization / session update -> session store + history store -> renderer`
 
+Cross-cutting concerns like notifications are implemented as `sessionStore` callbacks rather than per-path wiring. When `sessionStore.applyEvent()` detects a status change, it invokes the registered `onStatusChange` callback, which routes to the notification service. This means every event path (hook ingress, file watchers) automatically gains notification support without adapter-specific code.
+
 Main responsibilities:
 
 - `src/adapters/`
@@ -149,6 +151,8 @@ Each integration should map into common concepts:
 This keeps the renderer simple and avoids per-tool UI forks.
 
 The renderer still treats the dashboard list as a summary surface. Full retained history is loaded only when a session row is expanded, so restart-safe history does not degrade the main monitoring path.
+
+On startup, recent user-initiated sessions (last 24 hours, up to 150) are restored from the SQLite history store into the in-memory session store. This means the dashboard is immediately populated after an app update or restart without resurfacing lifecycle-only noise such as bare "session ended" rows. Restored sessions that were `running` or `waiting` at shutdown are normalized to `idle`, and live hook events always take precedence over restored state.
 
 ## Integration Strategy
 

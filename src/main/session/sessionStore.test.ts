@@ -1387,4 +1387,164 @@ describe("createSessionStore", () => {
     expect(store.isPendingActionClosed("s1", "x")).toBe(false);
     expect(store.preparePendingActionResponse("s1", "x", "Allow")).not.toBeNull();
   });
+
+  describe("onStatusChange callback", () => {
+    it("fires when session status changes", () => {
+      const onChange = vi.fn();
+      const store = createSessionStore({ onStatusChange: onChange });
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "cursor",
+        status: "running",
+        title: "Fix bug",
+        timestamp: 1,
+      });
+
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "s1",
+          tool: "cursor",
+          prevStatus: undefined,
+          nextStatus: "running",
+        }),
+      );
+    });
+
+    it("does not fire when status stays the same", () => {
+      const onChange = vi.fn();
+      const store = createSessionStore({ onStatusChange: onChange });
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "cursor",
+        status: "running",
+        timestamp: 1,
+      });
+      onChange.mockClear();
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "cursor",
+        status: "running",
+        timestamp: 2,
+      });
+
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("includes lastUserMessage from activity items", () => {
+      const onChange = vi.fn();
+      const store = createSessionStore({ onStatusChange: onChange });
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "cursor",
+        status: "running",
+        timestamp: 1,
+        activityItems: [
+          {
+            id: "u1",
+            kind: "message",
+            source: "user",
+            title: "User",
+            body: "帮我修登录页面",
+            timestamp: 1,
+          },
+        ],
+      });
+      onChange.mockClear();
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "cursor",
+        status: "completed",
+        timestamp: 2,
+      });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prevStatus: "running",
+          nextStatus: "completed",
+          lastUserMessage: "帮我修登录页面",
+        }),
+      );
+    });
+  });
+
+  describe("seedFromHistory", () => {
+    it("restores a completed session from history", () => {
+      const store = createSessionStore();
+      store.seedFromHistory({
+        id: "s1",
+        tool: "cursor",
+        status: "completed",
+        title: "Fix bug",
+        latestTask: "debug task",
+        updatedAt: Date.now() - 60_000,
+        lastUserMessageAt: Date.now() - 120_000,
+      });
+
+      const session = store.getSession("s1");
+      expect(session).not.toBeNull();
+      expect(session!.status).toBe("completed");
+      expect(session!.title).toBe("Fix bug");
+      expect(session!.task).toBe("debug task");
+    });
+
+    it("normalizes running status to idle on restore", () => {
+      const store = createSessionStore();
+      store.seedFromHistory({
+        id: "s1",
+        tool: "claude",
+        status: "running",
+        title: "Active task",
+        latestTask: null,
+        updatedAt: Date.now(),
+        lastUserMessageAt: null,
+      });
+
+      expect(store.getSession("s1")!.status).toBe("idle");
+    });
+
+    it("normalizes waiting status to idle on restore", () => {
+      const store = createSessionStore();
+      store.seedFromHistory({
+        id: "s1",
+        tool: "cursor",
+        status: "waiting",
+        title: null,
+        latestTask: null,
+        updatedAt: Date.now(),
+        lastUserMessageAt: null,
+      });
+
+      expect(store.getSession("s1")!.status).toBe("idle");
+    });
+
+    it("does not overwrite an existing session from a live event", () => {
+      const store = createSessionStore();
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "cursor",
+        status: "running",
+        title: "Live title",
+        timestamp: Date.now(),
+      });
+
+      store.seedFromHistory({
+        id: "s1",
+        tool: "cursor",
+        status: "completed",
+        title: "Old title",
+        latestTask: null,
+        updatedAt: Date.now() - 60_000,
+        lastUserMessageAt: null,
+      });
+
+      expect(store.getSession("s1")!.title).toBe("Live title");
+      expect(store.getSession("s1")!.status).toBe("running");
+    });
+  });
 });

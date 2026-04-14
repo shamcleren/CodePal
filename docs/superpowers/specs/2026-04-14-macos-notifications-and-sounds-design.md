@@ -17,7 +17,7 @@ This is the first v1.1.0 feature. It has no external blockers and can be impleme
 
 `{tool}` is the display name of the agent (e.g. "Cursor", "Claude Code", "Codex", "CodeBuddy").
 
-Notification body: the session title when available, empty otherwise.
+Notification body priority: **last user message** (what the user asked the agent to do) > session title > session task > generic fallback. Long user messages are truncated to 120 characters with an ellipsis. This gives the user immediate context about which request just completed, errored, etc.
 
 ## Debounce
 
@@ -61,7 +61,37 @@ Settings version stays at `1`; the new key is additive and has safe defaults whe
 
 ## Architecture
 
-### New module
+### Unified status-change callback
+
+Notifications are triggered by a unified `onStatusChange` callback on `sessionStore`, not by individual event routing paths. This means every event path (hook ingress, file watchers for Codex/Claude/CodeBuddy/JetBrains) automatically gains notification support without any per-adapter wiring.
+
+```
+Any event path → sessionStore.applyEvent() → status changed? → onStatusChange callback → notificationService
+```
+
+`createSessionStore` accepts an optional `onStatusChange` callback:
+
+```typescript
+type SessionStatusChange = {
+  sessionId: string;
+  tool: string;
+  prevStatus: SessionStatus | undefined;
+  nextStatus: SessionStatus;
+  title?: string;
+  task?: string;
+  lastUserMessage?: string;
+};
+
+createSessionStore({
+  onStatusChange: (change) => notificationService.onSessionStateChange(change),
+});
+```
+
+The callback fires inside `applyEvent()` after the session record is updated, only when `prevStatus !== nextStatus`. The `lastUserMessage` is extracted from the session's in-memory activity items via `latestUserMessageBody()`.
+
+Because `notificationService` is created later during `app.whenReady()`, `main.ts` uses a late-binding mutable reference (`notificationServiceRef`) that the `onStatusChange` closure resolves at call time.
+
+### Notification service module
 
 `src/main/notification/notificationService.ts`
 
@@ -69,7 +99,7 @@ Single factory function:
 
 ```typescript
 function createNotificationService(deps: {
-  settingsService: SettingsService;
+  getNotificationSettings: () => NotificationSettings;
   getMainWindow: () => BrowserWindow | null;
 }): NotificationService;
 ```
@@ -84,37 +114,24 @@ interface NotificationService {
     prevStatus: SessionStatus | undefined;
     nextStatus: SessionStatus;
     title?: string;
+    task?: string;
+    lastUserMessage?: string;
   }): void;
 }
 ```
 
 Responsibilities:
 
-1. Read current `NotificationSettings` from `settingsService`.
+1. Read current `NotificationSettings` from the settings getter.
 2. Check master switch → check per-state switch → check debounce.
 3. If all checks pass, create and show an `electron.Notification`.
-4. If `soundEnabled`, play the mapped macOS system sound via a spawned `afplay /System/Library/Sounds/{name}.aiff` call (lightweight, no native module needed).
-5. On notification `click`, call `mainWindow.show()` + `mainWindow.webContents.send('codepal:focus-session', sessionId)`.
+4. Build the notification body using the priority chain: lastUserMessage > title > task > generic fallback.
+5. If `soundEnabled`, play the mapped macOS system sound via a spawned `afplay /System/Library/Sounds/{name}.aiff` call (lightweight, no native module needed).
+6. On notification `click`, call `mainWindow.show()` + `mainWindow.webContents.send('codepal:focus-session', sessionId)`.
 
-### Hook point in main.ts
+### Why not per-path wiring
 
-After `sessionStore.applyEvent(event)` at the existing event handling block (current lines 322-326):
-
-```typescript
-const prevStatus = prevSession?.status;
-const nextSession = sessionStore.getSession(event.sessionId);
-if (nextSession && prevStatus !== nextSession.status) {
-  notificationService.onSessionStateChange({
-    sessionId: event.sessionId,
-    tool: event.tool,
-    prevStatus,
-    nextStatus: nextSession.status,
-    title: nextSession.title,
-  });
-}
-```
-
-This reads the previous status before `applyEvent` mutates the store, then compares after. The notification call is non-blocking and does not affect the existing broadcast or history-write flow.
+Earlier iterations wired the notification service manually in each event path (`wireIpcHub` for hook events, `routeSessionEvent` for file watchers). This caused Codex/CodeBuddy/JetBrains notifications to be silently dropped because their event path (`sessionWatchersBootstrap.ts`) was not wired. The unified callback approach eliminates this class of bugs entirely — any new adapter or event path only needs to call `sessionStore.applyEvent()` and notifications happen automatically.
 
 ### Sound playback
 
@@ -197,11 +214,12 @@ All notification titles and settings labels need entries in both `en` and `zh-CN
 ### Modified files
 
 - `src/shared/appSettings.ts` — add `NotificationSettings` type, defaults, normalize/clone/merge
-- `src/main/main.ts` — import and wire notification service, capture prevStatus before applyEvent
-- `src/preload/index.ts` — expose `codepal:focus-session` channel
-- `src/renderer/` — add focus-session IPC listener, scroll-to-session logic
-- `src/renderer/` — add notification settings section in settings panel
-- i18n translation files — add notification-related strings
+- `src/main/session/sessionStore.ts` — add `onStatusChange` callback and `SessionStatusChange` type
+- `src/main/main.ts` — create sessionStore with onStatusChange, late-bind notificationServiceRef
+- `src/main/preload/index.ts` — expose `codepal:focus-session` channel
+- `src/renderer/components/SessionList.tsx` — add focus-session IPC listener
+- `src/renderer/App.tsx` — wire notification settings section into settings panel
+- `src/renderer/i18n.tsx` — add notification-related strings in zh-CN and en
 
 ## Out of scope
 

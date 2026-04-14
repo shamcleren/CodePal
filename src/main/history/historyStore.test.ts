@@ -363,6 +363,127 @@ describe("createHistoryStore", () => {
     ]);
   });
 
+  describe("getRecentSessions", () => {
+    it("returns sessions updated within maxAgeMs", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const now = () => 100_000_000;
+      store = createHistoryStore({ dbPath, now });
+
+      store.writeSessionEvent({
+        session: {
+          id: "s1",
+          tool: "cursor",
+          status: "completed",
+          title: "Fix bug",
+          latestTask: "debug task",
+          updatedAt: now() - 3_600_000, // 1 hour ago
+          lastUserMessageAt: now() - 3_700_000,
+          hasPendingActions: false,
+        },
+        activityItems: [],
+      });
+      store.writeSessionEvent({
+        session: {
+          id: "s2",
+          tool: "claude",
+          status: "running",
+          title: "Refactor",
+          updatedAt: now() - 90_000_000, // 25 hours ago
+          lastUserMessageAt: now() - 90_100_000,
+          hasPendingActions: false,
+        },
+        activityItems: [],
+      });
+
+      const recent = store.getRecentSessions({
+        maxAgeMs: 24 * 60 * 60 * 1000,
+        limit: 100,
+      });
+
+      expect(recent).toHaveLength(1);
+      expect(recent[0]).toMatchObject({
+        id: "s1",
+        tool: "cursor",
+        status: "completed",
+        title: "Fix bug",
+        latestTask: "debug task",
+        lastUserMessageAt: now() - 3_700_000,
+      });
+    });
+
+    it("excludes lifecycle-only sessions without a user message", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const now = () => 100_000_000;
+      store = createHistoryStore({ dbPath, now });
+
+      store.writeSessionEvent({
+        session: {
+          id: "lifecycle-only",
+          tool: "claude",
+          status: "completed",
+          title: "session ended",
+          latestTask: "session ended",
+          updatedAt: now() - 1_000,
+          hasPendingActions: false,
+        },
+        activityItems: [],
+      });
+      store.writeSessionEvent({
+        session: {
+          id: "real-session",
+          tool: "claude",
+          status: "completed",
+          title: "Explain plan",
+          latestTask: "Explain plan",
+          updatedAt: now() - 2_000,
+          lastUserMessageAt: now() - 3_000,
+          hasPendingActions: false,
+        },
+        activityItems: [],
+      });
+
+      const recent = store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 100 });
+
+      expect(recent.map((session) => session.id)).toEqual(["real-session"]);
+    });
+
+    it("respects limit and returns most recent first", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const now = () => 100_000_000;
+      store = createHistoryStore({ dbPath, now });
+
+      for (let i = 0; i < 5; i++) {
+        store.writeSessionEvent({
+          session: {
+            id: `s${i}`,
+            tool: "cursor",
+            status: "completed",
+            updatedAt: now() - i * 1000,
+            lastUserMessageAt: now() - i * 1000 - 500,
+            hasPendingActions: false,
+          },
+          activityItems: [],
+        });
+      }
+
+      const recent = store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 3 });
+      expect(recent).toHaveLength(3);
+      expect(recent[0].id).toBe("s0");
+    });
+
+    it("returns empty array when no sessions exist", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      store = createHistoryStore({ dbPath });
+
+      const recent = store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 100 });
+      expect(recent).toEqual([]);
+    });
+  });
+
   it("exposes close so callers can tear down and reopen cleanly", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
     const dbPath = path.join(tmpDir, "history.sqlite");

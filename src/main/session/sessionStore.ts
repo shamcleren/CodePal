@@ -537,7 +537,21 @@ function shouldHideCodeBuddyDuplicateShell(
   });
 }
 
-export function createSessionStore() {
+export type SessionStatusChange = {
+  sessionId: string;
+  tool: string;
+  prevStatus: SessionStatus | undefined;
+  nextStatus: SessionStatus;
+  title?: string;
+  task?: string;
+  lastUserMessage?: string;
+};
+
+type SessionStoreOptions = {
+  onStatusChange?: (change: SessionStatusChange) => void;
+};
+
+export function createSessionStore(options?: SessionStoreOptions) {
   const sessions = new Map<string, InternalSessionRecord>();
 
   function preparePendingActionResponse(
@@ -822,6 +836,19 @@ export function createSessionStore() {
         closedLedger: nextClosedLedger,
       };
       sessions.set(event.sessionId, internal);
+
+      const prevStatus = prev?.status;
+      if (options?.onStatusChange && prevStatus !== internal.status) {
+        options.onStatusChange({
+          sessionId: internal.id,
+          tool: internal.tool,
+          prevStatus,
+          nextStatus: internal.status,
+          title: internal.title,
+          task: internal.task,
+          lastUserMessage: latestUserMessageBody(internal),
+        });
+      }
     },
 
     preparePendingActionResponse,
@@ -856,6 +883,40 @@ export function createSessionStore() {
         return null;
       }
       return toSessionRecord(session);
+    },
+
+    seedFromHistory(record: {
+      id: string;
+      tool: string;
+      status: string;
+      title: string | null;
+      latestTask: string | null;
+      updatedAt: number;
+      lastUserMessageAt: number | null;
+    }) {
+      if (sessions.has(record.id)) {
+        return;
+      }
+      const restoredStatus: SessionStatus =
+        record.status === "running" || record.status === "waiting"
+          ? "idle"
+          : isSessionStatus(record.status)
+            ? record.status
+            : "completed";
+      const internal: InternalSessionRecord = {
+        id: record.id,
+        tool: record.tool,
+        status: restoredStatus,
+        title: record.title ?? undefined,
+        task: record.latestTask ?? undefined,
+        updatedAt: record.updatedAt,
+        lastUserMessageAt: record.lastUserMessageAt ?? undefined,
+        activityItems: [],
+        activities: [],
+        pendingById: new Map(),
+        closedLedger: new Map(),
+      };
+      sessions.set(record.id, internal);
     },
 
     getSessions(): SessionRecord[] {

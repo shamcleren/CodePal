@@ -40,6 +40,21 @@ export type PersistedSessionWrite = {
   };
 };
 
+export type SessionSeedRecord = {
+  id: string;
+  tool: string;
+  status: string;
+  title: string | null;
+  latestTask: string | null;
+  updatedAt: number;
+  lastUserMessageAt: number | null;
+};
+
+export type GetRecentSessionsOptions = {
+  maxAgeMs: number;
+  limit: number;
+};
+
 function parseJsonObject(value: string | null): Record<string, unknown> | undefined {
   if (!value) return undefined;
   try {
@@ -240,6 +255,14 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     ORDER BY timestamp DESC, insert_seq DESC
     LIMIT ?
   `);
+  const recentSessionsStmt = db.prepare(`
+    SELECT id, tool, status, title, latest_task, updated_at, last_user_message_at
+    FROM sessions
+    WHERE updated_at >= ?
+      AND last_user_message_at IS NOT NULL
+    ORDER BY updated_at DESC
+    LIMIT ?
+  `);
   const deleteActivityBeforeStmt = db.prepare(`DELETE FROM session_activity_items WHERE timestamp < ?`);
   const deleteDebugBeforeStmt = db.prepare(`DELETE FROM session_event_debug WHERE timestamp < ?`);
   const oldestActivityRowsStmt = db.prepare(`
@@ -371,6 +394,30 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     };
   }
 
+  function getRecentSessions(opts: GetRecentSessionsOptions): SessionSeedRecord[] {
+    assertOpen();
+    const cutoff = now() - opts.maxAgeMs;
+    const limit = Math.max(1, Math.min(opts.limit, 500));
+    const rows = recentSessionsStmt.all(cutoff, limit) as Array<{
+      id: string;
+      tool: string;
+      status: string;
+      title: string | null;
+      latest_task: string | null;
+      updated_at: number;
+      last_user_message_at: number | null;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      tool: row.tool,
+      status: row.status,
+      title: row.title,
+      latestTask: row.latest_task,
+      updatedAt: row.updated_at,
+      lastUserMessageAt: row.last_user_message_at,
+    }));
+  }
+
   function clearAll(): HistoryDiagnostics {
     assertOpen();
     db.exec(`
@@ -469,6 +516,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   return {
     writeSessionEvent,
     getSessionHistoryPage,
+    getRecentSessions,
     getDiagnostics,
     clearAll,
     runCleanup,
