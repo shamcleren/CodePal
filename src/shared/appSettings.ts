@@ -22,11 +22,21 @@ export type HistorySettings = {
   maxStorageMb: number;
 };
 
+export type NotificationSettings = {
+  enabled: boolean;
+  soundEnabled: boolean;
+  completed: boolean;
+  waiting: boolean;
+  error: boolean;
+  resumed: boolean;
+};
+
 export type AppSettings = {
   version: 1;
   locale: AppLocale;
   display: UsageDisplaySettings;
   history: HistorySettings;
+  notifications: NotificationSettings;
   codebuddy: {
     code: CodeBuddyEndpointSettings;
     enterprise: CodeBuddyEndpointSettings;
@@ -38,6 +48,7 @@ export type AppSettingsPatch = {
   locale?: AppLocale;
   display?: Partial<UsageDisplaySettings>;
   history?: Partial<HistorySettings>;
+  notifications?: Partial<NotificationSettings>;
   codebuddy?: {
     code?: Partial<CodeBuddyEndpointSettings>;
     enterprise?: Partial<CodeBuddyEndpointSettings>;
@@ -68,11 +79,21 @@ export const defaultHistorySettings: HistorySettings = {
   maxStorageMb: 100,
 };
 
+export const defaultNotificationSettings: NotificationSettings = {
+  enabled: true,
+  soundEnabled: false,
+  completed: true,
+  waiting: true,
+  error: true,
+  resumed: true,
+};
+
 export const defaultAppSettings: AppSettings = {
   version: 1,
   locale: "system",
   display: defaultUsageDisplaySettings,
   history: defaultHistorySettings,
+  notifications: { ...defaultNotificationSettings },
   codebuddy: {
     code: {
       enabled: true,
@@ -101,6 +122,9 @@ export function cloneAppSettings(settings: AppSettings): AppSettings {
     },
     history: {
       ...settings.history,
+    },
+    notifications: {
+      ...settings.notifications,
     },
     codebuddy: {
       code: {
@@ -218,6 +242,21 @@ function normalizeHistorySettings(value: unknown): HistorySettings {
   };
 }
 
+function normalizeNotificationSettings(value: unknown): NotificationSettings {
+  const candidate = asRecord(value);
+  if (!candidate) {
+    return { ...defaultNotificationSettings };
+  }
+  return {
+    enabled: typeof candidate.enabled === "boolean" ? candidate.enabled : defaultNotificationSettings.enabled,
+    soundEnabled: typeof candidate.soundEnabled === "boolean" ? candidate.soundEnabled : defaultNotificationSettings.soundEnabled,
+    completed: typeof candidate.completed === "boolean" ? candidate.completed : defaultNotificationSettings.completed,
+    waiting: typeof candidate.waiting === "boolean" ? candidate.waiting : defaultNotificationSettings.waiting,
+    error: typeof candidate.error === "boolean" ? candidate.error : defaultNotificationSettings.error,
+    resumed: typeof candidate.resumed === "boolean" ? candidate.resumed : defaultNotificationSettings.resumed,
+  };
+}
+
 export function normalizeCodeBuddyEndpointSettings(
   value: unknown,
   defaults: CodeBuddyEndpointSettings,
@@ -254,6 +293,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
 
   const display = normalizeUsageDisplaySettings(candidate.display);
   const history = normalizeHistorySettings(candidate.history);
+  const notifications = normalizeNotificationSettings(candidate.notifications);
   const codebuddy = asRecord(candidate.codebuddy);
 
   return {
@@ -261,6 +301,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     locale: normalizeLocale(candidate.locale),
     display,
     history,
+    notifications,
     codebuddy: {
       code: normalizeCodeBuddyEndpointSettings(codebuddy?.code, defaultAppSettings.codebuddy.code),
       enterprise: normalizeCodeBuddyEndpointSettings(
@@ -285,6 +326,10 @@ export function mergeAppSettings(
     history: {
       ...current.history,
       ...(incoming.history ?? {}),
+    },
+    notifications: {
+      ...current.notifications,
+      ...(incoming.notifications ?? {}),
     },
     codebuddy: {
       ...current.codebuddy,

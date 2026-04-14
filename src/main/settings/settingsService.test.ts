@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES, defaultAppSettings } from "../../shared/appSettings";
+import { DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES, defaultAppSettings, normalizeAppSettings } from "../../shared/appSettings";
 import { createSettingsService } from "./settingsService";
 import YAML from "yaml";
 
@@ -195,6 +195,40 @@ describe("settingsService", () => {
     expect(reset.display.hiddenAgents).toEqual([]);
     expect(reset.codebuddy.code.cookieNames).toEqual(DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES);
     expect(defaultAppSettings.display.hiddenAgents).toEqual([]);
+  });
+
+  it("round-trips notification settings through normalize", () => {
+    const result = normalizeAppSettings({
+      version: 1,
+      notifications: {
+        enabled: false,
+        soundEnabled: true,
+        completed: false,
+        waiting: true,
+        error: true,
+        resumed: false,
+      },
+    });
+    expect(result.notifications).toEqual({
+      enabled: false,
+      soundEnabled: true,
+      completed: false,
+      waiting: true,
+      error: true,
+      resumed: false,
+    });
+  });
+
+  it("fills default notification settings when key is missing", () => {
+    const result = normalizeAppSettings({ version: 1 });
+    expect(result.notifications).toEqual({
+      enabled: true,
+      soundEnabled: false,
+      completed: true,
+      waiting: true,
+      error: true,
+      resumed: true,
+    });
   });
 
   it("logs and falls back when the template yaml is malformed", () => {
