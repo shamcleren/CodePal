@@ -24,6 +24,19 @@ type PrimaryRenderEntry = {
   isTypingItem: boolean;
 };
 
+type PrimaryDisplayItem =
+  | {
+      kind: "item";
+      renderKey: string;
+      entry: PrimaryRenderEntry;
+    }
+  | {
+      kind: "tool-group";
+      renderKey: string;
+      items: TimelineItem[];
+      activeArtifact: boolean;
+    };
+
 const PRIMARY_ITEM_GAP_PX = 10;
 const PRIMARY_VIRTUALIZATION_THRESHOLD = 24;
 const PRIMARY_OVERSCAN_PX = 360;
@@ -346,6 +359,45 @@ export function buildPrimaryRenderEntries(
   }));
 }
 
+export function buildPrimaryDisplayItems(
+  primaryItems: TimelineItem[],
+  sessionStatus: SessionStatus,
+  typingLabel: string,
+): PrimaryDisplayItem[] {
+  const entries = buildPrimaryRenderEntries(primaryItems, sessionStatus, typingLabel);
+  const displayItems: PrimaryDisplayItem[] = [];
+  let index = 0;
+
+  while (index < entries.length) {
+    const current = entries[index];
+    if (current.item.kind !== "tool") {
+      displayItems.push({
+        kind: "item",
+        renderKey: current.renderKey,
+        entry: current,
+      });
+      index += 1;
+      continue;
+    }
+
+    const toolItems: TimelineItem[] = [];
+    const firstToolIndex = index;
+    while (index < entries.length && entries[index].item.kind === "tool") {
+      toolItems.push(entries[index].item);
+      index += 1;
+    }
+
+    displayItems.push({
+      kind: "tool-group",
+      renderKey: `tool-group:${entries[firstToolIndex].renderKey}`,
+      items: toolItems,
+      activeArtifact: sessionStatus === "running" && firstToolIndex === 0,
+    });
+  }
+
+  return displayItems;
+}
+
 function estimatePrimaryEntryHeight(entry: PrimaryRenderEntry): number {
   if (entry.isTypingItem) {
     return 76;
@@ -495,6 +547,50 @@ function PrimaryStreamItem({
   );
 }
 
+function ToolGroupItem({
+  items,
+  activeArtifact,
+}: {
+  items: TimelineItem[];
+  activeArtifact: boolean;
+}) {
+  const i18n = useI18n();
+
+  return (
+    <div
+      className={`session-stream__item session-stream__item--artifact session-stream__item--artifact-group ${
+        activeArtifact ? "session-stream__item--artifact-active" : ""
+      }`}
+    >
+      <div className="session-stream__artifact-accent" aria-hidden="true" />
+      <div className="session-stream__artifact-copy">
+        <div className="session-stream__header">
+          <span className="session-stream__artifact-kicker">{i18n.t("session.execution")}</span>
+          <span className="session-stream__label">Tools</span>
+          <span className="session-stream__artifact-type">{items.length}</span>
+        </div>
+        <div className="session-stream__body">
+          <div className="session-stream__artifact-group-list">
+            {items.map((item) => {
+              const toolLabel = item.toolName?.trim() || item.label.trim() || item.title.trim();
+              const phaseLabel = item.toolPhase === "call" ? "call" : "result";
+              return (
+                <div key={item.id} className="session-stream__artifact-group-row" title={item.body}>
+                  <span className="session-stream__artifact-group-tool">{toolLabel}</span>
+                  <span className="session-stream__artifact-group-phase">{phaseLabel}</span>
+                  <span className="session-stream__artifact-group-body">
+                    {toolBodySummary(item.body)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function HoverDetails({ items, sessionStatus, scrollContainerRef }: HoverDetailsProps) {
   const i18n = useI18n();
   const chronologicalItems = [...items].reverse();
@@ -514,9 +610,10 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
     sectionOffsetTop: 0,
   });
 
+  const primaryDisplayItems = buildPrimaryDisplayItems(primaryItems, sessionStatus, i18n.t("session.typing"));
   const primaryEntries = buildPrimaryRenderEntries(primaryItems, sessionStatus, i18n.t("session.typing"));
   const shouldVirtualize =
-    primaryEntries.length >= PRIMARY_VIRTUALIZATION_THRESHOLD && Boolean(scrollContainerRef?.current);
+    primaryDisplayItems.length >= PRIMARY_VIRTUALIZATION_THRESHOLD && Boolean(scrollContainerRef?.current);
 
   function toggleTool(renderKey: string) {
     setExpandedTools((current) => ({
@@ -557,13 +654,17 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
   }, []);
 
   useEffect(() => {
-    const activeKeys = new Set(primaryEntries.map((entry) => entry.renderKey));
+    const activeKeys = new Set(
+      primaryDisplayItems.map((entry) =>
+        entry.kind === "item" ? entry.entry.renderKey : entry.renderKey,
+      ),
+    );
     for (const cachedKey of Object.keys(measuredHeightsRef.current)) {
       if (!activeKeys.has(cachedKey)) {
         delete measuredHeightsRef.current[cachedKey];
       }
     }
-  }, [primaryEntries]);
+  }, [primaryDisplayItems]);
 
   useEffect(() => {
     if (!shouldVirtualize) {
@@ -600,7 +701,7 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
       container.removeEventListener("scroll", syncMetrics);
       observer?.disconnect();
     };
-  }, [scrollContainerRef, shouldVirtualize, primaryEntries.length, metricsVersion]);
+  }, [scrollContainerRef, shouldVirtualize, primaryDisplayItems.length, metricsVersion]);
 
   function registerPrimaryItemNode(renderKey: string) {
     return (node: HTMLDivElement | null) => {
@@ -622,21 +723,35 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
   if (!shouldVirtualize) {
     primaryContent = (
       <div ref={primarySectionRef} className="session-stream__section session-stream__section--primary">
-        {primaryEntries.map((entry, index) => (
-          <PrimaryStreamItem
-            key={entry.renderKey}
-            entry={entry}
-            entryIndex={index}
-            primaryItems={primaryItems}
-            sessionStatus={sessionStatus}
-            expandedTools={expandedTools}
-            onToggleTool={toggleTool}
-          />
-        ))}
+        {primaryDisplayItems.map((entry, index) =>
+          entry.kind === "tool-group" ? (
+            <ToolGroupItem
+              key={entry.renderKey}
+              items={entry.items}
+              activeArtifact={entry.activeArtifact}
+            />
+          ) : (
+            <PrimaryStreamItem
+              key={entry.renderKey}
+              entry={entry.entry}
+              entryIndex={index}
+              primaryItems={primaryItems}
+              sessionStatus={sessionStatus}
+              expandedTools={expandedTools}
+              onToggleTool={toggleTool}
+            />
+          ),
+        )}
       </div>
     );
   } else {
-    const heights = primaryEntries.map((entry) => measuredHeightsRef.current[entry.renderKey] ?? estimatePrimaryEntryHeight(entry));
+    const heights = primaryDisplayItems.map((entry) => {
+      const renderKey = entry.kind === "item" ? entry.entry.renderKey : entry.renderKey;
+      if (entry.kind === "tool-group") {
+        return measuredHeightsRef.current[renderKey] ?? Math.max(90, 60 + entry.items.length * 26);
+      }
+      return measuredHeightsRef.current[renderKey] ?? estimatePrimaryEntryHeight(entry.entry);
+    });
     const offsets: number[] = [];
     let cursor = 0;
     for (let index = 0; index < heights.length; index += 1) {
@@ -662,28 +777,36 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
       Number.isFinite(visibleBottom)
         ? calculateVirtualWindow(offsets, heights, visibleTop, visibleBottom)
         : { startIndex: 0, endIndex: primaryEntries.length - 1 };
-    const visibleEntries = primaryEntries.slice(startIndex, endIndex + 1);
+    const visibleEntries = primaryDisplayItems.slice(startIndex, endIndex + 1);
 
     primaryContent = (
       <div ref={primarySectionRef} className="session-stream__section session-stream__section--primary">
         <div className="session-stream__virtual-viewport" style={{ height: `${totalHeight}px` }}>
           {visibleEntries.map((entry, visibleIndex) => {
             const absoluteIndex = startIndex + visibleIndex;
+            const renderKey = entry.kind === "item" ? entry.entry.renderKey : entry.renderKey;
             return (
               <div
-                key={entry.renderKey}
-                ref={registerPrimaryItemNode(entry.renderKey)}
+                key={renderKey}
+                ref={registerPrimaryItemNode(renderKey)}
                 className="session-stream__virtual-item"
                 style={{ top: `${offsets[absoluteIndex]}px` }}
               >
-                <PrimaryStreamItem
-                  entry={entry}
-                  entryIndex={absoluteIndex}
-                  primaryItems={primaryItems}
-                  sessionStatus={sessionStatus}
-                  expandedTools={expandedTools}
-                  onToggleTool={toggleTool}
-                />
+                {entry.kind === "tool-group" ? (
+                  <ToolGroupItem
+                    items={entry.items}
+                    activeArtifact={entry.activeArtifact}
+                  />
+                ) : (
+                  <PrimaryStreamItem
+                    entry={entry.entry}
+                    entryIndex={absoluteIndex}
+                    primaryItems={primaryItems}
+                    sessionStatus={sessionStatus}
+                    expandedTools={expandedTools}
+                    onToggleTool={toggleTool}
+                  />
+                )}
               </div>
             );
           })}

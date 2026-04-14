@@ -209,6 +209,19 @@ contextBridge.exposeInMainWorld("codepal", {
       ipcRenderer.removeListener(channel, listener);
     };
   },
+  onFocusSession(handler: (sessionId: string) => void) {
+    const channel = "codepal:focus-session";
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      sessionId: string,
+    ) => {
+      handler(sessionId);
+    };
+    ipcRenderer.on(channel, listener);
+    return () => {
+      ipcRenderer.removeListener(channel, listener);
+    };
+  },
   openExternalTarget(target: string) {
     return ipcRenderer.invoke("codepal:open-external-target", { target }) as Promise<string>;
   },

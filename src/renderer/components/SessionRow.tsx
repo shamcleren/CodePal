@@ -106,6 +106,7 @@ type SessionRowProps = {
   session: MonitorSessionRow;
   historyVersion?: number;
   expanded: boolean;
+  deemphasized: boolean;
   showExperimentalControls?: boolean;
   onToggleExpanded: (sessionId: string) => void;
   onRespond: (sessionId: string, actionId: string, option: string) => void;
@@ -115,6 +116,7 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
   session,
   historyVersion = 0,
   expanded,
+  deemphasized,
   showExperimentalControls = true,
   onToggleExpanded,
   onRespond,
@@ -128,7 +130,9 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
   return (
     <article
       ref={ref}
-      className={`session-row session-row--${session.status} ${expanded ? "session-row--expanded" : ""}`}
+      className={`session-row session-row--${session.status} ${expanded ? "session-row--expanded" : ""} ${
+        deemphasized ? "session-row--backgrounded" : ""
+      }`}
     >
       <button
         type="button"

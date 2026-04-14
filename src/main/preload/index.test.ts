@@ -18,6 +18,7 @@ vi.mock("electron", () => ({
 
 describe("preload history bridge", () => {
   beforeEach(() => {
+    vi.resetModules();
     exposeInMainWorld.mockReset();
     invoke.mockReset();
     on.mockReset();
@@ -47,5 +48,16 @@ describe("preload history bridge", () => {
       limit: 25,
     });
     expect(invoke).toHaveBeenNthCalledWith(3, "codepal:clear-history-store");
+  });
+
+  it("exposes onFocusSession listener", async () => {
+    await import("./index");
+
+    const api = exposeInMainWorld.mock.calls[0]?.[1] as Record<string, unknown>;
+    const handler = vi.fn();
+
+    (api.onFocusSession as (handler: (sessionId: string) => void) => () => void)(handler);
+
+    expect(on).toHaveBeenCalledWith("codepal:focus-session", expect.any(Function));
   });
 });

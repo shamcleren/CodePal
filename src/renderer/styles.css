@@ -1066,6 +1066,26 @@ body {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
+.session-list--focus .session-row {
+  transition:
+    transform 150ms ease,
+    opacity 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.session-row--expanded {
+  margin-block: 8px;
+  box-shadow:
+    0 14px 36px rgba(6, 10, 18, 0.26),
+    0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.session-row--backgrounded {
+  opacity: 0.56;
+  transform: scale(0.988);
+}
+
 .session-row--running.session-row--expanded,
 .session-row--running:hover {
   border-color: color-mix(in srgb, var(--running) 68%, var(--accent));
@@ -1155,13 +1175,20 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.session-row__details {
+.session-row__details-shell {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   max-height: min(52vh, 420px);
+}
+
+.session-row__details {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
   overflow: auto;
-  padding: 10px 12px 12px;
+  padding: 12px 14px 14px;
 }
 
 .session-row__history-status {
@@ -1189,6 +1216,12 @@ body {
   border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
   color: color-mix(in srgb, var(--text) 82%, var(--muted));
   background: linear-gradient(180deg, rgba(96, 165, 250, 0.05), rgba(96, 165, 250, 0.02));
+}
+
+.session-row__history-status--hint {
+  border-color: color-mix(in srgb, #34d399 24%, var(--border));
+  color: color-mix(in srgb, #d1fae5 72%, var(--text));
+  background: linear-gradient(180deg, rgba(52, 211, 153, 0.08), rgba(52, 211, 153, 0.03));
 }
 
 .session-row__history-status--error {
@@ -1237,6 +1270,71 @@ body {
   flex-direction: column;
   gap: 8px;
   min-height: 36px;
+}
+
+.session-row__footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 82%, white 8%);
+  background: linear-gradient(
+    180deg,
+    rgba(15, 21, 31, 0.98) 0%,
+    rgba(15, 21, 31, 0.99) 100%
+  );
+}
+
+.session-row__footer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.session-row__footer-chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, white 8%);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.session-row__footer-chip--pending {
+  border-color: color-mix(in srgb, var(--waiting) 28%, transparent);
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--waiting);
+}
+
+.session-row__footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.session-row__footer-button {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.12), rgba(96, 165, 250, 0.05));
+  color: color-mix(in srgb, var(--text) 92%, white 8%);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.session-row__footer-button:hover {
+  filter: brightness(1.06);
+}
+
+.session-row__footer-button--ghost {
+  border-color: color-mix(in srgb, var(--border) 88%, white 8%);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--muted);
 }
 
 .session-row__loading {
@@ -1958,6 +2056,46 @@ body {
 
 .session-stream__artifact-body-shell {
   position: relative;
+}
+
+.session-stream__artifact-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-stream__artifact-group-row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.session-stream__artifact-group-tool {
+  font-size: 10px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text) 90%, white 6%);
+}
+
+.session-stream__artifact-group-phase {
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 76%, white 8%);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.session-stream__artifact-group-body {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
 }
 
 .session-stream__artifact-summary {

@@ -87,6 +87,13 @@ test("keeps the session list pinned to the expanded row bottom", async () => {
     await expect(details.getByText("Expanded target activity line 27")).toBeVisible({
       timeout: 15_000,
     });
+    await expect
+      .poll(async () => {
+        return details.evaluate((node) =>
+          Math.round(node.scrollHeight - node.scrollTop - node.clientHeight),
+        );
+      })
+      .toBeLessThanOrEqual(8);
 
     await expect
       .poll(async () => {

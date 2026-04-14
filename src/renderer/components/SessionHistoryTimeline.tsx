@@ -1,18 +1,25 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { WheelEvent } from "react";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type { PendingAction } from "../../shared/sessionTypes";
 import { useI18n } from "../i18n";
 import type { MonitorSessionRow, TimelineItem } from "../monitorSession";
 import { HoverDetails } from "./HoverDetails";
 
-const HISTORY_PAGE_LIMIT = 100;
+const HISTORY_INITIAL_PAGE_LIMIT = 100;
+const HISTORY_INCREMENTAL_PAGE_LIMIT = 60;
 const HISTORY_SCROLL_TOP_THRESHOLD_PX = 72;
 const HISTORY_SCROLL_BOTTOM_THRESHOLD_PX = 32;
+const HISTORY_LOADING_MIN_MS = 220;
+const SUMMARY_MESSAGE_LIMIT = 10;
 const LOW_VALUE_LIFECYCLE_BODIES = new Set([
   "Claude session started",
   "Claude request finished",
   "Claude session ended",
+  "CodeBuddy request started",
+  "CodeBuddy request finished",
 ]);
+const DUPLICATE_HISTORY_TIME_WINDOW_MS = 5_000;
 
 function normalizeComparableText(text: string): string {
   return text
@@ -47,6 +54,47 @@ function shouldHideLowValueLifecycleItem(item: Pick<ActivityItem, "kind" | "sour
   );
 }
 
+function sameRenderableHistoryItem(left: TimelineItem, right: ActivityItem): boolean {
+  if (left.kind !== right.kind || left.source !== right.source) {
+    return false;
+  }
+
+  const leftBody = normalizeComparableText(left.body);
+  const rightBody = normalizeComparableText(right.body);
+  if (!leftBody || leftBody !== rightBody) {
+    return false;
+  }
+
+  return Math.abs(left.timestamp - right.timestamp) <= DUPLICATE_HISTORY_TIME_WINDOW_MS;
+}
+
+export function mergeHistoryStatusState(options: {
+  historyError: string | null;
+  historyLoading: boolean;
+  persistedCount: number;
+  historyHasMore: boolean;
+}): { kind: "error" | "loading-initial" | "loading-more" | "hint"; textKey: string } | null {
+  if (options.historyError) {
+    return { kind: "error", textKey: "session.history.error" };
+  }
+
+  if (options.historyLoading) {
+    return {
+      kind: options.persistedCount > 0 ? "loading-more" : "loading-initial",
+      textKey:
+        options.persistedCount > 0
+          ? "session.history.loadingMore"
+          : "session.history.loading",
+    };
+  }
+
+  if (options.historyHasMore && options.persistedCount > 0) {
+    return { kind: "hint", textKey: "session.history.moreAvailable" };
+  }
+
+  return null;
+}
+
 export function mergeSessionTimelineItems(
   liveItems: TimelineItem[],
   persistedItems: ActivityItem[],
@@ -70,6 +118,9 @@ export function mergeSessionTimelineItems(
       continue;
     }
     if (seen.has(item.id)) {
+      continue;
+    }
+    if (merged.some((existing) => sameRenderableHistoryItem(existing, item))) {
       continue;
     }
     seen.add(item.id);
@@ -100,6 +151,22 @@ export function shouldLoadNextHistoryPage(options: {
     options.scrollTop <= HISTORY_SCROLL_TOP_THRESHOLD_PX &&
     options.hasMore &&
     !options.loading
+  );
+}
+
+export function shouldLoadNextHistoryPageFromWheel(options: {
+  deltaY: number;
+  scrollTop: number;
+  hasMore: boolean;
+  loading: boolean;
+}) {
+  return (
+    options.deltaY < 0 &&
+    shouldLoadNextHistoryPage({
+      scrollTop: options.scrollTop,
+      hasMore: options.hasMore,
+      loading: options.loading,
+    })
   );
 }
 
@@ -143,6 +210,120 @@ function actionDisplayOptions(
   return action.options;
 }
 
+function summarizeText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function sessionToolLabel(tool: string): string {
+  const normalized = tool.trim();
+  if (!normalized) {
+    return "Unknown";
+  }
+
+  return normalized.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function sessionStatusLabel(status: MonitorSessionRow["status"]): string {
+  switch (status) {
+    case "running":
+      return "RUNNING";
+    case "waiting":
+      return "WAITING";
+    case "error":
+      return "ERROR";
+    case "completed":
+      return "DONE";
+    case "idle":
+      return "IDLE";
+    case "offline":
+      return "OFFLINE";
+  }
+}
+
+function summaryLabelForItem(item: TimelineItem): string | null {
+  if (item.kind === "tool") {
+    return "Tool";
+  }
+
+  if (item.kind !== "message") {
+    return null;
+  }
+
+  if (item.source === "assistant") {
+    return "Assistant";
+  }
+
+  if (item.source === "user") {
+    return "User";
+  }
+
+  return item.label || item.title || "Agent";
+}
+
+export function buildSessionSummaryText(
+  session: Pick<
+    MonitorSessionRow,
+    "tool" | "status" | "titleLabel" | "updatedLabel" | "pendingActions" | "pendingCount"
+  >,
+  items: TimelineItem[],
+): string {
+  const pendingActionCount = session.pendingActions?.length ?? 0;
+  const pendingCount = pendingActionCount > 0 ? pendingActionCount : session.pendingCount;
+  const messageItems = items.filter((item) => item.kind === "message");
+  const selectedMessageItems = messageItems.slice(-SUMMARY_MESSAGE_LIMIT);
+  const messageLines = selectedMessageItems
+    .map((item) => {
+      const label = summaryLabelForItem(item);
+      if (!label) {
+        return null;
+      }
+
+      const body = summarizeText(item.body);
+      return body ? `- ${label}: ${body}` : null;
+    })
+    .filter((line): line is string => line !== null);
+  const toolCount = items.filter((item) => item.kind === "tool").length;
+  const lines = [
+    session.titleLabel,
+    "",
+    "Session facts",
+    `- Tool: ${sessionToolLabel(session.tool)}`,
+    `- Status: ${sessionStatusLabel(session.status)}`,
+    `- Updated: ${session.updatedLabel}`,
+    `- Pending count: ${pendingCount}`,
+    `- Timeline items considered: ${items.length}`,
+  ];
+
+  lines.push("");
+  lines.push("Copied message scope");
+  lines.push(`- Last ${SUMMARY_MESSAGE_LIMIT} User/Assistant messages are included when available.`);
+  lines.push("- Tool details are intentionally omitted.");
+
+  if ((session.pendingActions?.length ?? 0) > 0) {
+    lines.push("");
+    lines.push("Pending decisions");
+    for (const action of session.pendingActions ?? []) {
+      lines.push(`- ${summarizeText(action.title)}`);
+    }
+  }
+
+  if (messageLines.length > 0) {
+    lines.push("");
+    lines.push(
+      `Recent User/Assistant messages copied (${messageLines.length} of ${messageItems.length} available)`,
+    );
+    lines.push(...messageLines);
+  }
+
+  if (toolCount > 0) {
+    lines.push("");
+    lines.push("Tool activity summary");
+    lines.push(`- Omitted tool details: ${toolCount} ${toolCount === 1 ? "item" : "items"}`);
+  }
+
+  return lines.join("\n").trim();
+}
+
 export type SessionHistoryTimelineProps = {
   session: MonitorSessionRow;
   historyVersion?: number;
@@ -171,8 +352,10 @@ export function SessionHistoryTimeline({
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [summaryCopied, setSummaryCopied] = useState(false);
 
   const mergedItems = mergeSessionTimelineItems(session.timelineItems, persistedItems);
+  const summaryText = buildSessionSummaryText(session, mergedItems);
   const latestToolItem = mergedItems.find((item) => item.kind === "tool");
   const hasRenderablePrimaryContent = mergedItems.some(
     (item) => item.kind === "message" || item.kind === "tool",
@@ -182,13 +365,23 @@ export function SessionHistoryTimeline({
     latestToolItem &&
     normalizeComparableText(latestToolItem.body) !== normalizeComparableText(session.titleLabel) &&
     normalizeComparableText(latestToolItem.body) !== normalizeComparableText(session.collapsedSummary);
-  const historyStatusText = historyError
-    ? i18n.t("session.history.error")
-    : historyLoading
-      ? persistedItems.length > 0
-        ? i18n.t("session.history.loadingMore")
-        : i18n.t("session.history.loading")
-      : null;
+  const historyStatus = mergeHistoryStatusState({
+    historyError,
+    historyLoading,
+    persistedCount: persistedItems.length,
+    historyHasMore,
+  });
+
+  async function withMinimumLoadingVisibility<T>(startedAt: number, task: Promise<T>): Promise<T> {
+    try {
+      return await task;
+    } finally {
+      const remaining = HISTORY_LOADING_MIN_MS - (Date.now() - startedAt);
+      if (remaining > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remaining));
+      }
+    }
+  }
 
   useEffect(() => {
     requestIdRef.current += 1;
@@ -227,17 +420,20 @@ export function SessionHistoryTimeline({
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     let cancelled = false;
-    initialLoadDoneRef.current = true;
 
     async function loadHistoryPages() {
+      const startedAt = Date.now();
       setHistoryLoading(true);
       setHistoryError(null);
 
       try {
-        const page = await window.codepal.getSessionHistoryPage({
-          sessionId: session.id,
-          limit: HISTORY_PAGE_LIMIT,
-        });
+        const page = await withMinimumLoadingVisibility(
+          startedAt,
+          window.codepal.getSessionHistoryPage({
+            sessionId: session.id,
+            limit: HISTORY_INITIAL_PAGE_LIMIT,
+          }),
+        );
 
         if (cancelled || requestIdRef.current !== requestId) {
           return;
@@ -266,7 +462,7 @@ export function SessionHistoryTimeline({
       requestIdRef.current += 1;
       setHistoryLoading(false);
     };
-  }, [expanded, historyError, historyLoading, initialLoadAttempt, persistedItems.length, session.id]);
+  }, [expanded, historyError, initialLoadAttempt, session.id]);
 
   useLayoutEffect(() => {
     const node = detailsRef.current;
@@ -277,18 +473,78 @@ export function SessionHistoryTimeline({
 
     const pendingScrollRestore = pendingScrollRestoreRef.current;
     if (pendingScrollRestore) {
-      node.scrollTop =
-        pendingScrollRestore.scrollTop +
-        Math.max(0, node.scrollHeight - pendingScrollRestore.scrollHeight);
+      if (node.scrollHeight <= pendingScrollRestore.scrollHeight) {
+        lastExpandedRef.current = expanded;
+        return;
+      }
+
+      let firstFrame = 0;
+      let secondFrame = 0;
+      let stopObserving = 0;
+      const restoreScrollPosition = () => {
+        node.scrollTop =
+          pendingScrollRestore.scrollTop +
+          Math.max(0, node.scrollHeight - pendingScrollRestore.scrollHeight);
+      };
+
+      restoreScrollPosition();
+      firstFrame = window.requestAnimationFrame(() => {
+        restoreScrollPosition();
+        secondFrame = window.requestAnimationFrame(restoreScrollPosition);
+      });
+
+      const observer =
+        typeof ResizeObserver !== "undefined"
+          ? new ResizeObserver(restoreScrollPosition)
+          : null;
+      observer?.observe(node);
+      stopObserving = window.setTimeout(() => {
+        observer?.disconnect();
+      }, 800);
+
       pendingScrollRestoreRef.current = null;
       shouldStickToBottomRef.current = false;
       lastExpandedRef.current = expanded;
-      return;
+      return () => {
+        window.cancelAnimationFrame(firstFrame);
+        window.cancelAnimationFrame(secondFrame);
+        window.clearTimeout(stopObserving);
+        observer?.disconnect();
+      };
     }
 
     const justOpened = !lastExpandedRef.current;
     if (justOpened || shouldStickToBottomRef.current) {
-      node.scrollTop = node.scrollHeight;
+      let firstFrame = 0;
+      let secondFrame = 0;
+      let stopObserving = 0;
+      const pinToBottom = () => {
+        node.scrollTop = node.scrollHeight;
+      };
+
+      pinToBottom();
+      firstFrame = window.requestAnimationFrame(() => {
+        pinToBottom();
+        secondFrame = window.requestAnimationFrame(pinToBottom);
+      });
+
+      const observer =
+        typeof ResizeObserver !== "undefined"
+          ? new ResizeObserver(pinToBottom)
+          : null;
+      observer?.observe(node);
+      stopObserving = window.setTimeout(() => {
+        observer?.disconnect();
+      }, 800);
+
+      lastExpandedRef.current = expanded;
+
+      return () => {
+        window.cancelAnimationFrame(firstFrame);
+        window.cancelAnimationFrame(secondFrame);
+        window.clearTimeout(stopObserving);
+        observer?.disconnect();
+      };
     }
 
     lastExpandedRef.current = expanded;
@@ -309,15 +565,18 @@ export function SessionHistoryTimeline({
 
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
+    const startedAt = Date.now();
     setHistoryLoading(true);
     setHistoryError(null);
 
-    void window.codepal
-      .getSessionHistoryPage({
+    void withMinimumLoadingVisibility(
+      startedAt,
+      window.codepal.getSessionHistoryPage({
         sessionId: session.id,
         cursor: historyCursor,
-        limit: HISTORY_PAGE_LIMIT,
-      })
+        limit: HISTORY_INCREMENTAL_PAGE_LIMIT,
+      }),
+    )
       .then((page) => {
         if (requestIdRef.current !== requestId) {
           return;
@@ -369,14 +628,86 @@ export function SessionHistoryTimeline({
     }
   }
 
+  function handleDetailsWheel(event: WheelEvent<HTMLDivElement>) {
+    const node = detailsRef.current;
+    if (!node) {
+      return;
+    }
+
+    if (
+      shouldLoadNextHistoryPageFromWheel({
+        deltaY: event.deltaY,
+        scrollTop: node.scrollTop,
+        hasMore: historyHasMore,
+        loading: historyLoading,
+      })
+    ) {
+      event.preventDefault();
+      loadOlderHistory();
+    }
+  }
+
+  function scrollToLatest() {
+    const node = detailsRef.current;
+    if (!node) {
+      return;
+    }
+
+    shouldStickToBottomRef.current = true;
+    node.scrollTop = node.scrollHeight;
+  }
+
+  async function copySummary() {
+    await window.codepal.writeClipboardText(summaryText);
+    setSummaryCopied(true);
+    window.setTimeout(() => {
+      setSummaryCopied(false);
+    }, 1200);
+  }
+
+  const footer = (
+    <div className="session-row__footer">
+      <div className="session-row__footer-meta">
+        <span className="session-row__footer-chip">
+          {i18n.t("session.footer.items", { count: mergedItems.length })}
+        </span>
+        {session.pendingCount > 0 ? (
+          <span className="session-row__footer-chip session-row__footer-chip--pending">
+            {i18n.t("session.pending", { count: session.pendingCount })}
+          </span>
+        ) : null}
+      </div>
+      <div className="session-row__footer-actions">
+        <button
+          type="button"
+          className="session-row__footer-button session-row__footer-button--ghost"
+          onClick={scrollToLatest}
+        >
+          {i18n.t("session.footer.backToLatest")}
+        </button>
+        <button
+          type="button"
+          className="session-row__footer-button"
+          onClick={() => {
+            void copySummary();
+          }}
+        >
+          {summaryCopied ? i18n.t("common.copied") : i18n.t("session.footer.copySummary")}
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div
-      ref={detailsRef}
-      className="session-row__details"
-      onScroll={handleDetailsScroll}
-    >
-      {historyStatusText ? (
-        historyError ? (
+    <div className="session-row__details-shell">
+      <div
+        ref={detailsRef}
+        className="session-row__details"
+        onScroll={handleDetailsScroll}
+        onWheel={handleDetailsWheel}
+      >
+      {historyStatus ? (
+        historyStatus.kind === "error" ? (
           <button
             type="button"
             className="session-row__history-status session-row__history-status--error session-row__history-status--action"
@@ -386,10 +717,14 @@ export function SessionHistoryTimeline({
           </button>
         ) : (
           <div
-            className="session-row__history-status session-row__history-status--loading"
+            className={`session-row__history-status ${
+              historyStatus.kind === "hint"
+                ? "session-row__history-status--hint"
+                : "session-row__history-status--loading"
+            }`}
             role="status"
           >
-            {historyStatusText}
+            {i18n.t(historyStatus.textKey)}
           </div>
         )
       ) : null}
@@ -445,6 +780,8 @@ export function SessionHistoryTimeline({
           ))}
         </div>
       ) : null}
+      </div>
+      {footer}
     </div>
   );
 }

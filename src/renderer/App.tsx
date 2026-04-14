@@ -14,6 +14,7 @@ import { ClaudeQuotaPanel } from "./components/ClaudeQuotaPanel";
 import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
 import { MainUpdateButton } from "./components/MainUpdateButton";
+import { NotificationPreferencesPanel } from "./components/NotificationPreferencesPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SessionList } from "./components/SessionList";
 import { UpdatePanel } from "./components/UpdatePanel";
@@ -31,7 +32,13 @@ import {
 
 const CURSOR_DASHBOARD_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const CODEBUDDY_QUOTA_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-type SettingsSectionId = "integrations" | "display" | "usage" | "maintenance" | "support";
+type SettingsSectionId =
+  | "integrations"
+  | "display"
+  | "notifications"
+  | "usage"
+  | "maintenance"
+  | "support";
 type SettingsSection = {
   id: SettingsSectionId;
   label: string;
@@ -114,6 +121,12 @@ export function App() {
       label: i18n.t("display.title"),
       eyebrow: i18n.t("settings.nav.display.eyebrow"),
       summary: i18n.t("settings.summary.display"),
+    },
+    {
+      id: "notifications",
+      label: i18n.t("notifications.title"),
+      eyebrow: i18n.t("settings.nav.notifications.eyebrow"),
+      summary: i18n.t("settings.summary.notifications"),
     },
     {
       id: "usage",
@@ -860,6 +873,20 @@ export function App() {
                   onLocaleChange={(nextValue) =>
                     void updateAppSettings({
                       locale: nextValue,
+                    })
+                  }
+                />
+              ) : null}
+              {activeSettingsSection === "notifications" ? (
+                <NotificationPreferencesPanel
+                  showHeader={false}
+                  settings={appSettings.notifications}
+                  onUpdate={(patch) =>
+                    void updateAppSettings({
+                      notifications: {
+                        ...appSettings.notifications,
+                        ...patch,
+                      },
                     })
                   }
                 />

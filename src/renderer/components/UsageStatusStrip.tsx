@@ -285,6 +285,19 @@ function buildSummaries(
   ].filter((item): item is UsageAgentSummary => item !== null);
 }
 
+export function hasVisibleUsageStatus(
+  overview: UsageOverview | null,
+  settings: UsageDisplaySettings,
+  i18n: ReturnType<typeof useI18n>,
+): boolean {
+  return buildSummaries(overview, settings, i18n).some(
+    (item) =>
+      !settings.hiddenAgents.includes(
+        item.agent as "claude" | "codex" | "cursor" | "codebuddy",
+      ),
+  );
+}
+
 export function UsageStatusStrip({ overview, settings }: UsageStatusStripProps) {
   const i18n = useI18n();
   if (!settings.showInStatusBar) {

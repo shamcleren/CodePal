@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { TimelineItem } from "../monitorSession";
-import { buildItemRenderKeys, buildPrimaryRenderEntries, calculateVirtualWindow } from "./HoverDetails";
+import {
+  buildItemRenderKeys,
+  buildPrimaryRenderEntries,
+  calculateVirtualWindow,
+  buildPrimaryDisplayItems,
+} from "./HoverDetails";
 import { toRenderableMessageBody } from "../messageBody";
 
 function toolItem(id: string, timestamp: number): TimelineItem {
@@ -56,6 +61,73 @@ describe("buildPrimaryRenderEntries", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0].isTypingItem).toBe(false);
+  });
+});
+
+describe("buildPrimaryDisplayItems", () => {
+  it("groups adjacent tool items into a single compact group", () => {
+    const items: TimelineItem[] = [
+      {
+        id: "tool-call",
+        kind: "tool",
+        source: "tool",
+        label: "terminal",
+        title: "terminal",
+        body: "Tool call: terminal",
+        timestamp: 1,
+        toolName: "terminal",
+        toolPhase: "call",
+      },
+      {
+        id: "tool-result-a",
+        kind: "tool",
+        source: "tool",
+        label: "terminal",
+        title: "terminal",
+        body: "pwd",
+        timestamp: 2,
+        toolName: "terminal",
+        toolPhase: "result",
+      },
+      {
+        id: "tool-result-b",
+        kind: "tool",
+        source: "tool",
+        label: "terminal",
+        title: "terminal",
+        body: "ls -la",
+        timestamp: 3,
+        toolName: "terminal",
+        toolPhase: "result",
+      },
+    ];
+
+    const grouped = buildPrimaryDisplayItems(items, "completed", "typing");
+
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]).toMatchObject({
+      kind: "tool-group",
+      items: items,
+    });
+  });
+
+  it("keeps messages as standalone items between tool groups", () => {
+    const items: TimelineItem[] = [
+      toolItem("tool-a", 1),
+      {
+        id: "message-1",
+        kind: "message",
+        source: "assistant",
+        label: "Assistant",
+        title: "Assistant",
+        body: "Done.",
+        timestamp: 2,
+      },
+      toolItem("tool-b", 3),
+    ];
+
+    const grouped = buildPrimaryDisplayItems(items, "completed", "typing");
+    expect(grouped.map((entry) => entry.kind)).toEqual(["tool-group", "item", "tool-group"]);
   });
 });
 

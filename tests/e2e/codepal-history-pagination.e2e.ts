@@ -121,14 +121,38 @@ test("loads older persisted history pages when scrolling upward", async () => {
         timeout: 15_000,
       })
       .toContain("Persisted history item 229");
+    await expect(
+      page.getByText(
+        /Older history is available\. Keep scrolling up to load more…|还有更早历史，继续上滑即可加载…/,
+      ),
+    ).toBeVisible({ timeout: 15_000 });
 
     await expect(page.getByText("Persisted history item 0")).toBeHidden();
 
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    await details.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+    await details.hover();
+    await page.mouse.wheel(0, -700);
+    await expect(
+      page.getByText(
+        /Recent items are shown\. Scroll upward to load earlier history…|已显示最近记录，继续上滑可读取更早历史…/,
+      ),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(async () => {
+        return details.evaluate((node) => node.scrollTop);
+      }, {
+        timeout: 15_000,
+      })
+      .toBeGreaterThan(0);
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
       await details.evaluate((node) => {
         node.scrollTop = 0;
-        node.dispatchEvent(new Event("scroll"));
       });
+      await details.hover();
+      await page.mouse.wheel(0, -700);
 
       const oldestVisible = await page
         .getByText("Persisted history item 0")
@@ -138,7 +162,7 @@ test("loads older persisted history pages when scrolling upward", async () => {
         break;
       }
 
-      await page.waitForTimeout(150);
+      await page.waitForTimeout(280);
     }
 
     await expect(page.getByText("Persisted history item 0")).toBeVisible({

@@ -1,16 +1,25 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MonitorSessionRow } from "../monitorSession";
 import { SessionRow } from "./SessionRow";
 
 type SessionListProps = {
   sessions: MonitorSessionRow[];
   historyVersion: number;
+  initiallyExpandedSessionId?: string;
   onRespond: (sessionId: string, actionId: string, option: string) => void;
 };
 
-export function SessionList({ sessions, historyVersion, onRespond }: SessionListProps) {
-  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+export function SessionList({
+  sessions,
+  historyVersion,
+  initiallyExpandedSessionId,
+  onRespond,
+}: SessionListProps) {
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
+    initiallyExpandedSessionId ?? null,
+  );
   const rowRefs = useRef(new Map<string, HTMLElement>());
+  const hasExpandedSession = expandedSessionId !== null;
 
   const toggleExpanded = useCallback((sessionId: string) => {
     setExpandedSessionId((current) => (current === sessionId ? null : sessionId));
@@ -55,6 +64,12 @@ export function SessionList({ sessions, historyVersion, onRespond }: SessionList
     };
   }, [expandedSessionId]);
 
+  useEffect(() => {
+    return window.codepal.onFocusSession((sessionId) => {
+      setExpandedSessionId(sessionId);
+    });
+  }, []);
+
   const registerRow = useCallback((sessionId: string) => {
     return (node: HTMLElement | null) => {
       if (!node) {
@@ -66,7 +81,10 @@ export function SessionList({ sessions, historyVersion, onRespond }: SessionList
   }, []);
 
   return (
-    <section className="session-list" aria-label="Session tasks">
+    <section
+      className={`session-list ${hasExpandedSession ? "session-list--focus" : ""}`}
+      aria-label="Session tasks"
+    >
       <div className="session-list__header">Sessions</div>
       {sessions.map((session) => (
         <SessionRow
@@ -75,6 +93,7 @@ export function SessionList({ sessions, historyVersion, onRespond }: SessionList
           session={session}
           historyVersion={historyVersion}
           expanded={expandedSessionId === session.id}
+          deemphasized={hasExpandedSession && expandedSessionId !== session.id}
           showExperimentalControls={false}
           onToggleExpanded={toggleExpanded}
           onRespond={onRespond}

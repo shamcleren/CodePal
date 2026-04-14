@@ -64,6 +64,7 @@ export type CodePalApi = {
   refreshCursorDashboardUsage: () => Promise<CursorDashboardConnectResult>;
   clearCursorDashboardAuth: () => Promise<CursorDashboardDiagnostics>;
   onOpenSettings: (handler: () => void) => () => void;
+  onFocusSession: (handler: (sessionId: string) => void) => () => void;
   openExternalTarget: (target: string) => Promise<string>;
   writeClipboardText: (text: string) => Promise<void>;
   respondToPendingAction: (sessionId: string, actionId: string, option: string) => void;

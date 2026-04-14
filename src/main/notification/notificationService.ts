@@ -56,7 +56,37 @@ export interface NotificationService {
     prevStatus: SessionStatus | undefined;
     nextStatus: SessionStatus;
     title?: string;
+    task?: string;
   }): void;
+}
+
+function buildNotificationBody(params: {
+  title?: string;
+  task?: string;
+  nextStatus: SessionStatus;
+}): string {
+  const title = params.title?.trim();
+  if (title) {
+    return title;
+  }
+
+  const task = params.task?.trim();
+  if (task) {
+    return task;
+  }
+
+  switch (params.nextStatus) {
+    case "completed":
+      return "Open CodePal to review the completed session.";
+    case "waiting":
+      return "Open CodePal to review the pending decision.";
+    case "error":
+      return "Open CodePal to inspect the session error.";
+    case "running":
+      return "Open CodePal to review the resumed session.";
+    default:
+      return "Open CodePal to inspect this session.";
+  }
 }
 
 export function createNotificationService(deps: {
@@ -66,7 +96,7 @@ export function createNotificationService(deps: {
   const lastNotified = new Map<string, number>();
 
   return {
-    onSessionStateChange({ sessionId, tool, prevStatus, nextStatus, title }) {
+    onSessionStateChange({ sessionId, tool, prevStatus, nextStatus, title, task }) {
       const settings = deps.getNotificationSettings();
       if (!settings.enabled) return;
 
@@ -83,7 +113,7 @@ export function createNotificationService(deps: {
       const label = toolLabel(tool);
       const notification = new Notification({
         title: `${label} ${transition.titleZh}`,
-        body: title ?? "",
+        body: buildNotificationBody({ title, task, nextStatus }),
         silent: true,
       });
 

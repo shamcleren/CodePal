@@ -335,6 +335,7 @@ async function wireIpcHub(
           prevStatus,
           nextStatus: nextSession.status,
           title: nextSession.title,
+          task: nextSession.task,
         });
       }
       const session = nextSession ?? undefined;

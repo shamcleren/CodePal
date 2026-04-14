@@ -58,6 +58,33 @@ describe("notificationService", () => {
     expect(mockShow).toHaveBeenCalledTimes(1);
   });
 
+  it("falls back to session task when title is missing", () => {
+    service.onSessionStateChange({
+      sessionId: "s1",
+      tool: "cursor",
+      prevStatus: "running",
+      nextStatus: "completed",
+      task: "Investigate stuck approval prompt",
+    });
+    expect(MockNotification).toHaveBeenCalledTimes(1);
+    expect(MockNotification.mock.calls[0][0]).toMatchObject({
+      body: "Investigate stuck approval prompt",
+    });
+  });
+
+  it("uses a non-empty fallback body when title and task are missing", () => {
+    service.onSessionStateChange({
+      sessionId: "s1",
+      tool: "cursor",
+      prevStatus: "running",
+      nextStatus: "error",
+    });
+    expect(MockNotification).toHaveBeenCalledTimes(1);
+    expect(MockNotification.mock.calls[0][0]).toMatchObject({
+      body: "Open CodePal to inspect the session error.",
+    });
+  });
+
   it("sends notification on running → waiting", () => {
     service.onSessionStateChange({
       sessionId: "s1",

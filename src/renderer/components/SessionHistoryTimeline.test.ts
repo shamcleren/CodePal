@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type { TimelineItem } from "../monitorSession";
 import {
+  buildSessionSummaryText,
+  mergeHistoryStatusState,
   mergeSessionTimelineItems,
+  shouldLoadNextHistoryPageFromWheel,
   shouldStartInitialHistoryLoad,
   shouldLoadNextHistoryPage,
 } from "./SessionHistoryTimeline";
+import type { MonitorSessionRow } from "../monitorSession";
 
 function timelineItem(overrides: Partial<TimelineItem> & Pick<TimelineItem, "id" | "body">): TimelineItem {
   return {
@@ -139,6 +143,70 @@ describe("mergeSessionTimelineItems", () => {
 
     expect(merged.map((item) => item.id)).toEqual(["assistant-1", "user-1"]);
   });
+
+  it("deduplicates persisted items when the same user message already exists in live history", () => {
+    const merged = mergeSessionTimelineItems(
+      [
+        timelineItem({
+          id: "live-user-1",
+          kind: "message",
+          source: "user",
+          title: "User",
+          label: "User",
+          body: "帮我看下这个 session 为什么卡住了",
+          timestamp: 300,
+        }),
+      ],
+      [
+        activityItem({
+          id: "persisted-user-1",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "帮我看下这个 session 为什么卡住了",
+          timestamp: 299,
+        }),
+      ],
+    );
+
+    expect(merged.map((item) => item.id)).toEqual(["live-user-1"]);
+  });
+
+  it("filters low-value CodeBuddy lifecycle notes from expanded history", () => {
+    const merged = mergeSessionTimelineItems(
+      [
+        timelineItem({
+          id: "assistant-1",
+          title: "Assistant",
+          label: "Assistant",
+          body: "已经帮你整理好了变更建议。",
+          timestamp: 300,
+        }),
+      ],
+      [
+        activityItem({
+          id: "codebuddy-finished-1",
+          kind: "system",
+          source: "system",
+          title: "Request finished",
+          body: "CodeBuddy request finished",
+          timestamp: 250,
+          tone: "completed",
+        }),
+        activityItem({
+          id: "codebuddy-started-1",
+          kind: "system",
+          source: "system",
+          title: "Request started",
+          body: "CodeBuddy request started",
+          timestamp: 240,
+          tone: "running",
+        }),
+      ],
+    );
+
+    expect(merged.map((item) => item.id)).toEqual(["assistant-1"]);
+  });
 });
 
 describe("shouldLoadNextHistoryPage", () => {
@@ -174,6 +242,35 @@ describe("shouldLoadNextHistoryPage", () => {
   });
 });
 
+describe("shouldLoadNextHistoryPageFromWheel", () => {
+  it("loads when the user keeps wheeling upward at the top edge", () => {
+    expect(
+      shouldLoadNextHistoryPageFromWheel({
+        deltaY: -80,
+        scrollTop: 0,
+        hasMore: true,
+        loading: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldLoadNextHistoryPageFromWheel({
+        deltaY: 80,
+        scrollTop: 0,
+        hasMore: true,
+        loading: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldLoadNextHistoryPageFromWheel({
+        deltaY: -80,
+        scrollTop: 120,
+        hasMore: true,
+        loading: false,
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("shouldStartInitialHistoryLoad", () => {
   it("does not auto-retry while an error banner is already visible", () => {
     expect(
@@ -193,5 +290,146 @@ describe("shouldStartInitialHistoryLoad", () => {
         historyError: null,
       }),
     ).toBe(true);
+  });
+});
+
+describe("mergeHistoryStatusState", () => {
+  it("surfaces a stronger affordance when more persisted history can be loaded", () => {
+    expect(
+      mergeHistoryStatusState({
+        historyError: null,
+        historyLoading: false,
+        persistedCount: 20,
+        historyHasMore: true,
+      }),
+    ).toEqual({
+      kind: "hint",
+      textKey: "session.history.moreAvailable",
+    });
+
+    expect(
+      mergeHistoryStatusState({
+        historyError: null,
+        historyLoading: true,
+        persistedCount: 20,
+        historyHasMore: true,
+      }),
+    ).toEqual({
+      kind: "loading-more",
+      textKey: "session.history.loadingMore",
+    });
+  });
+});
+
+describe("buildSessionSummaryText", () => {
+  it("builds a compact summary from the current session and high-signal items", () => {
+    const session = {
+      id: "session-1",
+      tool: "cursor",
+      status: "waiting",
+      titleLabel: "Review flaky history loading",
+      updatedLabel: "04-14 16:20",
+      pendingActions: [
+        {
+          id: "pending-1",
+          type: "approval" as const,
+          title: "Approve the fix?",
+          options: ["Allow", "Deny"],
+        },
+      ],
+    } as Pick<
+      MonitorSessionRow,
+      "id" | "tool" | "status" | "titleLabel" | "updatedLabel" | "pendingActions" | "pendingCount"
+    >;
+
+    const summary = buildSessionSummaryText(session, [
+      timelineItem({
+        id: "assistant-1",
+        kind: "message",
+        source: "assistant",
+        title: "Assistant",
+        label: "Assistant",
+        body: "I found the pagination threshold issue.",
+        timestamp: 3,
+      }),
+      timelineItem({
+        id: "tool-1",
+        kind: "tool",
+        source: "tool",
+        title: "terminal",
+        label: "terminal",
+        body: "npx playwright test -c playwright.e2e.config.ts",
+        timestamp: 2,
+        toolName: "terminal",
+        toolPhase: "result",
+      }),
+    ]);
+
+    expect(summary).toContain("Review flaky history loading");
+    expect(summary).toContain("- Tool: Cursor");
+    expect(summary).toContain("- Status: WAITING");
+    expect(summary).toContain("- Updated: 04-14 16:20");
+    expect(summary).toContain("Pending decisions");
+    expect(summary).toContain("- Approve the fix?");
+    expect(summary).toContain("Copied message scope");
+    expect(summary).toContain("- Last 10 User/Assistant messages are included when available.");
+    expect(summary).toContain("Recent User/Assistant messages copied (1 of 1 available)");
+    expect(summary).toContain("- Assistant: I found the pagination threshold issue.");
+    expect(summary).toContain("Tool activity summary");
+    expect(summary).toContain("- Omitted tool details: 1 item");
+    expect(summary).not.toContain("npx playwright test -c playwright.e2e.config.ts");
+  });
+
+  it("keeps enough recent message context while omitting verbose tool bodies", () => {
+    const session = {
+      id: "session-1",
+      tool: "claude",
+      status: "running",
+      titleLabel: "Fix session copy summary",
+      updatedLabel: "04-14 17:30",
+      pendingCount: 2,
+      pendingActions: [],
+    } as Pick<
+      MonitorSessionRow,
+      "id" | "tool" | "status" | "titleLabel" | "updatedLabel" | "pendingCount" | "pendingActions"
+    >;
+    const longAssistantMessage = `Long assistant context ${"detail ".repeat(180)}`;
+    const items = [
+      timelineItem({
+        id: "tool-1",
+        kind: "tool",
+        source: "tool",
+        title: "Bash",
+        label: "Bash",
+        body: "npm run test:e2e -- --very-verbose-output-that-should-not-be-copied",
+        timestamp: 20,
+      }),
+      ...Array.from({ length: 10 }, (_value, index) =>
+        timelineItem({
+          id: `msg-${index}`,
+          kind: "message",
+          source: index % 2 === 0 ? "user" : "assistant",
+          title: index % 2 === 0 ? "User" : "Assistant",
+          label: index % 2 === 0 ? "User" : "Assistant",
+          body: index === 9 ? longAssistantMessage : `Message context ${index}`,
+          timestamp: 10 - index,
+        }),
+      ),
+    ];
+
+    const summary = buildSessionSummaryText(session, items);
+
+    expect(summary).toContain("Session facts");
+    expect(summary).toContain("- Tool: Claude");
+    expect(summary).toContain("- Status: RUNNING");
+    expect(summary).toContain("- Pending count: 2");
+    expect(summary).toContain("- Timeline items considered: 11");
+    expect(summary).toContain("Recent User/Assistant messages copied (10 of 10 available)");
+    expect(summary).toContain("Message context 0");
+    expect(summary).toContain("Message context 1");
+    expect(summary).toContain(longAssistantMessage.trim());
+    expect(summary).toContain("Tool activity summary");
+    expect(summary).toContain("- Omitted tool details: 1 item");
+    expect(summary).not.toContain("very-verbose-output-that-should-not-be-copied");
   });
 });

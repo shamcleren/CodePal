@@ -80,4 +80,32 @@ describe("SessionList", () => {
     expect(html).toContain("Codex · repo audit");
     expect(html).toContain("live run");
   });
+
+  it("marks non-expanded rows as deemphasized when one session is expanded", () => {
+    const html = renderToStaticMarkup(
+      <SessionList
+        historyVersion={0}
+        sessions={[
+          row({
+            id: "expanded-session",
+            status: "running",
+            titleLabel: "Expanded session",
+            collapsedSummary: "focus",
+          }),
+          row({
+            id: "background-session",
+            status: "waiting",
+            titleLabel: "Background session",
+            collapsedSummary: "secondary",
+          }),
+        ]}
+        initiallyExpandedSessionId="expanded-session"
+        onRespond={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("session-list session-list--focus");
+    expect(html).toContain("session-row--expanded");
+    expect(html).toContain("session-row--backgrounded");
+  });
 });

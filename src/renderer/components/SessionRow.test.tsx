@@ -30,6 +30,7 @@ function renderRow(row: MonitorSessionRow, options?: { expanded?: boolean; showE
       <SessionRow
         session={row}
         expanded={options?.expanded ?? false}
+        deemphasized={false}
         showExperimentalControls={options?.showExperimentalControls}
         onToggleExpanded={vi.fn()}
         onRespond={vi.fn()}
@@ -138,7 +139,8 @@ describe("SessionRow pending action", () => {
     expect(html).toContain(
       "Notification (permission_prompt): CodeBuddy needs your permission to use Bash",
     );
-    expect(html).toContain("session-stream__item--artifact-call");
+    expect(html).toContain("session-stream__item--artifact-group");
+    expect(html).toContain("session-stream__artifact-group-phase");
   });
 
   it("renders the collapsed summary line", () => {
@@ -214,6 +216,31 @@ describe("SessionRow pending action", () => {
 
     expect(html).toContain("session-row__details");
     expect(html).toContain("Proceed?");
+  });
+
+  it("renders footer actions for expanded sessions", () => {
+    const html = renderRow(
+      baseRow({
+        timelineItems: [
+          {
+            id: "1",
+            kind: "message",
+            source: "assistant",
+            label: "Assistant",
+            title: "Assistant",
+            body: "Proceed when ready.",
+            timestamp: 1,
+          },
+        ],
+      }),
+      { expanded: true },
+    );
+
+    expect(html).toContain("session-row__details-shell");
+    expect(html).toContain("session-row__footer");
+    expect(html).toContain("Back to latest");
+    expect(html).toContain("Copy last 10 messages");
+    expect(html).toContain("</div><div class=\"session-row__footer\">");
   });
 
   it("hides pending action UI in dashboard mode even when pending actions exist", () => {
@@ -560,7 +587,8 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("session-row__overview-artifact");
     expect(html).toContain("session-stream__item--artifact-active");
     expect(html).toContain("session-stream__artifact-kicker");
-    expect(html).toContain("session-stream__item--artifact-call");
+    expect(html).toContain("session-stream__item--artifact-group");
+    expect(html).toContain("session-stream__artifact-group-body");
   });
 
   it("renders result artifacts with a distinct result-state class", () => {
@@ -588,7 +616,8 @@ describe("SessionRow pending action", () => {
       />,
     );
 
-    expect(html).toContain("session-stream__item--artifact-result");
+    expect(html).toContain("session-stream__item--artifact-group");
+    expect(html).toContain(">result<");
   });
 
   it("renders tool artifacts with a collapsible body shell when content is long", () => {
@@ -617,10 +646,10 @@ describe("SessionRow pending action", () => {
       />,
     );
 
-    expect(html).toContain("session-stream__artifact-toggle");
-    expect(html).toContain("Expand");
-    expect(html).toContain("session-stream__artifact-body-shell");
-    expect(html).toContain("session-stream__artifact-summary");
+    expect(html).toContain("session-stream__item--artifact-group");
+    expect(html).toContain("session-stream__artifact-group-row");
+    expect(html).toContain("session-stream__artifact-group-body");
+    expect(html).not.toContain("session-stream__artifact-toggle");
     expect(html).not.toContain("session-stream__plaintext");
   });
 
@@ -649,7 +678,7 @@ describe("SessionRow pending action", () => {
       />,
     );
 
-    expect(html).toContain("session-stream__artifact-summary");
+    expect(html).toContain("session-stream__artifact-group-body");
     expect(html).toContain("diff --git a/README.md b/README.md");
     expect(html).not.toContain("session-stream__plaintext--diff");
     expect(html).not.toContain("session-stream__richtext");
@@ -681,7 +710,7 @@ describe("SessionRow pending action", () => {
       />,
     );
 
-    expect(html).toContain("session-stream__artifact-summary");
+    expect(html).toContain("session-stream__artifact-group-body");
     expect(html).toContain("&quot;status&quot;: &quot;ok&quot;");
   });
 
