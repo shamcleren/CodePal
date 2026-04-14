@@ -34,6 +34,7 @@ import {
   registerHistoryIpcHandlers,
 } from "./history/historyRuntime";
 import { installMainProcessFileLogger } from "./logging/appLogger";
+import { createNotificationService } from "./notification/notificationService";
 
 const sessionStore = createSessionStore();
 const usageStore = createUsageStore();
@@ -302,6 +303,7 @@ function getOrCreateMainWindow(): BrowserWindow {
 async function wireIpcHub(
   integrationService: ReturnType<typeof createIntegrationService>,
   settingsService: ReturnType<typeof createSettingsService>,
+  notificationService: ReturnType<typeof createNotificationService>,
   currentHistoryStore: ReturnType<typeof createAppHistoryStore>,
   usageSnapshotCache?: ReturnType<typeof createUsageSnapshotCache>,
 ): Promise<"listening" | "already_running" | "error"> {
@@ -320,10 +322,22 @@ async function wireIpcHub(
     }
     const event = lineToSessionEvent(line);
     if (event) {
+      const prevSession = sessionStore.getSession(event.sessionId);
+      const prevStatus = prevSession?.status;
       sessionStore.applyEvent(event);
       integrationService.recordEvent(event.tool, event.status, event.timestamp);
       sessionBroadcastScheduler.request();
-      const session = sessionStore.getSession(event.sessionId) ?? undefined;
+      const nextSession = sessionStore.getSession(event.sessionId);
+      if (nextSession && prevStatus !== nextSession.status) {
+        notificationService.onSessionStateChange({
+          sessionId: event.sessionId,
+          tool: event.tool,
+          prevStatus,
+          nextStatus: nextSession.status,
+          title: nextSession.title,
+        });
+      }
+      const session = nextSession ?? undefined;
       if (!historyWriter) {
         return;
       }
@@ -521,6 +535,10 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         stateFilePath: path.join(app.getPath("userData"), "update-state.json"),
         onStateChange: broadcastUpdateState,
       });
+      const notificationService = createNotificationService({
+        getNotificationSettings: () => settingsService.getSettings().notifications,
+        getMainWindow: () => mainWindow,
+      });
 
       wireActionResponseIpc(
         settingsService,
@@ -535,6 +553,7 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       const ipcResult = await wireIpcHub(
         integrationService,
         settingsService,
+        notificationService,
         historyStore,
         usageSnapshotCache,
       );
