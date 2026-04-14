@@ -18,11 +18,76 @@ That means:
 - improve release ergonomics before scaling distribution
 - validate sustained user value before implementing paid features
 
-## Near-Term Product Priorities
+## v1.1.0 Planned Features
 
-These are the most reasonable next steps after the current V1 release baseline:
+These four features define the v1.1.0 release scope. They move CodePal from monitoring-only toward lightweight interaction and awareness.
 
-### 1. Monitoring Depth
+### 1. macOS Notifications And Sounds
+
+**Priority: highest — no external blockers, can start immediately.**
+
+Add native macOS notifications and optional sounds for important session state transitions.
+
+Initial candidate states:
+
+- session completed
+- session waiting for a decision
+- session errored
+- long-running session became active again
+
+Design decisions:
+
+- whether notifications are enabled by default
+- whether sounds can be disabled independently
+- which states should stay silent and only update the main panel
+- how to avoid repeated notifications when one state flickers
+
+### 2. Allow (Approval Expansion)
+
+**Priority: high — Cursor already works, Codex blocked on upstream.**
+
+Cursor `approval` / `Allow / Deny` already round-trips through the hook path. Codex approval is blocked because the current public Codex `notify` hook is completion-only, not a real approval source.
+
+Next steps:
+
+- resume Codex approval work only when upstream exposes a real approval / permission hook
+- required: stable `sessionId` in the approval payload, explicit approval semantics
+- keep the existing canonical pending-action model and response-target routing
+
+Relevant code: `src/main/hook/`, `src/main/ingress/hookIngress.ts`, `src/main/actionResponse/dispatchActionResponse.ts`
+
+### 3. Send Message (CodePal → Agent)
+
+**Priority: medium — depends on session ownership and delivery semantics.**
+
+Enable outbound message delivery from CodePal to a running agent session.
+
+Preconditions:
+
+- session ownership must be unambiguous (one CodePal panel → one agent session)
+- delivery mechanism must be reliable per agent (stdin pipe, hook response, local protocol)
+- must not interfere with the existing monitoring-first data flow
+
+This is not freeform `text_input`; scope is limited to structured message delivery to an identified running session.
+
+### 4. Click-To-Navigate (IDE / Terminal Jump)
+
+**Priority: lower — depends on per-agent navigation APIs.**
+
+Allow clicking a session or activity row to jump to the corresponding IDE window or terminal pane.
+
+Preconditions:
+
+- each agent adapter must expose a way to activate its window or pane
+- Cursor and JetBrains IDEs may support window activation via CLI or AppleScript
+- terminal-based agents (Claude Code, Codex) need a reliable pane-focus mechanism
+- must degrade gracefully when navigation is unavailable
+
+## Ongoing Priorities
+
+These continue alongside v1.1.0 feature work:
+
+### Monitoring Depth
 
 - broader Claude quota calibration beyond the current token usage and statusLine-derived `rate_limits` snapshots
 - broader Cursor real-world payload calibration
@@ -30,20 +95,19 @@ These are the most reasonable next steps after the current V1 release baseline:
 - deeper JetBrains coverage on the shared monitoring path
 - continued signal-to-noise improvements in the activity timeline
 
-### 2. Distribution And Release Ergonomics
+### Distribution And Release Ergonomics
 
 - smoother installation and first-run onboarding on macOS
 - consistent release artifacts, release notes, and updater metadata across patch releases
 - continued verification of signed and notarized macOS distribution
 - more predictable in-app update discovery and recovery when a release is unavailable or malformed
 
-### 3. Product Polish
+### Product Polish
 
 - more predictable settings and diagnostics UX
 - stronger empty / degraded / expired state messaging
 - better resilience around last-known usage and login-state handling
 - refreshed macOS menu bar and in-app icon assets so size, sharpness, and dark-mode rendering stay consistent
-- macOS notifications and optional sounds for important task state transitions, starting with completed, waiting-for-decision, and error states
 
 ## Distribution And Updates
 
@@ -92,7 +156,7 @@ These are direction candidates, not committed SKUs.
 
 ## Longer-Term Expansion
 
-These directions are worth recording now, but they should remain explicitly behind the current monitoring-baseline work.
+These directions are worth recording now, but they should remain explicitly behind v1.1.0 and the current monitoring-baseline work.
 
 ### Dynamic Island / Ambient Surface
 
@@ -113,24 +177,6 @@ It would affect:
 - notification behavior
 - interaction entry points
 - which states deserve ambient exposure versus full-panel detail
-
-### macOS Notifications And Sounds
-
-Task state transitions are worth tracking as a separate experience improvement rather than mixing them into the current settings-layout pass.
-
-Initial candidate states:
-
-- session completed
-- session waiting for a decision
-- session errored
-- long-running session became active again
-
-The design should decide:
-
-- whether notifications are enabled by default
-- whether sounds can be disabled independently
-- which states should stay silent and only update the main panel
-- how to avoid repeated notifications when one state flickers
 
 ### Windows Adaptation
 

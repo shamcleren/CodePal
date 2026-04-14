@@ -210,18 +210,16 @@ npm run dist:mac
 
 - ACP / `acpx` common capability extraction
 - freeform `text_input`
-- a general CodePal -> codeagent free-text message channel
-- deep IDE / terminal pane navigation promises
 - moving control-loop UX back onto the main dashboard path
 
-### Deferred But Planned
+### v1.1.0 Planned
 
-These items are not part of the current accepted V1 baseline, but they still belong to the broader product direction:
+The following features are planned for the v1.1.0 release. See `docs/roadmap-next.md` for full details, priorities, and preconditions:
 
-- outbound `send message` / CodePal -> agent message delivery when session ownership and delivery semantics are stable enough
-- ACP / `acpx` style common capability extraction once the current per-agent monitoring and action model is mature enough to justify it
-- richer observability coverage beyond the current session/activity/usage baseline, including source health, ingestion reliability, and stronger debugging signals for adapter behavior
-- deeper cross-agent control-loop support only after the dashboard-first monitoring path is validated
+- macOS notifications and sounds (highest priority, no blockers)
+- Allow / approval expansion (Cursor done, Codex blocked on upstream)
+- Send message / CodePal → agent delivery (depends on session ownership semantics)
+- Click-to-navigate / IDE jump (depends on per-agent navigation APIs)
 
 ## Next-Step Pointer
 
