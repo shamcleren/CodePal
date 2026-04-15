@@ -292,7 +292,7 @@ export function shouldStartInitialHistoryLoad(options: {
   );
 }
 
-function pendingEyebrow(
+export function pendingEyebrow(
   type: string,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
@@ -308,7 +308,7 @@ function pendingEyebrow(
   }
 }
 
-function actionDisplayOptions(
+export function actionDisplayOptions(
   action: PendingAction,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string[] {
@@ -445,6 +445,13 @@ export function SessionHistoryTimeline({
   expanded,
   onRespond,
 }: SessionHistoryTimelineProps) {
+  type ActionCardState = "pending" | "sending" | "success" | "error";
+
+  const [cardStates, setCardStates] = useState<Record<string, ActionCardState>>({});
+  const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
+  // 追踪每个 actionId 最后一次选择的 option，供重试使用
+  const [cardLastOptions, setCardLastOptions] = useState<Record<string, string>>({});
+
   const i18n = useI18n();
   const detailsRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -614,6 +621,42 @@ export function SessionHistoryTimeline({
       applyBufferedHistoryPage(node);
     }
   }, [bufferedHistoryPage, expanded]);
+
+  useEffect(() => {
+    return window.codepal.onActionResponseResult((result) => {
+      if (result.sessionId !== session.id) return;
+      const { actionId } = result;
+      if (result.result === "success") {
+        setCardStates((prev) => ({ ...prev, [actionId]: "success" }));
+        setCardErrors((prev) => {
+          const next = { ...prev };
+          delete next[actionId];
+          return next;
+        });
+        setTimeout(() => {
+          setCardStates((prev) => {
+            const next = { ...prev };
+            delete next[actionId];
+            return next;
+          });
+        }, 1000);
+      } else {
+        setCardStates((prev) => ({ ...prev, [actionId]: "error" }));
+        setCardErrors((prev) => ({ ...prev, [actionId]: result.error ?? "发送失败" }));
+      }
+    });
+  }, [session.id]);
+
+  function handleRespond(sessionId: string, actionId: string, option: string) {
+    setCardStates((prev) => ({ ...prev, [actionId]: "sending" }));
+    setCardErrors((prev) => {
+      const next = { ...prev };
+      delete next[actionId];
+      return next;
+    });
+    setCardLastOptions((prev) => ({ ...prev, [actionId]: option }));
+    onRespond(sessionId, actionId, option);
+  }
 
   function maybePrefetchHistory(node: HTMLDivElement) {
     if (
@@ -940,28 +983,111 @@ export function SessionHistoryTimeline({
       ) : null}
       {(session.pendingActions?.length ?? 0) > 0 ? (
         <div className="session-row__interaction">
-          {(session.pendingActions ?? []).map((action) => (
-            <div key={action.id} className="pending-action" aria-label={action.title}>
-              <div className="pending-action__eyebrow">
-                <span className="pending-action__kicker">
-                  {pendingEyebrow(action.type, i18n.t)}
-                </span>
-              </div>
-              <div className="pending-action__title">{action.title}</div>
-              <div className="pending-action__actions">
-                {actionDisplayOptions(action, i18n.t).map((option) => (
-                  <button
-                    key={`${action.id}:${option}`}
-                    type="button"
-                    className="pending-action__btn"
-                    onClick={() => onRespond(session.id, action.id, option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
+          {(session.pendingActions?.length ?? 0) > 1 ? (
+            <div className="pending-action-bulk">
+              <span className="pending-action-bulk__count">
+                {session.pendingActions?.length} {i18n.t("session.pending", { count: session.pendingActions?.length ?? 0 })}
+              </span>
+              <button
+                type="button"
+                className="pending-action-bulk__btn pending-action-bulk__btn--allow"
+                onClick={() => {
+                  for (const action of session.pendingActions ?? []) {
+                    const state = cardStates[action.id];
+                    if (!state || state === "pending" || state === "error") {
+                      handleRespond(session.id, action.id, actionDisplayOptions(action, i18n.t)[0]);
+                    }
+                  }
+                }}
+              >
+                {i18n.t("pendingAction.allowAll")}
+              </button>
+              <button
+                type="button"
+                className="pending-action-bulk__btn pending-action-bulk__btn--deny"
+                onClick={() => {
+                  for (const action of session.pendingActions ?? []) {
+                    const state = cardStates[action.id];
+                    if (!state || state === "pending" || state === "error") {
+                      const opts = actionDisplayOptions(action, i18n.t);
+                      handleRespond(session.id, action.id, opts[opts.length - 1]);
+                    }
+                  }
+                }}
+              >
+                {i18n.t("pendingAction.denyAll")}
+              </button>
             </div>
-          ))}
+          ) : null}
+          {(session.pendingActions ?? []).map((action) => {
+            const cardState = cardStates[action.id] ?? "pending";
+            const cardError = cardErrors[action.id];
+            const isSending = cardState === "sending";
+            const isSuccess = cardState === "success";
+            const isError = cardState === "error";
+
+            return (
+              <div
+                key={action.id}
+                className={`pending-action pending-action--${cardState}`}
+                aria-label={action.title}
+              >
+                {isSuccess ? (
+                  <div className="pending-action__success">
+                    ✓ {i18n.t("pendingAction.sent")}
+                  </div>
+                ) : isError ? (
+                  <>
+                    <div className="pending-action__error-msg">⚠ {cardError}</div>
+                    <div className="pending-action__actions">
+                      <button
+                        type="button"
+                        className="pending-action__btn pending-action__btn--retry"
+                        onClick={() => handleRespond(session.id, action.id, cardLastOptions[action.id] ?? actionDisplayOptions(action, i18n.t)[0])}
+                      >
+                        {i18n.t("pendingAction.retry")}
+                      </button>
+                      <button
+                        type="button"
+                        className="pending-action__btn pending-action__btn--abandon"
+                        onClick={() => {
+                          setCardStates((prev) => {
+                            const next = { ...prev };
+                            delete next[action.id];
+                            return next;
+                          });
+                        }}
+                      >
+                        {i18n.t("pendingAction.abandon")}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="pending-action__eyebrow">
+                      <span className="pending-action__kicker">
+                        {pendingEyebrow(action.type, i18n.t)}
+                      </span>
+                    </div>
+                    <div className="pending-action__title">{action.title}</div>
+                    <div className="pending-action__actions">
+                      {actionDisplayOptions(action, i18n.t).map((option) => (
+                        <button
+                          key={`${action.id}:${option}`}
+                          type="button"
+                          className="pending-action__btn"
+                          disabled={isSending}
+                          onClick={() => handleRespond(session.id, action.id, option)}
+                        >
+                          {isSending ? i18n.t("pendingAction.sending") : option}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : null}
       </div>
