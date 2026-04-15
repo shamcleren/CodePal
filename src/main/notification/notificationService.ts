@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import type { NotificationSettings } from "../../shared/appSettings";
 import type { SessionStatus } from "../../shared/sessionTypes";
 import type { BrowserWindow } from "electron";
+import type { PendingActionCreated } from "../session/sessionStore";
 
 const DEBOUNCE_MS = 30_000;
 
@@ -59,6 +60,7 @@ export interface NotificationService {
     task?: string;
     lastUserMessage?: string;
   }): void;
+  onPendingActionCreated(params: PendingActionCreated): void;
 }
 
 function buildNotificationBody(params: {
@@ -137,6 +139,53 @@ export function createNotificationService(deps: {
 
       if (settings.soundEnabled) {
         const soundPath = `/System/Library/Sounds/${transition.sound}.aiff`;
+        execFile("afplay", [soundPath], (err) => {
+          if (err) {
+            console.warn("[CodePal Notification] sound playback failed:", err.message);
+          }
+        });
+      }
+    },
+
+    onPendingActionCreated({ sessionId, tool, pendingCount, title, task }) {
+      const settings = deps.getNotificationSettings();
+      if (!settings.enabled) return;
+
+      // 仅在通知功能整体开启时触发（复用 waiting 设置键作为审批通知开关）
+      if (!settings.waiting) return;
+
+      const debounceKey = `${sessionId}:pending_action`;
+      const now = Date.now();
+      const last = lastNotified.get(debounceKey);
+      if (last !== undefined && now - last < DEBOUNCE_MS) return;
+      lastNotified.set(debounceKey, now);
+
+      const label = toolLabel(tool);
+      const body =
+        pendingCount === 1
+          ? "需要你的审批"
+          : `${pendingCount} 条操作需要你的审批`;
+      const titleText = `${label} · ${title ?? task ?? "未知会话"}`;
+
+      const notification = new Notification({
+        title: titleText,
+        body,
+        silent: true,
+      });
+
+      notification.on("click", () => {
+        const win = deps.getMainWindow();
+        if (win && !win.isDestroyed()) {
+          win.show();
+          win.focus();
+          win.webContents.send("codepal:focus-session", sessionId);
+        }
+      });
+
+      notification.show();
+
+      if (settings.soundEnabled) {
+        const soundPath = `/System/Library/Sounds/Ping.aiff`;
         execFile("afplay", [soundPath], (err) => {
           if (err) {
             console.warn("[CodePal Notification] sound playback failed:", err.message);

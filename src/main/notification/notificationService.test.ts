@@ -280,4 +280,69 @@ describe("notificationService", () => {
     });
     expect(mockExecFile).not.toHaveBeenCalled();
   });
+
+  describe("onPendingActionCreated", () => {
+    it("fires notification when pending action created and waiting enabled", () => {
+      service.onPendingActionCreated({
+        sessionId: "s1",
+        tool: "cursor",
+        pendingCount: 1,
+        title: "Fix bug",
+      });
+      expect(MockNotification).toHaveBeenCalledTimes(1);
+      expect(MockNotification.mock.calls[0][0]).toMatchObject({
+        title: expect.stringContaining("Cursor"),
+        body: "需要你的审批",
+      });
+      expect(mockShow).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows correct body for multiple pending actions", () => {
+      service.onPendingActionCreated({
+        sessionId: "s1",
+        tool: "cursor",
+        pendingCount: 3,
+        title: "Fix bug",
+      });
+      expect(MockNotification.mock.calls[0][0]).toMatchObject({
+        body: "3 条操作需要你的审批",
+      });
+    });
+
+    it("does not fire when notifications disabled", () => {
+      getSettings.mockReturnValue(makeSettings({ enabled: false }));
+      service.onPendingActionCreated({
+        sessionId: "s1",
+        tool: "cursor",
+        pendingCount: 1,
+      });
+      expect(MockNotification).not.toHaveBeenCalled();
+    });
+
+    it("does not fire when waiting setting is false", () => {
+      getSettings.mockReturnValue(makeSettings({ waiting: false }));
+      service.onPendingActionCreated({
+        sessionId: "s1",
+        tool: "cursor",
+        pendingCount: 1,
+      });
+      expect(MockNotification).not.toHaveBeenCalled();
+    });
+
+    it("debounces: second call within DEBOUNCE_MS for same session does not fire", () => {
+      service.onPendingActionCreated({ sessionId: "s1", tool: "cursor", pendingCount: 1 });
+      service.onPendingActionCreated({ sessionId: "s1", tool: "cursor", pendingCount: 2 });
+      expect(MockNotification).toHaveBeenCalledTimes(1);
+    });
+
+    it("clicking notification sends focus-session IPC to main window", () => {
+      const mockWin = { show: vi.fn(), focus: vi.fn(), isDestroyed: vi.fn(() => false), webContents: { send: vi.fn() } };
+      getMainWindow.mockReturnValue(mockWin);
+      service.onPendingActionCreated({ sessionId: "s42", tool: "cursor", pendingCount: 1 });
+      // Simulate click
+      const clickCb = mockOn.mock.calls.find((c: [string, unknown]) => c[0] === "click")?.[1] as (() => void) | undefined;
+      clickCb?.();
+      expect(mockWin.webContents.send).toHaveBeenCalledWith("codepal:focus-session", "s42");
+    });
+  });
 });
