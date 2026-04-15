@@ -5,6 +5,7 @@ import {
   buildPrimaryRenderEntries,
   calculateVirtualWindow,
   buildPrimaryDisplayItems,
+  summarizeToolGroup,
 } from "./HoverDetails";
 import { toRenderableMessageBody } from "../messageBody";
 
@@ -128,6 +129,48 @@ describe("buildPrimaryDisplayItems", () => {
 
     const grouped = buildPrimaryDisplayItems(items, "completed", "typing");
     expect(grouped.map((entry) => entry.kind)).toEqual(["tool-group", "item", "tool-group"]);
+  });
+});
+
+describe("summarizeToolGroup", () => {
+  it("builds a compact summary for collapsed tool groups", () => {
+    const summary = summarizeToolGroup([
+      {
+        id: "tool-call",
+        kind: "tool",
+        source: "tool",
+        label: "terminal",
+        title: "terminal",
+        body: "npm run build",
+        timestamp: 1,
+        toolName: "exec_command",
+        toolPhase: "call",
+      },
+      {
+        id: "tool-result",
+        kind: "tool",
+        source: "tool",
+        label: "terminal",
+        title: "terminal",
+        body: "build completed",
+        timestamp: 2,
+        toolName: "write_stdin",
+        toolPhase: "result",
+      },
+    ]);
+
+    expect(summary).toMatchObject({
+      count: 2,
+      uniqueToolCount: 2,
+      latestToolLabel: "write_stdin",
+      phaseCounts: {
+        call: 1,
+        result: 1,
+      },
+    });
+    expect(summary.summary).toContain("2 calls");
+    expect(summary.summary).toContain("2 tools");
+    expect(summary.summary).toContain("latest write_stdin");
   });
 });
 

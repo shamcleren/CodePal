@@ -45,6 +45,33 @@ describe("normalizeClaudeLogEvent", () => {
     });
   });
 
+  it("keeps SubagentStop on the parent Claude session id instead of creating a new session", () => {
+    const event = normalizeClaudeLogEvent(
+      JSON.stringify({
+        type: "progress",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        cwd: "/Users/demo/codepal",
+        timestamp: "2026-04-03T13:08:27.952Z",
+        data: {
+          type: "hook_progress",
+          hookEvent: "SubagentStop",
+          hookName: "SubagentStop",
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+      tool: "claude",
+      status: "completed",
+      task: "Claude request finished",
+      meta: {
+        hook_event: "SubagentStop",
+      },
+    });
+  });
+
   it("maps user messages into running session activity", () => {
     const event = normalizeClaudeLogEvent(
       JSON.stringify({

@@ -63,15 +63,36 @@ function firstNestedText(
   return undefined;
 }
 
-function pickCursorSessionId(payload: Record<string, unknown>): string | null {
-  for (const key of ["session_id", "sessionId", "conversation_id", "conversationId", "generation_id", "generationId"]) {
+function pickCursorSessionIdentity(
+  payload: Record<string, unknown>,
+): { id: string; source: "session" | "conversation" | "generation" } | null {
+  for (const key of ["session_id", "sessionId"] as const) {
     const raw = payload[key];
     if (raw === undefined || raw === null) continue;
     const s = String(raw).trim();
     if (s.length > 0) {
-      return s;
+      return { id: s, source: "session" };
     }
   }
+
+  for (const key of ["conversation_id", "conversationId"] as const) {
+    const raw = payload[key];
+    if (raw === undefined || raw === null) continue;
+    const s = String(raw).trim();
+    if (s.length > 0) {
+      return { id: s, source: "conversation" };
+    }
+  }
+
+  for (const key of ["generation_id", "generationId"] as const) {
+    const raw = payload[key];
+    if (raw === undefined || raw === null) continue;
+    const s = String(raw).trim();
+    if (s.length > 0) {
+      return { id: s, source: "generation" };
+    }
+  }
+
   return null;
 }
 
@@ -166,6 +187,7 @@ function normalizePendingAction(
 
 function pickMeta(
   payload: Record<string, unknown>,
+  identitySource: "session" | "conversation" | "generation" | undefined,
   unsupported?: UnsupportedActionMeta,
 ): Record<string, unknown> | undefined {
   const metaEntries: [string, string][] = [];
@@ -187,6 +209,10 @@ function pickMeta(
 
   const source = firstString(payload, ["source"]);
   if (source && source !== "cursor") metaEntries.push(["source", source]);
+
+  if (identitySource) {
+    metaEntries.push(["cursor_session_id_source", identitySource]);
+  }
 
   if (unsupported) {
     metaEntries.push(["unsupported_action_type", unsupported.type]);
@@ -454,8 +480,8 @@ function buildCursorActivityItems(
 export function normalizeCursorEvent(
   payload: Record<string, unknown>,
 ): StatusChangeUpstreamEvent | null {
-  const sessionId = pickCursorSessionId(payload);
-  if (!sessionId) return null;
+  const identity = pickCursorSessionIdentity(payload);
+  if (!identity) return null;
 
   const hookEventName = firstString(payload, ["hook_event_name"]);
   if (hookEventName === "afterAgentThought") {
@@ -475,12 +501,12 @@ export function normalizeCursorEvent(
 
   return {
     type: "status_change",
-    sessionId,
+    sessionId: identity.id,
     tool: "cursor",
     status,
     task,
     timestamp: pickTimestamp(payload),
-    meta: pickMeta(payload, unsupported),
+    meta: pickMeta(payload, identity.source, unsupported),
     ...(activityItems ? { activityItems } : {}),
     ...(pendingAction !== undefined ? { pendingAction } : {}),
     ...(responseTarget !== undefined ? { responseTarget } : {}),

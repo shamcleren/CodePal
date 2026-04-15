@@ -263,6 +263,9 @@ it("falls back to generation_id when neither session_id nor conversation_id is p
     tool: "cursor",
     status: "running",
     task: "done",
+    meta: {
+      cursor_session_id_source: "generation",
+    },
   });
 });
 

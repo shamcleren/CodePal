@@ -282,7 +282,7 @@ describe("createCodeBuddySessionWatcher", () => {
     });
   });
 
-  it("reads CodeBuddy IDE history transcripts and emits assistant content from message files", async () => {
+  it("reads CodeBuddy IDE history transcripts and emits user and assistant content from message files", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-codebuddy-ide-history-"));
     const historyRoot = path.join(tmpDir, "CodeBuddyExtension", "Data");
     const conversationDir = path.join(
@@ -381,9 +381,25 @@ describe("createCodeBuddySessionWatcher", () => {
 
     await watcher.pollOnce();
 
-    expect(onEvent).toHaveBeenCalledTimes(2);
+    expect(onEvent).toHaveBeenCalledTimes(3);
     expect(onEvent).toHaveBeenNthCalledWith(
       1,
+      expect.objectContaining({
+        sessionId: "030c49b34692413a8cd7b1c9817b0d57",
+        tool: "codebuddy",
+        status: "running",
+        task: "欢迎使用 CodePal",
+        activityItems: [
+          expect.objectContaining({
+            kind: "message",
+            source: "user",
+            body: "欢迎使用 CodePal",
+          }),
+        ],
+      }),
+    );
+    expect(onEvent).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         sessionId: "030c49b34692413a8cd7b1c9817b0d57",
         tool: "codebuddy",
@@ -399,7 +415,7 @@ describe("createCodeBuddySessionWatcher", () => {
       }),
     );
     expect(onEvent).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.objectContaining({
         sessionId: "030c49b34692413a8cd7b1c9817b0d57",
         tool: "codebuddy",

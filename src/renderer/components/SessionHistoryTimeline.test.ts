@@ -5,6 +5,8 @@ import {
   buildSessionSummaryText,
   mergeHistoryStatusState,
   mergeSessionTimelineItems,
+  shouldConsumeBufferedHistoryPage,
+  shouldPrefetchHistoryPage,
   shouldLoadNextHistoryPageFromWheel,
   shouldStartInitialHistoryLoad,
   shouldLoadNextHistoryPage,
@@ -266,6 +268,73 @@ describe("shouldLoadNextHistoryPageFromWheel", () => {
         scrollTop: 120,
         hasMore: true,
         loading: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("shouldPrefetchHistoryPage", () => {
+  it("starts background prefetch before the user fully reaches the top", () => {
+    expect(
+      shouldPrefetchHistoryPage({
+        scrollTop: 180,
+        hasMore: true,
+        loading: false,
+        hasBufferedPage: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldPrefetchHistoryPage({
+        scrollTop: 260,
+        hasMore: true,
+        loading: false,
+        hasBufferedPage: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not prefetch when loading is already in flight or a buffered page is ready", () => {
+    expect(
+      shouldPrefetchHistoryPage({
+        scrollTop: 120,
+        hasMore: true,
+        loading: true,
+        hasBufferedPage: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldPrefetchHistoryPage({
+        scrollTop: 120,
+        hasMore: true,
+        loading: false,
+        hasBufferedPage: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("shouldConsumeBufferedHistoryPage", () => {
+  it("consumes a prepared page only once the viewport actually reaches the top edge", () => {
+    expect(
+      shouldConsumeBufferedHistoryPage({
+        scrollTop: 8,
+        hasBufferedPage: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldConsumeBufferedHistoryPage({
+        scrollTop: 42,
+        hasBufferedPage: true,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldConsumeBufferedHistoryPage({
+        scrollTop: 8,
+        hasBufferedPage: false,
       }),
     ).toBe(false);
   });

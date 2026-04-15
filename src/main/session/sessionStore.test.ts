@@ -259,6 +259,198 @@ describe("createSessionStore", () => {
     ]);
   });
 
+  it("hides CodeBuddy completed shells that have no meaningful activity", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "cb-empty-complete",
+      tool: "codebuddy",
+      status: "completed",
+      timestamp: 100,
+    });
+
+    expect(store.getSessions()).toEqual([]);
+  });
+
+  it("keeps CodeBuddy history sessions visible once the restored user prompt exists", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "cb-history-real",
+      tool: "codebuddy",
+      status: "running",
+      task: "欢迎使用 CodePal",
+      timestamp: 100,
+      activityItems: [
+        {
+          id: "cb-history-real:user",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "欢迎使用 CodePal",
+          timestamp: 100,
+        },
+      ],
+    });
+
+    store.applyEvent({
+      sessionId: "cb-history-real",
+      tool: "codebuddy",
+      status: "completed",
+      task: "谢谢！我是CodePal，很高兴为您服务。请问有什么可以帮您的？",
+      timestamp: 101,
+      activityItems: [
+        {
+          id: "cb-history-real:assistant",
+          kind: "message",
+          source: "assistant",
+          title: "Assistant",
+          body: "谢谢！我是CodePal，很高兴为您服务。请问有什么可以帮您的？",
+          timestamp: 101,
+        },
+      ],
+    });
+
+    expect(store.getSessions()).toMatchObject([
+      {
+        id: "cb-history-real",
+        lastUserMessageAt: 100,
+        task: "谢谢！我是CodePal，很高兴为您服务。请问有什么可以帮您的？",
+      },
+    ]);
+  });
+
+  it("merges cursor generation-only events into an existing stable session from the same cwd", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "cursor-conv-1",
+      tool: "cursor",
+      status: "running",
+      task: "ship it",
+      timestamp: 100,
+      meta: {
+        cwd: "/tmp/demo",
+        cursor_session_id_source: "conversation",
+      },
+      activityItems: [
+        {
+          id: "cursor-conv-1:user",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "ship it",
+          timestamp: 100,
+        },
+      ],
+    });
+
+    store.applyEvent({
+      sessionId: "cursor-gen-1",
+      tool: "cursor",
+      status: "running",
+      task: "done",
+      timestamp: 101,
+      meta: {
+        cwd: "/tmp/demo",
+        cursor_session_id_source: "generation",
+      },
+      activityItems: [
+        {
+          id: "cursor-gen-1:assistant",
+          kind: "message",
+          source: "assistant",
+          title: "Assistant",
+          body: "done",
+          timestamp: 101,
+        },
+      ],
+    });
+
+    expect(store.getSessions()).toMatchObject([
+      {
+        id: "cursor-conv-1",
+        task: "done",
+        lastUserMessageAt: 100,
+        activityItems: [
+          expect.objectContaining({
+            source: "assistant",
+            body: "done",
+          }),
+          expect.objectContaining({
+            source: "user",
+            body: "ship it",
+          }),
+        ],
+      },
+    ]);
+  });
+
+  it("promotes a later stable cursor session id and absorbs the earlier generation-only shell", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "cursor-gen-1",
+      tool: "cursor",
+      status: "running",
+      task: "done",
+      timestamp: 100,
+      meta: {
+        cwd: "/tmp/demo",
+        cursor_session_id_source: "generation",
+      },
+      activityItems: [
+        {
+          id: "cursor-gen-1:assistant",
+          kind: "message",
+          source: "assistant",
+          title: "Assistant",
+          body: "done",
+          timestamp: 100,
+        },
+      ],
+    });
+
+    store.applyEvent({
+      sessionId: "cursor-conv-1",
+      tool: "cursor",
+      status: "running",
+      task: "ship it",
+      timestamp: 101,
+      meta: {
+        cwd: "/tmp/demo",
+        cursor_session_id_source: "conversation",
+      },
+      activityItems: [
+        {
+          id: "cursor-conv-1:user",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "ship it",
+          timestamp: 101,
+        },
+      ],
+    });
+
+    expect(store.getSessions()).toMatchObject([
+      {
+        id: "cursor-conv-1",
+        lastUserMessageAt: 101,
+        activityItems: [
+          expect.objectContaining({
+            source: "user",
+            body: "ship it",
+          }),
+          expect.objectContaining({
+            source: "assistant",
+            body: "done",
+          }),
+        ],
+      },
+    ]);
+  });
+
   it("preserves lastUserMessageAt across non-user follow-up events", () => {
     const store = createSessionStore();
 

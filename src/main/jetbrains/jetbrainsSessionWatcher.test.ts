@@ -239,6 +239,70 @@ describe("createJetBrainsSessionWatcher", () => {
     });
   });
 
+  it("keeps fetchChatCompletion conversation lifecycle and content on the same conversation session", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-jetbrains-"));
+    const chatAgentFile = createLogFile([
+      '{"jsonrpc":"2.0","method":"gongfeng/chat-agent-register","params":{"workspace":["file:///Users/demo/codepal"],"session_id":"conv-jetbrains-1","editor_name":"JetBrainsGoLand"},"id":"1"}',
+      '{"id":"1","result":{"code":0,"msg":"success","uuid":"jb-uuid-1","workspace_uri":"file:///Users/demo/codepal"},"jsonrpc":"2.0"}',
+      "",
+    ]);
+    const ideaLogFile = createIdeaLogFile("GoLand2025.1", []);
+
+    const onEvent = vi.fn();
+    const watcher = createJetBrainsSessionWatcher({
+      logRoot: path.join(tmpDir, ".gongfeng-copilot"),
+      onEvent,
+      initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
+    });
+
+    fs.mkdirSync(path.join(tmpDir, ".gongfeng-copilot", "gongfeng-chat-agent", "log"), {
+      recursive: true,
+    });
+    fs.copyFileSync(
+      chatAgentFile,
+      path.join(tmpDir, ".gongfeng-copilot", "gongfeng-chat-agent", "log", "chat-agent.log"),
+    );
+
+    await watcher.pollOnce();
+    fs.appendFileSync(
+      ideaLogFile,
+      '2026-04-14 20:00:00.000 INFO fetchChatCompletion-onSuccess: {"type":"RUN_STARTED","threadId":"conv-jetbrains-1","timestamp":1760000000000,"rawEvent":{"conversation_id":"conv-jetbrains-1","uuid":"jb-uuid-1","workspace_uri":"file:///Users/demo/codepal"}}{"type":"TEXT_MESSAGE_CONTENT","threadId":"conv-jetbrains-1","timestamp":1760000001000,"delta":"Hello from JetBrains","rawEvent":{"conversation_id":"conv-jetbrains-1","content":"Hello from JetBrains"}}{"type":"RUN_FINISHED","threadId":"conv-jetbrains-1","timestamp":1760000002000,"rawEvent":{"conversation_id":"conv-jetbrains-1"}}\n',
+    );
+
+    await watcher.pollOnce();
+
+    expect(onEvent).toHaveBeenCalledTimes(3);
+    const emitted = onEvent.mock.calls.map((call) => call[0]);
+    expect(
+      emitted.some(
+        (event) =>
+          event.sessionId === "conv-jetbrains-1" &&
+          event.tool === "goland" &&
+          event.status === "running" &&
+          event.activityItems?.[0]?.title === "Request started",
+      ),
+    ).toBe(true);
+    expect(
+      emitted.some(
+        (event) =>
+          event.sessionId === "conv-jetbrains-1" &&
+          event.tool === "goland" &&
+          event.status === "running" &&
+          event.activityItems?.[0]?.kind === "message" &&
+          event.activityItems?.[0]?.source === "assistant" &&
+          event.activityItems?.[0]?.body === "Hello from JetBrains",
+      ),
+    ).toBe(true);
+    expect(
+      emitted.some(
+        (event) =>
+          event.sessionId === "conv-jetbrains-1" &&
+          event.tool === "goland" &&
+          event.status === "completed",
+      ),
+    ).toBe(true);
+  });
+
   it("maps JetBrainsPyCharm to pycharm and keeps unknown JetBrains names generic", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-jetbrains-"));
     const filePath = createLogFile([

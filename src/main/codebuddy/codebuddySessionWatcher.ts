@@ -469,32 +469,53 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
 
       if (message.role === "user") {
         latestUserTask = message.body;
-        continue;
-      }
-
-      options.onEvent({
-        type: "update",
-        sessionId,
-        tool: "codebuddy",
-        status: "running",
-        task: latestUserTask,
-        timestamp: message.timestamp,
-        meta: {
-          event_source: "codebuddy_ide_history",
-          source_path: messagePath,
-        },
-        activityItems: [
-          {
-            id: `codebuddy-history:${sessionId}:${messageId}`,
-            kind: "message",
-            source: "assistant",
-            title: "Assistant",
-            body: message.body,
-            timestamp: message.timestamp,
-            tone: "completed",
+        options.onEvent({
+          type: "update",
+          sessionId,
+          tool: "codebuddy",
+          status: "running",
+          task: message.body,
+          timestamp: message.timestamp,
+          meta: {
+            event_source: "codebuddy_ide_history",
+            source_path: messagePath,
           },
-        ],
-      });
+          activityItems: [
+            {
+              id: `codebuddy-history:${sessionId}:${messageId}`,
+              kind: "message",
+              source: "user",
+              title: "User",
+              body: message.body,
+              timestamp: message.timestamp,
+            },
+          ],
+        });
+      } else {
+        options.onEvent({
+          type: "update",
+          sessionId,
+          tool: "codebuddy",
+          status: "running",
+          task: latestUserTask,
+          timestamp: message.timestamp,
+          meta: {
+            event_source: "codebuddy_ide_history",
+            source_path: messagePath,
+          },
+          activityItems: [
+            {
+              id: `codebuddy-history:${sessionId}:${messageId}`,
+              kind: "message",
+              source: "assistant",
+              title: "Assistant",
+              body: message.body,
+              timestamp: message.timestamp,
+              tone: "completed",
+            },
+          ],
+        });
+      }
     }
 
     const requestEntries = Array.isArray(parsed.requests)

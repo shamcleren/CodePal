@@ -1,6 +1,7 @@
 import {
   isValidElement,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type RefObject,
@@ -398,6 +399,44 @@ export function buildPrimaryDisplayItems(
   return displayItems;
 }
 
+export function summarizeToolGroup(items: TimelineItem[]): {
+  count: number;
+  uniqueToolCount: number;
+  latestToolLabel: string;
+  phaseCounts: { call: number; result: number };
+  summary: string;
+} {
+  const toolLabels = items
+    .map((item) => item.toolName?.trim() || item.label.trim() || item.title.trim())
+    .filter((label) => label.length > 0);
+  const uniqueToolCount = new Set(toolLabels).size;
+  const latestToolLabel = toolLabels[items.length - 1] ?? "Tool";
+  const phaseCounts = items.reduce(
+    (counts, item) => {
+      if (item.toolPhase === "call") {
+        counts.call += 1;
+      } else {
+        counts.result += 1;
+      }
+      return counts;
+    },
+    { call: 0, result: 0 },
+  );
+
+  const summaryParts = [`${items.length} calls`, `${uniqueToolCount} tools`, `latest ${latestToolLabel}`];
+  if (phaseCounts.call > 0 && phaseCounts.result > 0) {
+    summaryParts.push(`${phaseCounts.call} call / ${phaseCounts.result} result`);
+  }
+
+  return {
+    count: items.length,
+    uniqueToolCount,
+    latestToolLabel,
+    phaseCounts,
+    summary: summaryParts.join(" · "),
+  };
+}
+
 function estimatePrimaryEntryHeight(entry: PrimaryRenderEntry): number {
   if (entry.isTypingItem) {
     return 76;
@@ -471,6 +510,8 @@ function PrimaryStreamItem({
         className={`session-stream__item session-stream__item--message session-stream__item--message-${messageRole(item.label)} ${
           isTypingItem ? "session-stream__item--typing" : ""
         }`}
+        data-timeline-anchor="true"
+        data-timeline-id={renderKey}
       >
         <div className="session-stream__header">
           <span className="session-stream__label">{item.label}</span>
@@ -503,6 +544,8 @@ function PrimaryStreamItem({
       className={`session-stream__item session-stream__item--artifact ${artifactPhaseClass} ${
         activeArtifact ? "session-stream__item--artifact-active" : ""
       }`}
+      data-timeline-anchor="true"
+      data-timeline-id={renderKey}
     >
       <div className="session-stream__artifact-accent" aria-hidden="true" />
       <div className="session-stream__artifact-copy">
@@ -548,43 +591,73 @@ function PrimaryStreamItem({
 }
 
 function ToolGroupItem({
+  renderKey,
   items,
   activeArtifact,
+  expanded,
+  onToggle,
 }: {
+  renderKey: string;
   items: TimelineItem[];
   activeArtifact: boolean;
+  expanded: boolean;
+  onToggle: (renderKey: string) => void;
 }) {
   const i18n = useI18n();
+  const summary = summarizeToolGroup(items);
 
   return (
     <div
       className={`session-stream__item session-stream__item--artifact session-stream__item--artifact-group ${
         activeArtifact ? "session-stream__item--artifact-active" : ""
-      }`}
+      } ${expanded ? "session-stream__item--artifact-group-expanded" : "session-stream__item--artifact-group-collapsed"}`}
+      data-timeline-anchor="true"
+      data-timeline-id={renderKey}
     >
       <div className="session-stream__artifact-accent" aria-hidden="true" />
       <div className="session-stream__artifact-copy">
         <div className="session-stream__header">
           <span className="session-stream__artifact-kicker">{i18n.t("session.execution")}</span>
           <span className="session-stream__label">Tools</span>
-          <span className="session-stream__artifact-type">{items.length}</span>
+          <span className="session-stream__artifact-type">{summary.count}</span>
+          <span className="session-stream__artifact-name">{summary.latestToolLabel}</span>
+          <button
+            type="button"
+            className="session-stream__artifact-toggle"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onToggle(renderKey);
+            }}
+          >
+            {expanded ? i18n.t("session.collapse") : i18n.t("session.expand")}
+          </button>
         </div>
         <div className="session-stream__body">
-          <div className="session-stream__artifact-group-list">
-            {items.map((item) => {
-              const toolLabel = item.toolName?.trim() || item.label.trim() || item.title.trim();
-              const phaseLabel = item.toolPhase === "call" ? "call" : "result";
-              return (
-                <div key={item.id} className="session-stream__artifact-group-row" title={item.body}>
-                  <span className="session-stream__artifact-group-tool">{toolLabel}</span>
-                  <span className="session-stream__artifact-group-phase">{phaseLabel}</span>
-                  <span className="session-stream__artifact-group-body">
-                    {toolBodySummary(item.body)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          {!expanded ? (
+            <div className="session-stream__artifact-group-summary" title={summary.summary}>
+              <span className="session-stream__artifact-group-summary-text">{summary.summary}</span>
+              <span className="session-stream__artifact-group-summary-breakdown">
+                {summary.phaseCounts.call} call · {summary.phaseCounts.result} result
+              </span>
+            </div>
+          ) : (
+            <div className="session-stream__artifact-group-list">
+              {items.map((item) => {
+                const toolLabel = item.toolName?.trim() || item.label.trim() || item.title.trim();
+                const phaseLabel = item.toolPhase === "call" ? "call" : "result";
+                return (
+                  <div key={item.id} className="session-stream__artifact-group-row" title={item.body}>
+                    <span className="session-stream__artifact-group-tool">{toolLabel}</span>
+                    <span className="session-stream__artifact-group-phase">{phaseLabel}</span>
+                    <span className="session-stream__artifact-group-body">
+                      {toolBodySummary(item.body)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -593,12 +666,20 @@ function ToolGroupItem({
 
 export function HoverDetails({ items, sessionStatus, scrollContainerRef }: HoverDetailsProps) {
   const i18n = useI18n();
-  const chronologicalItems = [...items].reverse();
-  const primaryItems = chronologicalItems.filter((item) => item.kind === "message" || item.kind === "tool");
-  const notes = chronologicalItems
-    .filter((item) => item.kind === "note" || item.kind === "system")
-    .filter((item) => !(primaryItems.length > 0 && isLowSignalSystemEvent(item)));
+  const chronologicalItems = useMemo(() => [...items].reverse(), [items]);
+  const primaryItems = useMemo(
+    () => chronologicalItems.filter((item) => item.kind === "message" || item.kind === "tool"),
+    [chronologicalItems],
+  );
+  const notes = useMemo(
+    () =>
+      chronologicalItems
+        .filter((item) => item.kind === "note" || item.kind === "system")
+        .filter((item) => !(primaryItems.length > 0 && isLowSignalSystemEvent(item))),
+    [chronologicalItems, primaryItems.length],
+  );
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
+  const [expandedToolGroups, setExpandedToolGroups] = useState<Record<string, boolean>>({});
   const primarySectionRef = useRef<HTMLDivElement | null>(null);
   const itemNodesRef = useRef(new Map<string, HTMLElement>());
   const measuredHeightsRef = useRef<Record<string, number>>({});
@@ -610,13 +691,26 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
     sectionOffsetTop: 0,
   });
 
-  const primaryDisplayItems = buildPrimaryDisplayItems(primaryItems, sessionStatus, i18n.t("session.typing"));
-  const primaryEntries = buildPrimaryRenderEntries(primaryItems, sessionStatus, i18n.t("session.typing"));
+  const primaryDisplayItems = useMemo(
+    () => buildPrimaryDisplayItems(primaryItems, sessionStatus, i18n.t("session.typing")),
+    [primaryItems, sessionStatus],
+  );
+  const primaryEntries = useMemo(
+    () => buildPrimaryRenderEntries(primaryItems, sessionStatus, i18n.t("session.typing")),
+    [primaryItems, sessionStatus],
+  );
   const shouldVirtualize =
     primaryDisplayItems.length >= PRIMARY_VIRTUALIZATION_THRESHOLD && Boolean(scrollContainerRef?.current);
 
   function toggleTool(renderKey: string) {
     setExpandedTools((current) => ({
+      ...current,
+      [renderKey]: !current[renderKey],
+    }));
+  }
+
+  function toggleToolGroup(renderKey: string) {
+    setExpandedToolGroups((current) => ({
       ...current,
       [renderKey]: !current[renderKey],
     }));
@@ -727,8 +821,11 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
           entry.kind === "tool-group" ? (
             <ToolGroupItem
               key={entry.renderKey}
+              renderKey={entry.renderKey}
               items={entry.items}
               activeArtifact={entry.activeArtifact}
+              expanded={expandedToolGroups[entry.renderKey] ?? false}
+              onToggle={toggleToolGroup}
             />
           ) : (
             <PrimaryStreamItem
@@ -791,11 +888,16 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
                 ref={registerPrimaryItemNode(renderKey)}
                 className="session-stream__virtual-item"
                 style={{ top: `${offsets[absoluteIndex]}px` }}
+                data-timeline-anchor="true"
+                data-timeline-id={renderKey}
               >
                 {entry.kind === "tool-group" ? (
                   <ToolGroupItem
+                    renderKey={entry.renderKey}
                     items={entry.items}
                     activeArtifact={entry.activeArtifact}
+                    expanded={expandedToolGroups[entry.renderKey] ?? false}
+                    onToggle={toggleToolGroup}
                   />
                 ) : (
                   <PrimaryStreamItem
@@ -825,7 +927,12 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
           {notes.length > 0 ? (
             <div className="session-stream__section session-stream__section--notes">
               {notes.map((item) => (
-                <div key={item.id} className="session-stream__item session-stream__item--note">
+                <div
+                  key={item.id}
+                  className="session-stream__item session-stream__item--note"
+                  data-timeline-anchor="true"
+                  data-timeline-id={item.id}
+                >
                   <div className={`session-stream__note session-stream__note--${item.tone ?? "system"}`}>
                     <span className="session-stream__note-dot" aria-hidden="true" />
                     <span className="session-stream__note-body">{item.body}</span>

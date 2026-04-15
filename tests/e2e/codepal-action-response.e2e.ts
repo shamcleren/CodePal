@@ -405,6 +405,12 @@ test("tool artifact interactions: renders compact grouped tool activity", async 
     await expect(summary).toBeVisible({ timeout: 15_000 });
     await summary.click();
 
+    const artifactSummary = page.locator(".session-stream__artifact-group-summary").first();
+    await expect(artifactSummary).toBeVisible();
+
+    const expandButton = page.locator(".session-stream__artifact-toggle").first();
+    await expandButton.click();
+
     const artifactGroup = page.locator(".session-stream__artifact-group-row").first();
     await expect(artifactGroup).toBeVisible();
     await expect(artifactGroup).toContainText("Tool");

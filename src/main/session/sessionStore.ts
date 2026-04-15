@@ -18,6 +18,7 @@ export const COMPLETED_SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const ERROR_SESSION_RETENTION_MS = 48 * 60 * 60 * 1000;
 export const MAX_HISTORY_SESSION_COUNT = 150;
 const MAX_ACTIVITY_ITEMS = 6;
+const CURSOR_SESSION_MERGE_WINDOW_MS = 30 * 60 * 1000;
 
 export type SessionEvent = {
   type?: string;
@@ -52,6 +53,7 @@ type InternalSessionRecord = {
   status: SessionStatus;
   title?: string;
   task?: string;
+  meta?: Record<string, unknown>;
   updatedAt: number;
   lastUserMessageAt?: number;
   activityItems: ActivityItem[];
@@ -452,6 +454,28 @@ function isJetBrainsTool(tool: string): boolean {
   return tool === "jetbrains" || tool === "goland" || tool === "pycharm";
 }
 
+function isLowSignalSystemItem(item: ActivityItem): boolean {
+  const body = item.body.trim();
+  if (!body) {
+    return true;
+  }
+  return (
+    body === "Completed" ||
+    body === "Running" ||
+    body === "Waiting" ||
+    body === "Done" ||
+    body === "Idle" ||
+    body === "Offline" ||
+    body === "Error" ||
+    body === "Working" ||
+    body === "CodeBuddy request started" ||
+    body === "CodeBuddy request finished" ||
+    body === "Claude session started" ||
+    body === "Claude request finished" ||
+    body === "Claude session ended"
+  );
+}
+
 function isMeaningfulAssistantBody(body: string): boolean {
   const trimmed = body.trim();
   if (!trimmed) {
@@ -460,8 +484,27 @@ function isMeaningfulAssistantBody(body: string): boolean {
   return trimmed !== "正在整理回复" && trimmed !== "正在整理回复...";
 }
 
+function hasOnlyLifecycleOrPlaceholderContent(session: InternalSessionRecord): boolean {
+  if (session.activityItems.length === 0) {
+    return true;
+  }
+
+  return session.activityItems.every((item) => {
+    if (item.kind === "system" || item.kind === "note") {
+      return item.source === "system" && isLowSignalSystemItem(item);
+    }
+    return (
+      item.kind === "message" &&
+      item.source === "assistant" &&
+      !isMeaningfulAssistantBody(item.body)
+    );
+  });
+}
+
 function shouldHideNoiseSession(session: InternalSessionRecord): boolean {
-  if (!isJetBrainsTool(session.tool)) {
+  const isJetBrains = isJetBrainsTool(session.tool);
+  const isCodeBuddy = session.tool === "codebuddy";
+  if (!isJetBrains && !isCodeBuddy) {
     return false;
   }
 
@@ -477,13 +520,20 @@ function shouldHideNoiseSession(session: InternalSessionRecord): boolean {
   const hasToolResult = session.activityItems.some(
     (item) => item.kind === "tool" && item.toolPhase === "result",
   );
-  const hasLifecycleOnly = session.activityItems.every(
-    (item) =>
-      item.kind === "system" ||
-      (item.kind === "message" && item.source === "assistant" && !isMeaningfulAssistantBody(item.body)),
-  );
+  const hasLifecycleOnly = hasOnlyLifecycleOrPlaceholderContent(session);
 
-  return !hasUserMessage && !hasAssistantContent && !hasToolResult && hasLifecycleOnly;
+  if (isJetBrains) {
+    return !hasUserMessage && !hasAssistantContent && !hasToolResult && hasLifecycleOnly;
+  }
+
+  return (
+    session.pendingById.size === 0 &&
+    statusPriority(session.status) >= statusPriority("idle") &&
+    !hasUserMessage &&
+    !hasAssistantContent &&
+    !hasToolResult &&
+    hasLifecycleOnly
+  );
 }
 
 function latestUserMessageBody(session: InternalSessionRecord): string | undefined {
@@ -505,6 +555,14 @@ function hasMeaningfulAssistantContent(session: InternalSessionRecord): boolean 
 
 function hasToolResult(session: InternalSessionRecord): boolean {
   return session.activityItems.some((item) => item.kind === "tool" && item.toolPhase === "result");
+}
+
+function isCursorGenerationSession(session: InternalSessionRecord): boolean {
+  return firstMetaString(session.meta, "cursor_session_id_source") === "generation";
+}
+
+function cursorSessionCwd(session: InternalSessionRecord): string | undefined {
+  return firstMetaString(session.meta, "cwd");
 }
 
 function shouldHideCodeBuddyDuplicateShell(
@@ -535,6 +593,69 @@ function shouldHideCodeBuddyDuplicateShell(
     }
     return other.updatedAt >= session.updatedAt;
   });
+}
+
+type ResolvedSessionTarget = {
+  sessionId: string;
+  seed?: InternalSessionRecord;
+  absorbedSessionId?: string;
+};
+
+function resolveSessionTarget(
+  sessions: Map<string, InternalSessionRecord>,
+  event: SessionEvent,
+): ResolvedSessionTarget {
+  if (event.tool !== "cursor") {
+    return { sessionId: event.sessionId };
+  }
+
+  const cwd = firstMetaString(event.meta, "cwd");
+  const identitySource = firstMetaString(event.meta, "cursor_session_id_source");
+  if (!cwd) {
+    return { sessionId: event.sessionId };
+  }
+
+  const stableCandidates = [...sessions.values()]
+    .filter(
+      (session) =>
+        session.tool === "cursor" &&
+        session.id !== event.sessionId &&
+        cursorSessionCwd(session) === cwd &&
+        !isCursorGenerationSession(session) &&
+        Math.abs(session.updatedAt - event.timestamp) <= CURSOR_SESSION_MERGE_WINDOW_MS,
+    )
+    .sort((left, right) => right.updatedAt - left.updatedAt);
+  const generationCandidates = [...sessions.values()]
+    .filter(
+      (session) =>
+        session.tool === "cursor" &&
+        session.id !== event.sessionId &&
+        cursorSessionCwd(session) === cwd &&
+        isCursorGenerationSession(session) &&
+        Math.abs(session.updatedAt - event.timestamp) <= CURSOR_SESSION_MERGE_WINDOW_MS,
+    )
+    .sort((left, right) => right.updatedAt - left.updatedAt);
+
+  if (identitySource === "generation") {
+    const stableCandidate = stableCandidates[0];
+    if (stableCandidate) {
+      return { sessionId: stableCandidate.id, seed: stableCandidate };
+    }
+    return { sessionId: event.sessionId };
+  }
+
+  if (!sessions.has(event.sessionId)) {
+    const generationCandidate = generationCandidates[0];
+    if (generationCandidate) {
+      return {
+        sessionId: event.sessionId,
+        seed: generationCandidate,
+        absorbedSessionId: generationCandidate.id,
+      };
+    }
+  }
+
+  return { sessionId: event.sessionId };
 }
 
 export type SessionStatusChange = {
@@ -757,7 +878,9 @@ export function createSessionStore(options?: SessionStoreOptions) {
       if (!isSessionStatus(event.status)) {
         return;
       }
-      const prev = sessions.get(event.sessionId);
+      const resolvedTarget = resolveSessionTarget(sessions, event);
+      const sessionId = resolvedTarget.sessionId;
+      const prev = sessions.get(sessionId) ?? resolvedTarget.seed;
       const nextClosedLedger = new Map(prev?.closedLedger ?? []);
 
       let nextPendingById: Map<string, PendingActionRuntimeState>;
@@ -820,7 +943,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
       const nextUpdatedAt = Math.max(prev?.updatedAt ?? Number.NEGATIVE_INFINITY, event.timestamp);
 
       const internal: InternalSessionRecord = {
-        id: event.sessionId,
+        id: sessionId,
         tool: event.tool,
         status: preservePreviousStatus ? prev.status : event.status,
         title:
@@ -828,6 +951,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
             ? prev.title
             : (event.title ?? prev?.title),
         task: preservePreviousStatus ? prev?.task : event.task,
+        meta: event.meta ?? prev?.meta,
         updatedAt: nextUpdatedAt,
         lastUserMessageAt: nextLastUserMessageAt,
         activityItems: nextActivityItems,
@@ -835,7 +959,10 @@ export function createSessionStore(options?: SessionStoreOptions) {
         pendingById: nextPendingById,
         closedLedger: nextClosedLedger,
       };
-      sessions.set(event.sessionId, internal);
+      sessions.set(sessionId, internal);
+      if (resolvedTarget.absorbedSessionId && resolvedTarget.absorbedSessionId !== sessionId) {
+        sessions.delete(resolvedTarget.absorbedSessionId);
+      }
 
       const prevStatus = prev?.status;
       if (options?.onStatusChange && prevStatus !== internal.status) {
@@ -909,6 +1036,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
         status: restoredStatus,
         title: record.title ?? undefined,
         task: record.latestTask ?? undefined,
+        meta: undefined,
         updatedAt: record.updatedAt,
         lastUserMessageAt: record.lastUserMessageAt ?? undefined,
         activityItems: [],

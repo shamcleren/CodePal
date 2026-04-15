@@ -1,4 +1,4 @@
-import { forwardRef, memo } from "react";
+import { forwardRef, memo, useState } from "react";
 import claudeAppIcon from "../assets/claude-app-icon.png";
 import codebuddyAppIcon from "../assets/codebuddy-app-icon.png";
 import codexAppIcon from "../assets/codex-app-icon.png";
@@ -121,6 +121,11 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
   onToggleExpanded,
   onRespond,
 }, ref) {
+  const [hasEverExpanded, setHasEverExpanded] = useState(expanded);
+  if (expanded && !hasEverExpanded) {
+    setHasEverExpanded(true);
+  }
+
   const i18n = useI18n();
   const meta = toolDisplay(session.tool);
   const { className: stateClass, label: stateLabel } = statusPresentation(session.status);
@@ -164,7 +169,7 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
           </span>
         </span>
       </button>
-      {expanded ? (
+      {hasEverExpanded ? (
         <SessionHistoryTimeline
           session={session}
           historyVersion={historyVersion}

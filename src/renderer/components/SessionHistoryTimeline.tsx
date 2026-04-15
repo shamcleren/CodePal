@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WheelEvent } from "react";
+import type { SessionHistoryPage } from "../../shared/historyTypes";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type { PendingAction } from "../../shared/sessionTypes";
 import { useI18n } from "../i18n";
@@ -11,6 +12,8 @@ const HISTORY_INCREMENTAL_PAGE_LIMIT = 60;
 const HISTORY_SCROLL_TOP_THRESHOLD_PX = 72;
 const HISTORY_SCROLL_BOTTOM_THRESHOLD_PX = 32;
 const HISTORY_LOADING_MIN_MS = 220;
+const HISTORY_PREFETCH_TRIGGER_PX = 220;
+const HISTORY_CONSUME_TRIGGER_PX = 18;
 const SUMMARY_MESSAGE_LIMIT = 10;
 const LOW_VALUE_LIFECYCLE_BODIES = new Set([
   "Claude session started",
@@ -100,7 +103,8 @@ export function mergeSessionTimelineItems(
   persistedItems: ActivityItem[],
 ): TimelineItem[] {
   const seen = new Set<string>();
-  const merged: TimelineItem[] = [];
+  const bodyFingerprints = new Set<string>();
+  const filteredLive: TimelineItem[] = [];
 
   for (const item of liveItems) {
     if (shouldHideLowValueLifecycleItem(item)) {
@@ -110,9 +114,21 @@ export function mergeSessionTimelineItems(
       continue;
     }
     seen.add(item.id);
-    merged.push(item);
+    filteredLive.push(item);
+    const normalized = normalizeComparableText(item.body);
+    if (normalized) {
+      bodyFingerprints.add(`${item.kind}:${item.source}:${normalized}`);
+    }
   }
 
+  if (persistedItems.length === 0) {
+    if (filteredLive.length === liveItems.length) {
+      return liveItems;
+    }
+    return filteredLive;
+  }
+
+  const historical: TimelineItem[] = [];
   for (const item of persistedItems) {
     if (shouldHideLowValueLifecycleItem(item)) {
       continue;
@@ -120,26 +136,46 @@ export function mergeSessionTimelineItems(
     if (seen.has(item.id)) {
       continue;
     }
-    if (merged.some((existing) => sameRenderableHistoryItem(existing, item))) {
+    if (filteredLive.some((existing) => sameRenderableHistoryItem(existing, item))) {
+      continue;
+    }
+    const normalized = normalizeComparableText(item.body);
+    const contentKey = normalized ? `${item.kind}:${item.source}:${normalized}` : "";
+    if (contentKey && bodyFingerprints.has(contentKey)) {
       continue;
     }
     seen.add(item.id);
-    merged.push({
+    if (contentKey) {
+      bodyFingerprints.add(contentKey);
+    }
+    historical.push({
       ...item,
       label: item.title,
     });
   }
 
-  if (persistedItems.length === 0 && merged.length === liveItems.length) {
-    return liveItems;
+  if (historical.length === 0) {
+    if (filteredLive.length === liveItems.length) {
+      return liveItems;
+    }
+    return filteredLive;
   }
 
-  return merged.sort((left, right) => {
+  const descSort = (left: TimelineItem, right: TimelineItem) => {
     if (left.timestamp !== right.timestamp) {
       return right.timestamp - left.timestamp;
     }
     return left.id.localeCompare(right.id);
-  });
+  };
+
+  // Sort each block independently by timestamp descending.
+  // Live items form a stable block that stays at the front (most recent).
+  // Historical items are appended after (older), so loading history
+  // never reorders the items already visible on screen.
+  const liveDesc = [...filteredLive].sort(descSort);
+  historical.sort(descSort);
+
+  return [...liveDesc, ...historical];
 }
 
 export function shouldLoadNextHistoryPage(options: {
@@ -168,6 +204,78 @@ export function shouldLoadNextHistoryPageFromWheel(options: {
       loading: options.loading,
     })
   );
+}
+
+export function shouldPrefetchHistoryPage(options: {
+  scrollTop: number;
+  hasMore: boolean;
+  loading: boolean;
+  hasBufferedPage: boolean;
+}) {
+  return (
+    options.scrollTop <= HISTORY_PREFETCH_TRIGGER_PX &&
+    options.hasMore &&
+    !options.loading &&
+    !options.hasBufferedPage
+  );
+}
+
+export function shouldConsumeBufferedHistoryPage(options: {
+  scrollTop: number;
+  hasBufferedPage: boolean;
+}) {
+  return options.hasBufferedPage && options.scrollTop <= HISTORY_CONSUME_TRIGGER_PX;
+}
+
+type ScrollAnchor = {
+  id: string;
+  offsetTop: number;
+  scrollTop: number;
+  scrollHeight: number;
+};
+
+function captureScrollAnchor(container: HTMLDivElement): ScrollAnchor | null {
+  const containerRect = container.getBoundingClientRect();
+  const anchors = Array.from(
+    container.querySelectorAll<HTMLElement>("[data-timeline-anchor='true'][data-timeline-id]"),
+  );
+
+  for (const anchor of anchors) {
+    const rect = anchor.getBoundingClientRect();
+    if (rect.bottom <= containerRect.top + 4) {
+      continue;
+    }
+    return {
+      id: anchor.dataset.timelineId ?? "",
+      offsetTop: rect.top - containerRect.top,
+      scrollTop: container.scrollTop,
+      scrollHeight: container.scrollHeight,
+    };
+  }
+
+  return {
+    id: "",
+    offsetTop: 0,
+    scrollTop: container.scrollTop,
+    scrollHeight: container.scrollHeight,
+  };
+}
+
+function restoreScrollAnchor(container: HTMLDivElement, anchor: ScrollAnchor): void {
+  if (anchor.id) {
+    const target = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-timeline-anchor='true'][data-timeline-id]"),
+    ).find((candidate) => candidate.dataset.timelineId === anchor.id);
+    if (target) {
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      container.scrollTop += targetRect.top - containerRect.top - anchor.offsetTop;
+      return;
+    }
+  }
+
+  container.scrollTop =
+    anchor.scrollTop + Math.max(0, container.scrollHeight - anchor.scrollHeight);
 }
 
 export function shouldStartInitialHistoryLoad(options: {
@@ -345,16 +453,21 @@ export function SessionHistoryTimeline({
   const lastExpandedRef = useRef(false);
   const requestIdRef = useRef(0);
   const initialLoadDoneRef = useRef(false);
-  const pendingScrollRestoreRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  const pendingScrollRestoreRef = useRef<ScrollAnchor | null>(null);
   const [initialLoadAttempt, setInitialLoadAttempt] = useState(0);
   const [persistedItems, setPersistedItems] = useState<ActivityItem[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [bufferedHistoryPage, setBufferedHistoryPage] = useState<SessionHistoryPage | null>(null);
+  const [isNearHistoryTop, setIsNearHistoryTop] = useState(false);
   const [summaryCopied, setSummaryCopied] = useState(false);
 
-  const mergedItems = mergeSessionTimelineItems(session.timelineItems, persistedItems);
+  const mergedItems = useMemo(
+    () => mergeSessionTimelineItems(session.timelineItems, persistedItems),
+    [session.timelineItems, persistedItems],
+  );
   const summaryText = buildSessionSummaryText(session, mergedItems);
   const latestToolItem = mergedItems.find((item) => item.kind === "tool");
   const hasRenderablePrimaryContent = mergedItems.some(
@@ -390,6 +503,8 @@ export function SessionHistoryTimeline({
     setHistoryHasMore(false);
     setHistoryLoading(false);
     setHistoryError(null);
+    setBufferedHistoryPage(null);
+    setIsNearHistoryTop(false);
     initialLoadDoneRef.current = false;
     pendingScrollRestoreRef.current = null;
     shouldStickToBottomRef.current = true;
@@ -400,6 +515,8 @@ export function SessionHistoryTimeline({
     if (!expanded) {
       requestIdRef.current += 1;
       setHistoryLoading(false);
+      setBufferedHistoryPage(null);
+      setIsNearHistoryTop(false);
       if (persistedItems.length === 0) {
         initialLoadDoneRef.current = false;
       }
@@ -439,9 +556,13 @@ export function SessionHistoryTimeline({
           return;
         }
 
+        if (detailsRef.current && !shouldStickToBottomRef.current) {
+          pendingScrollRestoreRef.current = captureScrollAnchor(detailsRef.current);
+        }
         setPersistedItems((current) => appendUniqueHistoryItems(current, page.items));
         setHistoryCursor(page.nextCursor);
         setHistoryHasMore(page.hasMore);
+        setBufferedHistoryPage(null);
         initialLoadDoneRef.current = true;
       } catch (error) {
         if (!cancelled && requestIdRef.current === requestId) {
@@ -464,6 +585,100 @@ export function SessionHistoryTimeline({
     };
   }, [expanded, historyError, initialLoadAttempt, session.id]);
 
+  useEffect(() => {
+    if (!expanded || historyLoading || bufferedHistoryPage !== null) {
+      return;
+    }
+    const node = detailsRef.current;
+    if (!node) {
+      return;
+    }
+    if (!isNearHistoryTop) {
+      return;
+    }
+    maybePrefetchHistory(node);
+  }, [bufferedHistoryPage, expanded, historyCursor, historyHasMore, historyLoading, isNearHistoryTop]);
+
+  useEffect(() => {
+    if (!expanded || !bufferedHistoryPage) {
+      return;
+    }
+    const node = detailsRef.current;
+    if (!node) {
+      return;
+    }
+    if (
+      shouldConsumeBufferedHistoryPage({
+        scrollTop: node.scrollTop,
+        hasBufferedPage: true,
+      })
+    ) {
+      applyBufferedHistoryPage(node);
+    }
+  }, [bufferedHistoryPage, expanded]);
+
+  function maybePrefetchHistory(node: HTMLDivElement) {
+    if (
+      !shouldPrefetchHistoryPage({
+        scrollTop: node.scrollTop,
+        hasMore: historyHasMore,
+        loading: historyLoading,
+        hasBufferedPage: bufferedHistoryPage !== null,
+      })
+    ) {
+      return;
+    }
+
+    if (!historyCursor) {
+      return;
+    }
+
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const startedAt = Date.now();
+    setHistoryLoading(true);
+    setHistoryError(null);
+
+    void withMinimumLoadingVisibility(
+      startedAt,
+      window.codepal.getSessionHistoryPage({
+        sessionId: session.id,
+        cursor: historyCursor,
+        limit: HISTORY_INCREMENTAL_PAGE_LIMIT,
+      }),
+    )
+      .then((page) => {
+        if (requestIdRef.current !== requestId) {
+          return;
+        }
+        setBufferedHistoryPage(page);
+      })
+      .catch((error: unknown) => {
+        if (requestIdRef.current !== requestId) {
+          return;
+        }
+        setHistoryError((error as Error).message);
+      })
+      .finally(() => {
+        if (requestIdRef.current === requestId) {
+          setHistoryLoading(false);
+        }
+      });
+  }
+
+  function applyBufferedHistoryPage(node: HTMLDivElement) {
+    if (!bufferedHistoryPage) {
+      return;
+    }
+
+    pendingScrollRestoreRef.current = captureScrollAnchor(node);
+    setPersistedItems((current) => appendUniqueHistoryItems(current, bufferedHistoryPage.items));
+    setHistoryCursor(bufferedHistoryPage.nextCursor);
+    setHistoryHasMore(bufferedHistoryPage.hasMore);
+    setBufferedHistoryPage(null);
+    setHistoryError(null);
+  }
+
   useLayoutEffect(() => {
     const node = detailsRef.current;
     if (!expanded || !node) {
@@ -482,9 +697,7 @@ export function SessionHistoryTimeline({
       let secondFrame = 0;
       let stopObserving = 0;
       const restoreScrollPosition = () => {
-        node.scrollTop =
-          pendingScrollRestore.scrollTop +
-          Math.max(0, node.scrollHeight - pendingScrollRestore.scrollHeight);
+        restoreScrollAnchor(node, pendingScrollRestore);
       };
 
       restoreScrollPosition();
@@ -550,53 +763,22 @@ export function SessionHistoryTimeline({
     lastExpandedRef.current = expanded;
   }, [expanded, mergedItems.length, historyLoading, historyError, session.updatedAt, session.pendingCount]);
 
+  if (!expanded) {
+    return null;
+  }
+
   function loadOlderHistory() {
-    if (!historyCursor || historyLoading) {
+    const node = detailsRef.current;
+    if (!node) {
       return;
     }
 
-    const node = detailsRef.current;
-    pendingScrollRestoreRef.current = node
-      ? {
-          scrollHeight: node.scrollHeight,
-          scrollTop: node.scrollTop,
-        }
-      : null;
+    if (shouldConsumeBufferedHistoryPage({ scrollTop: node.scrollTop, hasBufferedPage: bufferedHistoryPage !== null })) {
+      applyBufferedHistoryPage(node);
+      return;
+    }
 
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-    const startedAt = Date.now();
-    setHistoryLoading(true);
-    setHistoryError(null);
-
-    void withMinimumLoadingVisibility(
-      startedAt,
-      window.codepal.getSessionHistoryPage({
-        sessionId: session.id,
-        cursor: historyCursor,
-        limit: HISTORY_INCREMENTAL_PAGE_LIMIT,
-      }),
-    )
-      .then((page) => {
-        if (requestIdRef.current !== requestId) {
-          return;
-        }
-        setPersistedItems((current) => appendUniqueHistoryItems(current, page.items));
-        setHistoryCursor(page.nextCursor);
-        setHistoryHasMore(page.hasMore);
-      })
-      .catch((error: unknown) => {
-        if (requestIdRef.current !== requestId) {
-          return;
-        }
-        setHistoryError((error as Error).message);
-        pendingScrollRestoreRef.current = null;
-      })
-      .finally(() => {
-        if (requestIdRef.current === requestId) {
-          setHistoryLoading(false);
-        }
-      });
+    maybePrefetchHistory(node);
   }
 
   function retryInitialHistoryLoad() {
@@ -616,16 +798,11 @@ export function SessionHistoryTimeline({
 
     const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
     shouldStickToBottomRef.current = distanceFromBottom < HISTORY_SCROLL_BOTTOM_THRESHOLD_PX;
-
-    if (
-      shouldLoadNextHistoryPage({
-        scrollTop: node.scrollTop,
-        hasMore: historyHasMore,
-        loading: historyLoading,
-      })
-    ) {
-      loadOlderHistory();
+    const nearTop = node.scrollTop <= HISTORY_PREFETCH_TRIGGER_PX;
+    if (nearTop !== isNearHistoryTop) {
+      setIsNearHistoryTop(nearTop);
     }
+    loadOlderHistory();
   }
 
   function handleDetailsWheel(event: WheelEvent<HTMLDivElement>) {
@@ -634,15 +811,11 @@ export function SessionHistoryTimeline({
       return;
     }
 
-    if (
-      shouldLoadNextHistoryPageFromWheel({
-        deltaY: event.deltaY,
-        scrollTop: node.scrollTop,
-        hasMore: historyHasMore,
-        loading: historyLoading,
-      })
-    ) {
-      event.preventDefault();
+    if (event.deltaY < 0) {
+      const nearTop = node.scrollTop <= HISTORY_PREFETCH_TRIGGER_PX;
+      if (nearTop !== isNearHistoryTop) {
+        setIsNearHistoryTop(nearTop);
+      }
       loadOlderHistory();
     }
   }
@@ -664,6 +837,13 @@ export function SessionHistoryTimeline({
       setSummaryCopied(false);
     }, 1200);
   }
+
+  const showTopHistoryLoadingHint =
+    isNearHistoryTop &&
+    historyLoading &&
+    persistedItems.length > 0 &&
+    bufferedHistoryPage === null &&
+    historyError === null;
 
   const footer = (
     <div className="session-row__footer">
@@ -700,6 +880,12 @@ export function SessionHistoryTimeline({
 
   return (
     <div className="session-row__details-shell">
+      {showTopHistoryLoadingHint ? (
+        <div className="session-row__history-peek" aria-hidden="true">
+          <div className="session-row__history-peek-dot" />
+          <div className="session-row__history-peek-label">{i18n.t("session.history.loadingMore")}</div>
+        </div>
+      ) : null}
       <div
         ref={detailsRef}
         className="session-row__details"
@@ -715,7 +901,7 @@ export function SessionHistoryTimeline({
           >
             {i18n.t("session.history.retry")}
           </button>
-        ) : (
+        ) : historyStatus.kind === "loading-more" ? null : (
           <div
             className={`session-row__history-status ${
               historyStatus.kind === "hint"
