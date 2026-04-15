@@ -208,7 +208,7 @@ describe("dispatchActionResponse", () => {
     expect(rec.pendingActions).toEqual([expect.objectContaining({ id: "keep" })]);
   });
 
-  it("when action was already closed remotely: duplicate response is no-op, warns, no send or broadcast", async () => {
+  it("when action was already closed remotely: emits an error result, warns, no send or broadcast", async () => {
     const store = createSessionStore();
     store.applyEvent({
       type: "status_change",
@@ -237,6 +237,7 @@ describe("dispatchActionResponse", () => {
 
     const transport = { send: vi.fn(async () => {}) };
     const broadcastSessions = vi.fn();
+    const emitResult = vi.fn();
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await dispatchActionResponse(
@@ -246,11 +247,19 @@ describe("dispatchActionResponse", () => {
       "s1",
       "act-1",
       "A",
+      emitResult,
     );
 
     expect(result).toBe(false);
     expect(transport.send).not.toHaveBeenCalled();
     expect(broadcastSessions).not.toHaveBeenCalled();
+    expect(emitResult).toHaveBeenCalledWith({
+      sessionId: "s1",
+      actionId: "act-1",
+      result: "error",
+      option: "A",
+      error: "Action was already handled.",
+    });
     expect(warnSpy).toHaveBeenCalledWith(
       "[CodePal] duplicate action_response ignored:",
       "s1",
@@ -260,7 +269,7 @@ describe("dispatchActionResponse", () => {
     warnSpy.mockRestore();
   });
 
-  it("when the same action is already in flight: ignores the second request before a second send", async () => {
+  it("when the same action is already in flight: emits an error for the second request before a second send", async () => {
     const store = createSessionStore();
     store.applyEvent({
       type: "status_change",
@@ -286,9 +295,18 @@ describe("dispatchActionResponse", () => {
       }),
     };
     const broadcastSessions = vi.fn();
+    const emitResult = vi.fn();
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const first = dispatchActionResponse(store, transport, broadcastSessions, "s1", "act-1", "A");
+    const first = dispatchActionResponse(
+      store,
+      transport,
+      broadcastSessions,
+      "s1",
+      "act-1",
+      "A",
+      emitResult,
+    );
     const second = await dispatchActionResponse(
       store,
       transport,
@@ -296,11 +314,19 @@ describe("dispatchActionResponse", () => {
       "s1",
       "act-1",
       "A",
+      emitResult,
     );
 
     expect(second).toBe(false);
     expect(transport.send).toHaveBeenCalledTimes(1);
     expect(broadcastSessions).not.toHaveBeenCalled();
+    expect(emitResult).toHaveBeenCalledWith({
+      sessionId: "s1",
+      actionId: "act-1",
+      result: "error",
+      option: "A",
+      error: "Action response is already being sent.",
+    });
 
     resolveSend?.();
 
@@ -363,6 +389,36 @@ describe("dispatchActionResponse", () => {
     });
   });
 
+  it("when preparing the response payload fails: emits an error result then rethrows", async () => {
+    const store = createSessionStore();
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "cursor",
+      status: "waiting",
+      timestamp: 1,
+      pendingAction: { id: "act-1", type: "approval", title: "Run?", options: ["Allow", "Deny"] },
+    });
+
+    const transport = { send: vi.fn(async () => {}) };
+    const broadcastSessions = vi.fn();
+    const emitResult = vi.fn();
+
+    await expect(
+      dispatchActionResponse(store, transport, broadcastSessions, "s1", "act-1", "允许", emitResult),
+    ).rejects.toThrow("invalid approval option: 允许");
+
+    expect(transport.send).not.toHaveBeenCalled();
+    expect(broadcastSessions).not.toHaveBeenCalled();
+    expect(emitResult).toHaveBeenCalledWith({
+      sessionId: "s1",
+      actionId: "act-1",
+      result: "error",
+      option: "允许",
+      error: "invalid approval option: 允许",
+    });
+  });
+
   it("when emitResult is omitted: does not throw", async () => {
     const store = createSessionStore();
     store.applyEvent({
@@ -379,7 +435,7 @@ describe("dispatchActionResponse", () => {
     ).resolves.toBe(true);
   });
 
-  it("when pending does not match: returns false and does not call transport.send", async () => {
+  it("when pending does not match: emits an error result and does not call transport.send", async () => {
     const store = createSessionStore();
     store.applyEvent({
       type: "status_change",
@@ -399,6 +455,7 @@ describe("dispatchActionResponse", () => {
       send: vi.fn(async () => {}),
     };
     const broadcastSessions = vi.fn();
+    const emitResult = vi.fn();
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await dispatchActionResponse(
@@ -408,11 +465,19 @@ describe("dispatchActionResponse", () => {
       "s1",
       "wrong-id",
       "A",
+      emitResult,
     );
 
     expect(result).toBe(false);
     expect(transport.send).not.toHaveBeenCalled();
     expect(broadcastSessions).not.toHaveBeenCalled();
+    expect(emitResult).toHaveBeenCalledWith({
+      sessionId: "s1",
+      actionId: "wrong-id",
+      result: "error",
+      option: "A",
+      error: "Pending action was not found.",
+    });
     expect(warnSpy).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();

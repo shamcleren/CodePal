@@ -5,12 +5,14 @@
 
 import type {
   ActivityItem,
+  ExternalApprovalState,
   PendingAction,
   PendingClosed,
   ResponseTarget,
 } from "../../shared/sessionTypes";
 import {
   isActivityItem,
+  isExternalApprovalState,
   isPendingAction,
   isPendingClosed,
   isResponseTarget,
@@ -36,6 +38,8 @@ export interface StatusChangeUpstreamEvent {
   activityItems?: ActivityItem[];
   /** 待处理动作；null 表示清除 */
   pendingAction?: PendingAction | null;
+  /** 需要在原工具内处理的只读审批；null 表示清除 */
+  externalApproval?: ExternalApprovalState | null;
   /** 可选：action_response 回写目标 */
   responseTarget?: ResponseTarget;
   /** 可选：某条 pending 已结束（消费 / 过期 / 取消等）；null 视为未提供 */
@@ -60,6 +64,11 @@ export function isStatusChangeUpstreamEvent(
   }
   if ("pendingAction" in o) {
     if (o.pendingAction !== null && !isPendingAction(o.pendingAction)) return false;
+  }
+  if ("externalApproval" in o) {
+    if (o.externalApproval !== null && !isExternalApprovalState(o.externalApproval)) {
+      return false;
+    }
   }
   if ("activityItems" in o && o.activityItems !== undefined) {
     if (!Array.isArray(o.activityItems) || !o.activityItems.every((item) => isActivityItem(item))) {

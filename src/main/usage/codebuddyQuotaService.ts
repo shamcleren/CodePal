@@ -166,11 +166,19 @@ async function extractEnterpriseIdFromWindow(window: BrowserWindow): Promise<str
 }
 
 function defaultCreateWindow(): BrowserWindow {
+  const parentWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed());
   return new BrowserWindow({
     width: 1080,
     height: 760,
     autoHideMenuBar: true,
+    show: true,
+    skipTaskbar: true,
     title: "登录 CodeBuddy 用量",
+    ...(parentWindow
+      ? {
+          parent: parentWindow,
+        }
+      : {}),
     webPreferences: {
       partition: CODEBUDDY_AUTH_PARTITION,
       contextIsolation: true,
@@ -631,6 +639,15 @@ export function createCodeBuddyQuotaService(options: CodeBuddyQuotaServiceOption
         diagnostics: notConfiguredDiagnostics(config, lastSyncAt),
         synced: false,
       };
+    }
+
+    const existingDiagnostics = buildCodeBuddyQuotaDiagnostics({
+      config,
+      cookies: await readCookies(session.cookies),
+      lastSyncAt,
+    });
+    if (existingDiagnostics.state === "connected") {
+      return await refreshUsage();
     }
 
     const createWindow = options.createWindow ?? defaultCreateWindow;

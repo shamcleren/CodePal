@@ -18,6 +18,7 @@ import { startSessionWatchers } from "./sessionWatchersBootstrap";
 import { createTray } from "./tray/createTray";
 import { createFloatingWindow } from "./window/createFloatingWindow";
 import type { SessionRecord } from "../shared/sessionTypes";
+import { isSessionJumpTarget } from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview, UsageSnapshot } from "../shared/usageTypes";
 import { createCursorDashboardService } from "./usage/cursorDashboardService";
@@ -37,8 +38,10 @@ import {
 import { installMainProcessFileLogger } from "./logging/appLogger";
 import { createNotificationService } from "./notification/notificationService";
 import type { NotificationService } from "./notification/notificationService";
+import { createSessionJumpService } from "./jump/sessionJumpService";
 
 let notificationServiceRef: NotificationService | null = null;
+const sessionJumpService = createSessionJumpService();
 const sessionStore = createSessionStore({
   onStatusChange: (change) => {
     notificationServiceRef?.onSessionStateChange(change);
@@ -275,6 +278,16 @@ function wireActionResponseIpc(
         ? (payload as Record<string, unknown>).text
         : "";
     clipboard.writeText(text);
+  });
+  ipcMain.handle("codepal:jump-to-session-target", async (_event, payload: unknown) => {
+    const target =
+      payload && typeof payload === "object"
+        ? (payload as Record<string, unknown>).target
+        : undefined;
+    if (!isSessionJumpTarget(target)) {
+      return { ok: false as const, error: "jump target is required" };
+    }
+    return sessionJumpService.jumpTo(target);
   });
   ipcMain.on("codepal:action-response", (_event, payload: unknown) => {
     if (!payload || typeof payload !== "object") return;

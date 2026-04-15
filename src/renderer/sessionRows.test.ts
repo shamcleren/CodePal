@@ -98,6 +98,34 @@ describe("sessionRecordToRow", () => {
     expect(row.collapsedSummary).toBe("Proceed with merge?");
   });
 
+  it("uses external approval titles for the collapsed summary when no true pending action exists", () => {
+    const row = sessionRecordToRow({
+      id: "claude-approval-1",
+      tool: "claude",
+      status: "waiting",
+      updatedAt: 1_700_000_000_000,
+      activityItems: [
+        {
+          id: "activity-1",
+          kind: "message",
+          source: "assistant",
+          title: "Assistant",
+          body: "需要你回到原工具里确认权限。",
+          timestamp: 1_700_000_000_000,
+        },
+      ],
+      externalApproval: {
+        kind: "approval_required",
+        title: "Approval required in Claude Code",
+        message: "Claude needs your approval to use Bash",
+        sourceTool: "claude",
+        updatedAt: 1_700_000_000_000,
+      },
+    });
+
+    expect(row.collapsedSummary).toBe("Approval required in Claude Code");
+  });
+
   it("skips empty completed events and prefers the latest meaningful progress text", () => {
     const row = sessionRecordToRow({
       id: "codex-3",

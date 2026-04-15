@@ -135,4 +135,40 @@ describe("cursorDashboardService", () => {
     expect(clearStorageData).toHaveBeenCalledOnce();
     expect(clearCache).toHaveBeenCalledOnce();
   });
+
+  it("does not open the auth window again when cursor is already connected", async () => {
+    const createWindow = vi.fn();
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          maxUserSpendCents: 24425,
+          teamMemberSpend: [
+            {
+              spendCents: 24425,
+              hardLimitOverrideDollars: 960,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const service = createCursorDashboardService({
+      createWindow: createWindow as never,
+      fetchImpl,
+      session: {
+        cookies: {
+          get: vi.fn(async () => [
+            { name: "team_id", value: "14634113" },
+            { name: "WorkosCursorSessionToken", value: "token" },
+          ]),
+        },
+      } as never,
+    });
+
+    const result = await service.connectAndSync();
+
+    expect(result.diagnostics.state).toBe("connected");
+    expect(createWindow).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
 });

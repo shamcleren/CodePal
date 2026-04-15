@@ -166,4 +166,56 @@ describe("normalizeCodeBuddyEvent", () => {
       }),
     ).toBeNull();
   });
+
+  it("maps permission_prompt into external approval metadata", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-31T12:00:00.000Z"));
+
+    const event = normalizeCodeBuddyEvent({
+      hook_event_name: "Notification",
+      session_id: "cb-approval-1",
+      conversation_id: "conv-1",
+      notification_type: "permission_prompt",
+      message: "CodeBuddy needs your permission to use Bash",
+      cwd: "/workspace/demo",
+    });
+
+    expect(event).toMatchObject({
+      sessionId: "cb-approval-1",
+      status: "waiting",
+      externalApproval: {
+        kind: "approval_required",
+        title: "Approval required in CodeBuddy",
+        message: "CodeBuddy needs your permission to use Bash",
+        sourceTool: "codebuddy",
+        jumpTarget: {
+          agent: "codebuddy",
+          appName: "CodeBuddy",
+          workspacePath: "/workspace/demo",
+          sessionId: "cb-approval-1",
+          conversationId: "conv-1",
+          fallbackBehavior: "activate_app",
+        },
+      },
+    });
+  });
+
+  it("maps localized permission-like notification into external approval metadata", () => {
+    const event = normalizeCodeBuddyEvent({
+      hook_event_name: "Notification",
+      session_id: "cb-approval-zh",
+      message: "需要授权后才能继续",
+      cwd: "/workspace/demo",
+    });
+
+    expect(event).toMatchObject({
+      sessionId: "cb-approval-zh",
+      status: "waiting",
+      externalApproval: {
+        kind: "approval_required",
+        message: "需要授权后才能继续",
+        sourceTool: "codebuddy",
+      },
+    });
+  });
 });

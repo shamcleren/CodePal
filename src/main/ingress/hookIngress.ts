@@ -2,9 +2,15 @@ import { normalizeCodeBuddyEvent } from "../../adapters/codebuddy/normalizeCodeB
 import { normalizeCursorEvent } from "../../adapters/cursor/normalizeCursorEvent";
 import { isStatusChangeUpstreamEvent } from "../../adapters/shared/eventEnvelope";
 import type { SessionEvent } from "../session/sessionStore";
-import type { PendingAction, PendingClosed, ResponseTarget } from "../session/sessionTypes";
+import type {
+  ExternalApprovalState,
+  PendingAction,
+  PendingClosed,
+  ResponseTarget,
+} from "../session/sessionTypes";
 import type { UsageSnapshot } from "../../shared/usageTypes";
 import {
+  isExternalApprovalState,
   isPendingAction,
   isPendingClosed,
   isResponseTarget,
@@ -53,6 +59,15 @@ function responseTargetFromRawPayload(
   if (!("responseTarget" in o)) return undefined;
   const raw = o.responseTarget;
   return isResponseTarget(raw) ? raw : undefined;
+}
+
+function externalApprovalFromRawPayload(
+  o: Record<string, unknown>,
+): ExternalApprovalState | null | undefined {
+  if (!("externalApproval" in o)) return undefined;
+  const raw = o.externalApproval;
+  if (raw === null) return null;
+  return isExternalApprovalState(raw) ? raw : null;
 }
 
 /**
@@ -307,6 +322,13 @@ export function lineToSessionEvent(line: string): SessionEvent | null {
     pendingClosedPart = pendingClosedFromRawPayload(o);
   }
 
+  let externalApprovalPart: ExternalApprovalState | null | undefined;
+  if (isStatusChangeUpstreamEvent(parsed)) {
+    externalApprovalPart = normalized.externalApproval;
+  } else {
+    externalApprovalPart = externalApprovalFromRawPayload(o);
+  }
+
   return {
     type: normalized.type,
     sessionId: normalized.sessionId,
@@ -317,6 +339,7 @@ export function lineToSessionEvent(line: string): SessionEvent | null {
     ...(normalized.meta !== undefined ? { meta: normalized.meta } : {}),
     ...(normalized.activityItems !== undefined ? { activityItems: normalized.activityItems } : {}),
     ...(pendingPart !== undefined ? { pendingAction: pendingPart } : {}),
+    ...(externalApprovalPart !== undefined ? { externalApproval: externalApprovalPart } : {}),
     ...(responseTargetPart !== undefined ? { responseTarget: responseTargetPart } : {}),
     ...(pendingClosedPart !== undefined ? { pendingClosed: pendingClosedPart } : {}),
   } as SessionEvent;

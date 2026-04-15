@@ -1036,6 +1036,58 @@ describe("createSessionStore", () => {
     expect(store.getSessions()[0]).not.toHaveProperty("responseTarget");
   });
 
+  it("stores externalApproval on session records", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "s-external",
+      tool: "claude",
+      status: "waiting",
+      timestamp: 10,
+      externalApproval: {
+        kind: "approval_required",
+        title: "Claude permission required",
+        message: "Approve in Terminal",
+        sourceTool: "claude",
+        updatedAt: 10,
+      },
+    });
+
+    expect(store.getSessions()[0].externalApproval).toEqual(
+      expect.objectContaining({
+        title: "Claude permission required",
+        sourceTool: "claude",
+      }),
+    );
+  });
+
+  it("clears externalApproval when a later event sends null", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "s-external",
+      tool: "claude",
+      status: "waiting",
+      timestamp: 10,
+      externalApproval: {
+        kind: "approval_required",
+        title: "Claude permission required",
+        message: "Approve in Terminal",
+        sourceTool: "claude",
+        updatedAt: 10,
+      },
+    });
+    store.applyEvent({
+      sessionId: "s-external",
+      tool: "claude",
+      status: "running",
+      timestamp: 11,
+      externalApproval: null,
+    });
+
+    expect(store.getSessions()[0]).not.toHaveProperty("externalApproval");
+  });
+
   it("accumulates two different actionIds on the same session in pendingActions", () => {
     const store = createSessionStore();
     const a1 = {

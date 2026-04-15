@@ -312,10 +312,37 @@ export function actionDisplayOptions(
   action: PendingAction,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string[] {
+  return actionDisplayChoices(action, t).map((choice) => choice.label);
+}
+
+export type PendingActionDisplayChoice = {
+  label: string;
+  value: string;
+};
+
+export function actionDisplayChoices(
+  action: PendingAction,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): PendingActionDisplayChoice[] {
   if (action.type === "approval") {
-    return [t("session.action.allow"), t("session.action.deny")];
+    return [
+      { label: t("session.action.allow"), value: "Allow" },
+      { label: t("session.action.deny"), value: "Deny" },
+    ];
   }
-  return action.options;
+  return action.options.map((option) => ({ label: option, value: option }));
+}
+
+export function pendingActionButtonLabel(
+  label: string,
+  cardState: "pending" | "sending" | "success" | "error",
+  isSelected: boolean,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  if (cardState === "sending" && isSelected) {
+    return t("pendingAction.sending");
+  }
+  return label;
 }
 
 function summarizeText(text: string): string {
@@ -658,6 +685,13 @@ export function SessionHistoryTimeline({
     onRespond(sessionId, actionId, option);
   }
 
+  async function handleJumpToOriginalTool() {
+    const result = await window.codepal.jumpToSessionTarget(session.externalApproval?.jumpTarget);
+    if (!result.ok) {
+      console.warn("[CodePal] failed to jump to original tool:", result.error);
+    }
+  }
+
   function maybePrefetchHistory(node: HTMLDivElement) {
     if (
       !shouldPrefetchHistoryPage({
@@ -995,7 +1029,7 @@ export function SessionHistoryTimeline({
                   for (const action of session.pendingActions ?? []) {
                     const state = cardStates[action.id];
                     if (!state || state === "pending" || state === "error") {
-                      handleRespond(session.id, action.id, actionDisplayOptions(action, i18n.t)[0]);
+                      handleRespond(session.id, action.id, actionDisplayChoices(action, i18n.t)[0].value);
                     }
                   }
                 }}
@@ -1009,8 +1043,8 @@ export function SessionHistoryTimeline({
                   for (const action of session.pendingActions ?? []) {
                     const state = cardStates[action.id];
                     if (!state || state === "pending" || state === "error") {
-                      const opts = actionDisplayOptions(action, i18n.t);
-                      handleRespond(session.id, action.id, opts[opts.length - 1]);
+                      const opts = actionDisplayChoices(action, i18n.t);
+                      handleRespond(session.id, action.id, opts[opts.length - 1].value);
                     }
                   }
                 }}
@@ -1025,6 +1059,7 @@ export function SessionHistoryTimeline({
             const isSending = cardState === "sending";
             const isSuccess = cardState === "success";
             const isError = cardState === "error";
+            const selectedOption = cardLastOptions[action.id];
 
             return (
               <div
@@ -1043,7 +1078,7 @@ export function SessionHistoryTimeline({
                       <button
                         type="button"
                         className="pending-action__btn pending-action__btn--retry"
-                        onClick={() => handleRespond(session.id, action.id, cardLastOptions[action.id] ?? actionDisplayOptions(action, i18n.t)[0])}
+                        onClick={() => handleRespond(session.id, action.id, cardLastOptions[action.id] ?? actionDisplayChoices(action, i18n.t)[0].value)}
                       >
                         {i18n.t("pendingAction.retry")}
                       </button>
@@ -1071,15 +1106,15 @@ export function SessionHistoryTimeline({
                     </div>
                     <div className="pending-action__title">{action.title}</div>
                     <div className="pending-action__actions">
-                      {actionDisplayOptions(action, i18n.t).map((option) => (
+                      {actionDisplayChoices(action, i18n.t).map((option) => (
                         <button
-                          key={`${action.id}:${option}`}
+                          key={`${action.id}:${option.value}`}
                           type="button"
                           className="pending-action__btn"
                           disabled={isSending}
-                          onClick={() => handleRespond(session.id, action.id, option)}
+                          onClick={() => handleRespond(session.id, action.id, option.value)}
                         >
-                          {isSending ? i18n.t("pendingAction.sending") : option}
+                          {pendingActionButtonLabel(option.label, cardState, selectedOption === option.value, i18n.t)}
                         </button>
                       ))}
                     </div>
@@ -1088,6 +1123,32 @@ export function SessionHistoryTimeline({
               </div>
             );
           })}
+        </div>
+      ) : null}
+      {session.externalApproval ? (
+        <div className="session-row__interaction">
+          <div
+            className="external-approval-card"
+            aria-label={session.externalApproval.title}
+          >
+            <div className="external-approval-card__eyebrow">
+              {i18n.t("session.externalApproval.eyebrow")}
+            </div>
+            <div className="external-approval-card__title">{session.externalApproval.title}</div>
+            <div className="external-approval-card__message">{session.externalApproval.message}</div>
+            <button
+              type="button"
+              className="external-approval-card__btn"
+              onClick={() => {
+                void handleJumpToOriginalTool();
+              }}
+            >
+              {i18n.t("session.externalApproval.goToTool")}
+            </button>
+            <div className="external-approval-card__hint">
+              {i18n.t("session.externalApproval.readonlyHint")}
+            </div>
+          </div>
         </div>
       ) : null}
       </div>

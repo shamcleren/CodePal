@@ -60,4 +60,12 @@ describe("preload history bridge", () => {
 
     expect(on).toHaveBeenCalledWith("codepal:focus-session", expect.any(Function));
   });
+
+  it("exposes jumpToSessionTarget on the bridge", async () => {
+    await import("./index");
+
+    const api = exposeInMainWorld.mock.calls[0]?.[1] as Record<string, unknown>;
+
+    expect(typeof api.jumpToSessionTarget).toBe("function");
+  });
 });

@@ -619,7 +619,12 @@ function inspectCodexConfig(
     health = "active";
   }
 
-  const { healthLabel, healthLabelKey, actionLabel, actionLabelKey } = labelsForHealth(health);
+  const labels = labelsForHealth(health);
+  const actionLabel = health === "active" && !hookInstalled ? "增强" : labels.actionLabel;
+  const actionLabelKey =
+    health === "active" && !hookInstalled
+      ? "integration.action.enhance"
+      : labels.actionLabelKey;
 
   return {
     id: "codex",
@@ -631,8 +636,8 @@ function inspectCodexConfig(
     hookScriptExists: fs.existsSync(displayPath),
     hookInstalled,
     health,
-    healthLabel,
-    healthLabelKey,
+    healthLabel: labels.healthLabel,
+    healthLabelKey: labels.healthLabelKey,
     actionLabel,
     actionLabelKey,
     statusMessage,

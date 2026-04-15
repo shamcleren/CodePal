@@ -1,5 +1,5 @@
 import type { StatusChangeUpstreamEvent } from "../shared/eventEnvelope";
-import type { ActivityItem } from "../../shared/sessionTypes";
+import type { ActivityItem, ExternalApprovalState } from "../../shared/sessionTypes";
 
 function firstString(
   payload: Record<string, unknown>,
@@ -294,6 +294,42 @@ function buildActivityItems(
   return undefined;
 }
 
+function buildExternalApproval(
+  payload: Record<string, unknown>,
+  sessionId: string,
+  timestamp: number,
+): ExternalApprovalState | undefined {
+  const notificationType = firstString(payload, ["notification_type"]);
+  const message = firstString(payload, ["message", "prompt", "task"]);
+
+  if (
+    notificationType !== "permission_prompt" &&
+    !(message && (/\b(permission|approval|approve|allow)\b/i.test(message) || /权限|授权|审批|批准|允许/.test(message)))
+  ) {
+    return undefined;
+  }
+
+  const cwd = firstString(payload, ["cwd"]);
+  const conversationId = firstString(payload, ["conversation_id", "conversationId"]);
+  const appName = firstString(payload, ["host_app", "app_name", "client"]) ?? "CodeBuddy";
+
+  return {
+    kind: "approval_required",
+    title: "Approval required in CodeBuddy",
+    message: message ?? "CodeBuddy needs your approval",
+    sourceTool: "codebuddy",
+    updatedAt: timestamp,
+    jumpTarget: {
+      agent: "codebuddy",
+      appName,
+      ...(cwd ? { workspacePath: cwd } : {}),
+      sessionId,
+      ...(conversationId ? { conversationId } : {}),
+      fallbackBehavior: "activate_app",
+    },
+  };
+}
+
 export function normalizeCodeBuddyEvent(
   payload: Record<string, unknown>,
 ): StatusChangeUpstreamEvent | null {
@@ -304,15 +340,18 @@ export function normalizeCodeBuddyEvent(
 
   const status = pickStatus(payload);
   const task = pickTask(payload);
+  const timestamp = pickTimestamp(payload);
   const activityItems = buildActivityItems(payload, status, task);
+  const externalApproval = buildExternalApproval(payload, sessionId, timestamp);
   return {
     type: "status_change",
     sessionId,
     tool: "codebuddy",
     status,
     task,
-    timestamp: pickTimestamp(payload),
+    timestamp,
     meta: pickMeta(payload),
     ...(activityItems ? { activityItems } : {}),
+    ...(externalApproval ? { externalApproval } : {}),
   };
 }

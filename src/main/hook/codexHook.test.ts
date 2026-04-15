@@ -91,6 +91,61 @@ describe("runCodexHookPipeline", () => {
     expect(sendEventLine).not.toHaveBeenCalled();
   });
 
+  it("downgrades permission notify without pendingAction into external approval event", async () => {
+    await runCodexHookPipeline(
+      JSON.stringify({
+        type: "notification",
+        sessionId: "codex-approval-1",
+        message: "Codex needs approval to continue",
+        cwd: "/repo",
+      }),
+      {},
+    );
+
+    expect(runBlockingHookFromRaw).not.toHaveBeenCalled();
+    expect(JSON.parse(sendEventLine.mock.calls[0][0] as string)).toMatchObject({
+      type: "status_change",
+      sessionId: "codex-approval-1",
+      tool: "codex",
+      status: "waiting",
+      externalApproval: {
+        kind: "approval_required",
+        title: "Approval required in Codex",
+        message: "Codex needs approval to continue",
+        sourceTool: "codex",
+        jumpTarget: {
+          agent: "codex",
+          appName: "Terminal",
+          workspacePath: "/repo",
+          sessionId: "codex-approval-1",
+          fallbackBehavior: "activate_app",
+        },
+      },
+    });
+  });
+
+  it("recognizes localized permission notify messages", async () => {
+    await runCodexHookPipeline(
+      JSON.stringify({
+        type: "notification",
+        sessionId: "codex-approval-zh",
+        message: "是否允许执行这个命令？",
+        cwd: "/repo",
+      }),
+      {},
+    );
+
+    expect(JSON.parse(sendEventLine.mock.calls[0][0] as string)).toMatchObject({
+      sessionId: "codex-approval-zh",
+      status: "waiting",
+      externalApproval: {
+        kind: "approval_required",
+        message: "是否允许执行这个命令？",
+        sourceTool: "codex",
+      },
+    });
+  });
+
   it("fails on invalid json", async () => {
     await expect(runCodexHookPipeline("{", {})).rejects.toThrow(/invalid JSON/i);
   });

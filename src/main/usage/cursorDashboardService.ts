@@ -178,11 +178,19 @@ async function readCookies(cookieStore: Cookies): Promise<CursorDashboardCookie[
 }
 
 function defaultCreateWindow(): BrowserWindow {
+  const parentWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed());
   return new BrowserWindow({
     width: 1080,
     height: 760,
     autoHideMenuBar: true,
+    show: true,
+    skipTaskbar: true,
     title: "登录 Cursor",
+    ...(parentWindow
+      ? {
+          parent: parentWindow,
+        }
+      : {}),
     webPreferences: {
       partition: CURSOR_AUTH_PARTITION,
       contextIsolation: true,
@@ -317,6 +325,11 @@ export function createCursorDashboardService(options: CursorDashboardServiceOpti
   }
 
   async function connectAndSync(): Promise<CursorDashboardConnectResult> {
+    const existingDiagnostics = await getDiagnostics();
+    if (existingDiagnostics.state === "connected") {
+      return await refreshUsage();
+    }
+
     const authWindow = (options.createWindow ?? defaultCreateWindow)();
     void authWindow.loadURL(CURSOR_USAGE_URL);
     await waitForCursorLogin(session.cookies, authWindow);

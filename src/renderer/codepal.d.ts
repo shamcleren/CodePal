@@ -20,7 +20,7 @@ import type {
   SessionHistoryPage,
   SessionHistoryPageRequest,
 } from "../shared/historyTypes";
-import type { SessionRecord } from "../shared/sessionTypes";
+import type { SessionJumpTarget, SessionRecord } from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview } from "../shared/usageTypes";
 
@@ -67,6 +67,9 @@ export type CodePalApi = {
   onFocusSession: (handler: (sessionId: string) => void) => () => void;
   openExternalTarget: (target: string) => Promise<string>;
   writeClipboardText: (text: string) => Promise<void>;
+  jumpToSessionTarget: (target: SessionJumpTarget | undefined) => Promise<
+    { ok: true; mode: "precise" | "activate_app" } | { ok: false; error: string }
+  >;
   respondToPendingAction: (sessionId: string, actionId: string, option: string) => void;
   onActionResponseResult: (handler: (result: { sessionId: string; actionId: string; result: "success" | "error"; option: string; error?: string }) => void) => () => void;
 };

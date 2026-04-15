@@ -32,6 +32,22 @@ function getPendingActionResponseKey(sessionId: string, actionId: string): strin
   return `${sessionId}\u0000${actionId}`;
 }
 
+function emitActionResponseError(
+  emitResult: ((result: ActionResponseResult) => void) | undefined,
+  sessionId: string,
+  actionId: string,
+  option: string,
+  error: string,
+): void {
+  emitResult?.({
+    sessionId,
+    actionId,
+    result: "error",
+    option,
+    error,
+  });
+}
+
 export async function dispatchActionResponse(
   sessionStore: ActionResponseSessionStore,
   fallbackTransport: ActionResponseTransport,
@@ -47,13 +63,43 @@ export async function dispatchActionResponse(
       "[CodePal] action_response ignored (already in flight):",
       `sessionId=${sessionId} actionId=${actionId}`,
     );
+    emitActionResponseError(
+      emitResult,
+      sessionId,
+      actionId,
+      option,
+      "Action response is already being sent.",
+    );
     return false;
   }
 
-  const prep = sessionStore.preparePendingActionResponse(sessionId, actionId, option);
+  let prep: PendingActionResponsePrep | null;
+  try {
+    prep = sessionStore.preparePendingActionResponse(sessionId, actionId, option);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    emitActionResponseError(emitResult, sessionId, actionId, option, error);
+    throw err;
+  }
+
   if (!prep) {
     if (sessionStore.isPendingActionClosed(sessionId, actionId)) {
       console.warn("[CodePal] duplicate action_response ignored:", sessionId, actionId);
+      emitActionResponseError(
+        emitResult,
+        sessionId,
+        actionId,
+        option,
+        "Action was already handled.",
+      );
+    } else {
+      emitActionResponseError(
+        emitResult,
+        sessionId,
+        actionId,
+        option,
+        "Pending action was not found.",
+      );
     }
     return false;
   }

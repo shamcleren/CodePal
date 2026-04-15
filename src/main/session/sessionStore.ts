@@ -1,6 +1,7 @@
 import { stringifyActionResponsePayload } from "../../shared/actionResponsePayload";
 import {
   type ActivityItem,
+  type ExternalApprovalState,
   type PendingAction,
   type PendingCloseReason,
   type PendingClosed,
@@ -32,6 +33,8 @@ export type SessionEvent = {
   activityItems?: ActivityItem[];
   /** 未出现则保留原值；null 表示清除 */
   pendingAction?: PendingAction | null;
+  /** 未出现则保留原值；null 表示清除 */
+  externalApproval?: ExternalApprovalState | null;
   /** 与 pendingAction 同条事件可选携带；按 action upsert 时写入该 action 的运行时路由 */
   responseTarget?: ResponseTarget;
   /** 仅关闭该 action，不整会话清空 pending */
@@ -59,6 +62,7 @@ type InternalSessionRecord = {
   activityItems: ActivityItem[];
   activities: string[];
   pendingById: Map<string, PendingActionRuntimeState>;
+  externalApproval?: ExternalApprovalState;
   /** 最近关闭的 action（新 upsert 同 id 时会移除），供控制器去重 */
   closedLedger: Map<string, PendingCloseReason>;
 };
@@ -252,6 +256,21 @@ function buildFallbackActivityItems(event: SessionEvent): ActivityItem[] {
     );
   }
 
+  if (event.externalApproval) {
+    items.push(
+      createActivityItem(
+        {
+          kind: "note",
+          source: "system",
+          title: "Approval required",
+          body: event.externalApproval.title,
+          tone: "waiting",
+        },
+        event,
+      ),
+    );
+  }
+
   return items;
 }
 
@@ -368,11 +387,12 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
     ...(internal.activities.length > 0 ? { activities: internal.activities } : {}),
   };
   if (internal.pendingById.size === 0) {
-    return base;
+    return internal.externalApproval ? { ...base, externalApproval: internal.externalApproval } : base;
   }
   return {
     ...base,
     pendingActions: [...internal.pendingById.values()].map((s) => s.action),
+    ...(internal.externalApproval ? { externalApproval: internal.externalApproval } : {}),
   };
 }
 
@@ -936,6 +956,13 @@ export function createSessionStore(options?: SessionStoreOptions) {
         nextClosedLedger.set(actionId, reason);
       }
 
+      const nextExternalApproval =
+        event.externalApproval === undefined
+          ? prev?.externalApproval
+          : event.externalApproval === null
+            ? undefined
+            : event.externalApproval;
+
       const nextActivityItems = mergeActivityItems(
         prev?.activityItems,
         event.tool === "codex"
@@ -967,6 +994,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
         activityItems: nextActivityItems,
         activities: toLegacyActivities(nextActivityItems),
         pendingById: nextPendingById,
+        externalApproval: nextExternalApproval,
         closedLedger: nextClosedLedger,
       };
       sessions.set(sessionId, internal);
@@ -1066,6 +1094,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
         activityItems: [],
         activities: [],
         pendingById: new Map(),
+        externalApproval: undefined,
         closedLedger: new Map(),
       };
       sessions.set(record.id, internal);

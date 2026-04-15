@@ -178,7 +178,9 @@ describe("codebuddyInternalQuotaService", () => {
     });
 
     const resultPromise = service.connectAndSync();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(closedHandler).toBeTypeOf("function");
+    });
     closedHandler?.();
     const result = await resultPromise;
 
@@ -224,5 +226,34 @@ describe("codebuddyInternalQuotaService", () => {
     });
     expect(clearStorageData).toHaveBeenCalledOnce();
     expect(clearCache).toHaveBeenCalledOnce();
+  });
+
+  it("does not open the auth window again when codebuddy enterprise is already connected", async () => {
+    const createWindow = vi.fn();
+    const service = createCodeBuddyInternalQuotaService({
+      config,
+      createWindow: createWindow as never,
+      fetchImpl: vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            usage_percentage: 1.7198805,
+            remaining_percentage: 98.28,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+      now: () => 1_775_000_000_000,
+      session: {
+        cookies: {
+          get: vi.fn(async () => [{ name: "RIO_TOKEN", value: "secret" }]),
+        },
+      } as never,
+    });
+
+    const result = await service.connectAndSync();
+
+    expect(result.diagnostics.state).toBe("connected");
+    expect(createWindow).not.toHaveBeenCalled();
   });
 });

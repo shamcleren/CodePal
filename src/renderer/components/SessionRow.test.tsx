@@ -85,7 +85,7 @@ describe("SessionRow pending action", () => {
     expect(html).toContain(">Deny<");
     expect(html).toContain(">A<");
     expect(html).toContain(">B<");
-    const cards = html.match(/class="pending-action"/g);
+    const cards = html.match(/class="pending-action pending-action--[a-z]+"/g);
     expect(cards).toHaveLength(2);
   });
 
@@ -215,6 +215,30 @@ describe("SessionRow pending action", () => {
 
     expect(html).toContain("session-row__details");
     expect(html).toContain("Proceed?");
+  });
+
+  it("renders external approval as a read-only card with jump CTA", () => {
+    const html = renderRow(
+      baseRow({
+        externalApproval: {
+          kind: "approval_required",
+          title: "Approval required in Claude Code",
+          message: "Claude needs your approval to use Bash",
+          sourceTool: "claude",
+          updatedAt: 1,
+          jumpTarget: {
+            agent: "claude",
+            appName: "Terminal",
+            fallbackBehavior: "activate_app",
+          },
+        },
+      }),
+      { expanded: true },
+    );
+
+    expect(html).toContain("Approval required in Claude Code");
+    expect(html).toContain("Go to original tool");
+    expect(html).toContain("CodePal cannot answer this request directly");
   });
 
   it("renders footer actions for expanded sessions", () => {

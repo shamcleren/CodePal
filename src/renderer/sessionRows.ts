@@ -528,6 +528,11 @@ function buildCollapsedSummary(record: SessionRecord, timelineItems: TimelineIte
     return pendingTitle;
   }
 
+  const externalApprovalTitle = record.externalApproval?.title.trim();
+  if (externalApprovalTitle) {
+    return externalApprovalTitle;
+  }
+
   const latestUserMessage = latestMeaningfulMessage(timelineItems, "user");
   const latestAssistantMessage = latestMeaningfulMessage(timelineItems, "assistant");
   if (latestAssistantMessage) {

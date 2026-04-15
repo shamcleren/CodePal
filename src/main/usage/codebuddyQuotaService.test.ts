@@ -275,6 +275,11 @@ describe("codebuddyQuotaService", () => {
   it("ignores ERR_ABORTED from login navigation and continues syncing", async () => {
     const onUsageSnapshot = vi.fn();
     let closedHandler: (() => void) | undefined;
+    const getCookies = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ name: "RIO_TOKEN", value: "secret" }])
+      .mockResolvedValue([{ name: "RIO_TOKEN", value: "secret" }]);
     const service = createCodeBuddyQuotaService({
       config,
       fetchImpl: vi.fn(async () =>
@@ -309,7 +314,7 @@ describe("codebuddyQuotaService", () => {
         }) as never,
       session: {
         cookies: {
-          get: vi.fn(async () => [{ name: "RIO_TOKEN", value: "secret" }]),
+          get: getCookies,
           on: vi.fn(),
           removeListener: vi.fn(),
         },
@@ -318,7 +323,9 @@ describe("codebuddyQuotaService", () => {
     });
 
     const resultPromise = service.connectAndSync();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(closedHandler).toBeTypeOf("function");
+    });
     closedHandler?.();
     const result = await resultPromise;
 
@@ -352,7 +359,9 @@ describe("codebuddyQuotaService", () => {
     });
 
     const resultPromise = service.connectAndSync();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(closedHandler).toBeTypeOf("function");
+    });
     closedHandler?.();
     const result = await resultPromise;
 
@@ -398,5 +407,40 @@ describe("codebuddyQuotaService", () => {
     });
     expect(clearStorageData).toHaveBeenCalledOnce();
     expect(clearCache).toHaveBeenCalledOnce();
+  });
+
+  it("does not open the auth window again when codebuddy code is already connected", async () => {
+    const createWindow = vi.fn();
+    const service = createCodeBuddyQuotaService({
+      config,
+      createWindow: createWindow as never,
+      fetchImpl: vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            code: 0,
+            msg: "OK",
+            data: {
+              credit: 905.96,
+              cycleStartTime: "2026-04-01 00:00:00",
+              cycleEndTime: "2026-04-30 23:59:59",
+              limitNum: 100000,
+              cycleResetTime: "2026-05-01 00:00:00",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+      now: () => 1_775_000_000_000,
+      session: {
+        cookies: {
+          get: vi.fn(async () => [{ name: "RIO_TOKEN", value: "secret" }]),
+        },
+      } as never,
+    });
+
+    const result = await service.connectAndSync();
+
+    expect(result.diagnostics.state).toBe("connected");
+    expect(createWindow).not.toHaveBeenCalled();
   });
 });

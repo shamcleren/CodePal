@@ -82,11 +82,19 @@ function isIgnorableNavigationError(error: unknown): boolean {
 }
 
 function defaultCreateWindow(): BrowserWindow {
+  const parentWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed());
   return new BrowserWindow({
     width: 1080,
     height: 760,
     autoHideMenuBar: true,
+    show: true,
+    skipTaskbar: true,
     title: "登录 CodeBuddy Enterprise 用量",
+    ...(parentWindow
+      ? {
+          parent: parentWindow,
+        }
+      : {}),
     webPreferences: {
       partition: CODEBUDDY_INTERNAL_AUTH_PARTITION,
       contextIsolation: true,
@@ -490,6 +498,15 @@ export function createCodeBuddyInternalQuotaService(
         diagnostics: notConfiguredDiagnostics(config, lastSyncAt),
         synced: false,
       };
+    }
+
+    const existingDiagnostics = buildCodeBuddyInternalQuotaDiagnostics({
+      config,
+      cookies: await readCookies(session.cookies),
+      lastSyncAt,
+    });
+    if (existingDiagnostics.state === "connected") {
+      return await refreshUsage();
     }
 
     const authWindow = (options.createWindow ?? defaultCreateWindow)();

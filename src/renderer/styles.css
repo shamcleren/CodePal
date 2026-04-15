@@ -2313,3 +2313,62 @@ body {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   background: color-mix(in srgb, var(--accent) 20%, var(--bg-elevated));
 }
+
+.external-approval-card {
+  margin-top: 8px;
+  padding: 12px 13px;
+  background:
+    linear-gradient(180deg, rgba(123, 178, 255, 0.08), rgba(123, 178, 255, 0.03)),
+    var(--bg-elevated);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(5, 10, 18, 0.12);
+}
+
+.external-approval-card__eyebrow {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 82%, white 4%);
+  margin-bottom: 7px;
+}
+
+.external-approval-card__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.external-approval-card__message {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
+.external-approval-card__btn {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-elevated-2));
+  color: var(--text);
+  cursor: pointer;
+}
+
+.external-approval-card__btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg-elevated));
+}
+
+.external-approval-card__hint {
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--text-faint);
+}

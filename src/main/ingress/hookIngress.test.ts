@@ -378,6 +378,33 @@ describe("lineToSessionEvent", () => {
     expect(ev?.pendingAction).toEqual(pendingAction);
   });
 
+  it("parses externalApproval on canonical status_change", () => {
+    const externalApproval = {
+      kind: "approval_required" as const,
+      title: "Claude permission required",
+      message: "Approve in Terminal",
+      sourceTool: "claude" as const,
+      updatedAt: 123,
+      jumpTarget: {
+        agent: "claude" as const,
+        appName: "Terminal",
+        sessionId: "s1",
+        fallbackBehavior: "activate_app" as const,
+      },
+    };
+    const ev = lineToSessionEvent(
+      JSON.stringify({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "claude",
+        status: "waiting",
+        timestamp: 3,
+        externalApproval,
+      }),
+    );
+    expect(ev?.externalApproval).toEqual(externalApproval);
+  });
+
   it("reads pendingAction from raw Cursor StatusChange payload", () => {
     const pendingAction = {
       id: "c-p",

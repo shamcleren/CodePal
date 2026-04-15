@@ -12,6 +12,8 @@ import {
   shouldStartInitialHistoryLoad,
   shouldLoadNextHistoryPage,
   actionDisplayOptions,
+  actionDisplayChoices,
+  pendingActionButtonLabel,
   pendingEyebrow,
 } from "./SessionHistoryTimeline";
 import type { MonitorSessionRow } from "../monitorSession";
@@ -468,6 +470,30 @@ describe("actionDisplayOptions", () => {
   });
 });
 
+describe("actionDisplayChoices", () => {
+  const t = (key: string) => {
+    const map: Record<string, string> = {
+      "session.action.allow": "允许",
+      "session.action.deny": "拒绝",
+    };
+    return map[key] ?? key;
+  };
+
+  it("keeps localized approval labels separate from stable response values", () => {
+    const action: PendingAction = {
+      id: "a1",
+      type: "approval",
+      title: "Approve?",
+      options: [],
+    };
+
+    expect(actionDisplayChoices(action, t)).toEqual([
+      { label: "允许", value: "Allow" },
+      { label: "拒绝", value: "Deny" },
+    ]);
+  });
+});
+
 describe("pendingEyebrow", () => {
   const t = (key: string) => {
     const map: Record<string, string> = {
@@ -493,6 +519,25 @@ describe("pendingEyebrow", () => {
 
   it("returns the default eyebrow label for unknown action types", () => {
     expect(pendingEyebrow("unknown_type", t)).toBe("Awaiting input");
+  });
+});
+
+describe("pendingActionButtonLabel", () => {
+  const t = (key: string) => {
+    const map: Record<string, string> = {
+      "pendingAction.sending": "Sending…",
+    };
+    return map[key] ?? key;
+  };
+
+  it("shows Sending only for the selected option while a response is in flight", () => {
+    expect(pendingActionButtonLabel("Allow", "sending", true, t)).toBe("Sending…");
+    expect(pendingActionButtonLabel("Deny", "sending", false, t)).toBe("Deny");
+  });
+
+  it("keeps labels unchanged outside the sending state", () => {
+    expect(pendingActionButtonLabel("Allow", "pending", true, t)).toBe("Allow");
+    expect(pendingActionButtonLabel("Allow", "error", true, t)).toBe("Allow");
   });
 });
 

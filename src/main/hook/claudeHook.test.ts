@@ -64,4 +64,56 @@ describe("claudeHook", () => {
       ],
     });
   });
+
+  it("maps permission notification into external approval metadata", () => {
+    const line = buildClaudeEventLine(
+      JSON.stringify({
+        session_id: "claude-approval-1",
+        hook_event_name: "Notification",
+        message: "Claude needs your approval to use Bash",
+        cwd: "/repo",
+      }),
+      {},
+    );
+
+    expect(JSON.parse(line)).toMatchObject({
+      sessionId: "claude-approval-1",
+      status: "waiting",
+      externalApproval: {
+        kind: "approval_required",
+        title: "Approval required in Claude Code",
+        message: "Claude needs your approval to use Bash",
+        sourceTool: "claude",
+        jumpTarget: {
+          agent: "claude",
+          appName: "Terminal",
+          workspacePath: "/repo",
+          sessionId: "claude-approval-1",
+          fallbackBehavior: "activate_app",
+        },
+      },
+    });
+  });
+
+  it("maps localized permission notification into external approval metadata", () => {
+    const line = buildClaudeEventLine(
+      JSON.stringify({
+        session_id: "claude-approval-zh",
+        hook_event_name: "Notification",
+        message: "需要授权后才能继续",
+        cwd: "/repo",
+      }),
+      {},
+    );
+
+    expect(JSON.parse(line)).toMatchObject({
+      sessionId: "claude-approval-zh",
+      status: "waiting",
+      externalApproval: {
+        kind: "approval_required",
+        message: "需要授权后才能继续",
+        sourceTool: "claude",
+      },
+    });
+  });
 });

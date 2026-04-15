@@ -1,3 +1,5 @@
+import type { ExternalApprovalState } from "../../shared/sessionTypes";
+
 function firstString(payload: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const value = payload[key];
@@ -6,6 +8,36 @@ function firstString(payload: Record<string, unknown>, keys: readonly string[]):
     }
   }
   return undefined;
+}
+
+function maybeBuildClaudeExternalApproval(
+  payload: Record<string, unknown>,
+  sessionId: string,
+  timestamp: number,
+  cwd: string | undefined,
+): ExternalApprovalState | undefined {
+  const message = firstString(payload, ["message", "notification", "prompt"]);
+  if (!message) {
+    return undefined;
+  }
+  if (!(/\b(permission|approval|approve|allow)\b/i.test(message) || /权限|授权|审批|批准|允许/.test(message))) {
+    return undefined;
+  }
+
+  return {
+    kind: "approval_required",
+    title: "Approval required in Claude Code",
+    message,
+    sourceTool: "claude",
+    updatedAt: timestamp,
+    jumpTarget: {
+      agent: "claude",
+      appName: "Terminal",
+      ...(cwd ? { workspacePath: cwd } : {}),
+      sessionId,
+      fallbackBehavior: "activate_app",
+    },
+  };
 }
 
 function parseClaudeHookPayload(trimmed: string): Record<string, unknown> {
@@ -132,6 +164,7 @@ function buildNotificationEvent(
   hookEventName: string,
 ): string {
   const message = firstString(payload, ["message", "notification", "prompt"]) ?? "Claude notification";
+  const externalApproval = maybeBuildClaudeExternalApproval(payload, sessionId, timestamp, cwd);
   return JSON.stringify({
     type: "status_change",
     sessionId,
@@ -144,6 +177,7 @@ function buildNotificationEvent(
       notification_type: "claude_notification",
       ...(cwd ? { cwd } : {}),
     },
+    ...(externalApproval ? { externalApproval } : {}),
     activityItems: [
       {
         id: `claude-hook:${sessionId}:${timestamp}:notification`,

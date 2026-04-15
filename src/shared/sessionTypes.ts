@@ -20,6 +20,13 @@ export function isSessionStatus(value: string): value is SessionStatus {
 }
 
 export type PendingActionType = "approval" | "single_choice" | "multi_choice";
+export type JumpTargetAgent =
+  | "cursor"
+  | "codex"
+  | "claude"
+  | "codebuddy"
+  | "goland"
+  | "pycharm";
 
 export type ActivityKind = "message" | "tool" | "note" | "system";
 export type ActivitySource = "user" | "assistant" | "agent" | "tool" | "system";
@@ -110,6 +117,25 @@ export interface PendingAction {
   options: string[];
 }
 
+export interface SessionJumpTarget {
+  agent: JumpTargetAgent;
+  appName?: string;
+  workspacePath?: string;
+  sessionId?: string;
+  conversationId?: string;
+  windowHint?: string;
+  fallbackBehavior: "activate_app";
+}
+
+export interface ExternalApprovalState {
+  kind: "approval_required";
+  title: string;
+  message: string;
+  sourceTool: JumpTargetAgent;
+  updatedAt: number;
+  jumpTarget?: SessionJumpTarget;
+}
+
 export function isPendingAction(value: unknown): value is PendingAction {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
@@ -117,6 +143,67 @@ export function isPendingAction(value: unknown): value is PendingAction {
   if (typeof o.type !== "string") return false;
   if (!(PENDING_ACTION_TYPES as readonly string[]).includes(o.type)) return false;
   if (!Array.isArray(o.options) || !o.options.every((x) => typeof x === "string")) {
+    return false;
+  }
+  return true;
+}
+
+export function isSessionJumpTarget(value: unknown): value is SessionJumpTarget {
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  if (
+    o.agent !== "cursor" &&
+    o.agent !== "codex" &&
+    o.agent !== "claude" &&
+    o.agent !== "codebuddy" &&
+    o.agent !== "goland" &&
+    o.agent !== "pycharm"
+  ) {
+    return false;
+  }
+  if (o.fallbackBehavior !== "activate_app") {
+    return false;
+  }
+  if ("appName" in o && o.appName !== undefined && typeof o.appName !== "string") {
+    return false;
+  }
+  if ("workspacePath" in o && o.workspacePath !== undefined && typeof o.workspacePath !== "string") {
+    return false;
+  }
+  if ("sessionId" in o && o.sessionId !== undefined && typeof o.sessionId !== "string") {
+    return false;
+  }
+  if ("conversationId" in o && o.conversationId !== undefined && typeof o.conversationId !== "string") {
+    return false;
+  }
+  if ("windowHint" in o && o.windowHint !== undefined && typeof o.windowHint !== "string") {
+    return false;
+  }
+  return true;
+}
+
+export function isExternalApprovalState(value: unknown): value is ExternalApprovalState {
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  if (o.kind !== "approval_required") return false;
+  if (
+    typeof o.title !== "string" ||
+    typeof o.message !== "string" ||
+    typeof o.updatedAt !== "number"
+  ) {
+    return false;
+  }
+  if (
+    o.sourceTool !== "cursor" &&
+    o.sourceTool !== "codex" &&
+    o.sourceTool !== "claude" &&
+    o.sourceTool !== "codebuddy" &&
+    o.sourceTool !== "goland" &&
+    o.sourceTool !== "pycharm"
+  ) {
+    return false;
+  }
+  if ("jumpTarget" in o && o.jumpTarget !== undefined && !isSessionJumpTarget(o.jumpTarget)) {
     return false;
   }
   return true;
@@ -194,4 +281,5 @@ export interface SessionRecord {
   activityItems?: ActivityItem[];
   activities?: string[];
   pendingActions?: PendingAction[];
+  externalApproval?: ExternalApprovalState;
 }

@@ -70,7 +70,10 @@ function checkBadgeClass(check: IntegrationAgentCheck): string {
 }
 
 function shouldShowAction(agent: IntegrationAgentDiagnostics): boolean {
-  return agent.supported && agent.health !== "active";
+  return (
+    agent.supported &&
+    (agent.health !== "active" || (agent.id === "codex" && !agent.hookInstalled))
+  );
 }
 
 export function IntegrationPanel({
@@ -85,8 +88,8 @@ export function IntegrationPanel({
 }: IntegrationPanelProps) {
   const i18n = useI18n();
   const runtime = diagnostics?.runtime;
-  const attentionAgents = (diagnostics?.agents ?? []).filter((agent) => agent.health !== "active");
-  const healthyAgents = (diagnostics?.agents ?? []).filter((agent) => agent.health === "active");
+  const attentionAgents = (diagnostics?.agents ?? []).filter(shouldShowAction);
+  const healthyAgents = (diagnostics?.agents ?? []).filter((agent) => !shouldShowAction(agent));
   const allHealthy = diagnostics !== null && attentionAgents.length === 0;
 
   return (

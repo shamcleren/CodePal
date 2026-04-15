@@ -143,6 +143,47 @@ const unavailableDiagnostics: IntegrationDiagnostics = {
 };
 
 describe("IntegrationPanel", () => {
+  it("shows an enhancement action for Codex when session-log monitoring is active but the realtime hook is missing", () => {
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="zh-CN">
+        <IntegrationPanel
+          diagnostics={{
+            ...diagnostics,
+            agents: [
+              {
+                id: "codex",
+                label: "Codex",
+                supported: true,
+                configPath: "/Users/demo/.codex/sessions",
+                configExists: true,
+                hookScriptPath: "/Users/demo/.codex/sessions",
+                hookScriptExists: true,
+                hookInstalled: false,
+                health: "active",
+                healthLabel: "正常",
+                healthLabelKey: "integration.health.active",
+                actionLabel: "增强",
+                actionLabelKey: "integration.action.enhance",
+                statusMessage: "已接入 Codex 监控（基于 session 日志）",
+                statusMessageKey: "integration.message.codex.monitoring",
+              },
+            ],
+          }}
+          loading={false}
+          installingAgentId={null}
+          feedbackMessage={null}
+          errorMessage={null}
+          onRefresh={vi.fn()}
+          onInstall={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain("已接入 Codex 监控（基于 session 日志）");
+    expect(html).toContain(">增强<");
+    expect(html).not.toContain("当前没有需要修复或登录的接入项");
+  });
+
   it("renders hook command context, listener, and agent actions", () => {
     const html = renderToStaticMarkup(
       <I18nProvider locale="zh-CN">

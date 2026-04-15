@@ -22,6 +22,7 @@ import type {
   SessionHistoryPageRequest,
 } from "../../shared/historyTypes";
 import type { SessionRecord } from "../../shared/sessionTypes";
+import type { SessionJumpTarget } from "../../shared/sessionTypes";
 import type { AppUpdateState } from "../../shared/updateTypes";
 import type { UsageOverview } from "../../shared/usageTypes";
 
@@ -227,6 +228,15 @@ contextBridge.exposeInMainWorld("codepal", {
   },
   writeClipboardText(text: string) {
     return ipcRenderer.invoke("codepal:write-clipboard-text", { text }) as Promise<void>;
+  },
+  jumpToSessionTarget(target: SessionJumpTarget | undefined) {
+    return ipcRenderer.invoke("codepal:jump-to-session-target", { target }) as Promise<{
+      ok: true;
+      mode: "precise" | "activate_app";
+    } | {
+      ok: false;
+      error: string;
+    }>;
   },
   respondToPendingAction(sessionId: string, actionId: string, option: string) {
     ipcRenderer.send("codepal:action-response", { sessionId, actionId, option });
