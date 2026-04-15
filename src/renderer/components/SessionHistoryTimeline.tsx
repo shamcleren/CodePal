@@ -486,6 +486,7 @@ export function SessionHistoryTimeline({
   const requestIdRef = useRef(0);
   const initialLoadDoneRef = useRef(false);
   const pendingScrollRestoreRef = useRef<ScrollAnchor | null>(null);
+  const isRestoringScrollRef = useRef(false);
   const [initialLoadAttempt, setInitialLoadAttempt] = useState(0);
   const [persistedItems, setPersistedItems] = useState<ActivityItem[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
@@ -768,70 +769,43 @@ export function SessionHistoryTimeline({
         return;
       }
 
-      let firstFrame = 0;
-      let secondFrame = 0;
-      let stopObserving = 0;
-      const restoreScrollPosition = () => {
+      // Suppress scroll handlers during restoration to prevent cascading
+      // state updates (e.g. setIsNearHistoryTop) that trigger extra renders.
+      isRestoringScrollRef.current = true;
+
+      // Single synchronous restoration in useLayoutEffect is sufficient —
+      // React has committed the DOM at this point, so scrollHeight is final.
+      restoreScrollAnchor(node, pendingScrollRestore);
+
+      // One safety RAF to handle any deferred layout (e.g. font loading),
+      // then clear the suppression flag.
+      const frame = window.requestAnimationFrame(() => {
         restoreScrollAnchor(node, pendingScrollRestore);
-      };
-
-      restoreScrollPosition();
-      firstFrame = window.requestAnimationFrame(() => {
-        restoreScrollPosition();
-        secondFrame = window.requestAnimationFrame(restoreScrollPosition);
+        isRestoringScrollRef.current = false;
       });
-
-      const observer =
-        typeof ResizeObserver !== "undefined"
-          ? new ResizeObserver(restoreScrollPosition)
-          : null;
-      observer?.observe(node);
-      stopObserving = window.setTimeout(() => {
-        observer?.disconnect();
-      }, 800);
 
       pendingScrollRestoreRef.current = null;
       shouldStickToBottomRef.current = false;
       lastExpandedRef.current = expanded;
       return () => {
-        window.cancelAnimationFrame(firstFrame);
-        window.cancelAnimationFrame(secondFrame);
-        window.clearTimeout(stopObserving);
-        observer?.disconnect();
+        window.cancelAnimationFrame(frame);
+        isRestoringScrollRef.current = false;
       };
     }
 
     const justOpened = !lastExpandedRef.current;
     if (justOpened || shouldStickToBottomRef.current) {
-      let firstFrame = 0;
-      let secondFrame = 0;
-      let stopObserving = 0;
       const pinToBottom = () => {
         node.scrollTop = node.scrollHeight;
       };
 
       pinToBottom();
-      firstFrame = window.requestAnimationFrame(() => {
-        pinToBottom();
-        secondFrame = window.requestAnimationFrame(pinToBottom);
-      });
-
-      const observer =
-        typeof ResizeObserver !== "undefined"
-          ? new ResizeObserver(pinToBottom)
-          : null;
-      observer?.observe(node);
-      stopObserving = window.setTimeout(() => {
-        observer?.disconnect();
-      }, 800);
+      const frame = window.requestAnimationFrame(pinToBottom);
 
       lastExpandedRef.current = expanded;
 
       return () => {
-        window.cancelAnimationFrame(firstFrame);
-        window.cancelAnimationFrame(secondFrame);
-        window.clearTimeout(stopObserving);
-        observer?.disconnect();
+        window.cancelAnimationFrame(frame);
       };
     }
 
@@ -866,6 +840,9 @@ export function SessionHistoryTimeline({
   }
 
   function handleDetailsScroll() {
+    if (isRestoringScrollRef.current) {
+      return;
+    }
     const node = detailsRef.current;
     if (!node) {
       return;
@@ -881,6 +858,9 @@ export function SessionHistoryTimeline({
   }
 
   function handleDetailsWheel(event: WheelEvent<HTMLDivElement>) {
+    if (isRestoringScrollRef.current) {
+      return;
+    }
     const node = detailsRef.current;
     if (!node) {
       return;

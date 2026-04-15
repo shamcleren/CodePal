@@ -1189,6 +1189,7 @@ body {
   gap: 12px;
   min-height: 0;
   overflow: auto;
+  overflow-anchor: none;
   padding: 12px 14px 14px;
 }
 
