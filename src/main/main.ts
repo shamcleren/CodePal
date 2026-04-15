@@ -4,6 +4,7 @@ import path from "node:path";
 import type { AppSettingsPatch } from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
 import { dispatchActionResponse } from "./actionResponse/dispatchActionResponse";
+import type { ActionResponseResult } from "./actionResponse/dispatchActionResponse";
 import { HOOK_CLI_NOT_HOOK_MODE, runHookCli } from "./hook/runHookCli";
 import { lineToSessionEvent, lineToUsageSnapshot } from "./ingress/hookIngress";
 import { createIntegrationService } from "./integrations/integrationService";
@@ -41,6 +42,9 @@ let notificationServiceRef: NotificationService | null = null;
 const sessionStore = createSessionStore({
   onStatusChange: (change) => {
     notificationServiceRef?.onSessionStateChange(change);
+  },
+  onPendingActionCreated: (params) => {
+    notificationServiceRef?.onPendingActionCreated(params);
   },
 });
 const usageStore = createUsageStore();
@@ -280,6 +284,13 @@ function wireActionResponseIpc(
     const option = typeof p.option === "string" ? p.option : "";
     if (!sessionId || !actionId || !option) return;
 
+    const emitResult = (result: ActionResponseResult) => {
+      const win = mainWindow;
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("codepal:action-response-result", result);
+      }
+    };
+
     void dispatchActionResponse(
       sessionStore,
       actionResponseTransport,
@@ -287,6 +298,7 @@ function wireActionResponseIpc(
       sessionId,
       actionId,
       option,
+      emitResult,
     ).catch((err) => {
       console.error("[CodePal] action_response transport error:", err);
     });

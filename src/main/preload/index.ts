@@ -231,4 +231,23 @@ contextBridge.exposeInMainWorld("codepal", {
   respondToPendingAction(sessionId: string, actionId: string, option: string) {
     ipcRenderer.send("codepal:action-response", { sessionId, actionId, option });
   },
+  onActionResponseResult(handler: (result: {
+    sessionId: string;
+    actionId: string;
+    result: "success" | "error";
+    option: string;
+    error?: string;
+  }) => void) {
+    const channel = "codepal:action-response-result";
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      result: { sessionId: string; actionId: string; result: "success" | "error"; option: string; error?: string },
+    ) => {
+      handler(result);
+    };
+    ipcRenderer.on(channel, listener);
+    return () => {
+      ipcRenderer.removeListener(channel, listener);
+    };
+  },
 });
