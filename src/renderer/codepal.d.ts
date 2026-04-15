@@ -68,6 +68,7 @@ export type CodePalApi = {
   openExternalTarget: (target: string) => Promise<string>;
   writeClipboardText: (text: string) => Promise<void>;
   respondToPendingAction: (sessionId: string, actionId: string, option: string) => void;
+  onActionResponseResult: (handler: (result: { sessionId: string; actionId: string; result: "success" | "error"; option: string; error?: string }) => void) => () => void;
 };
 
 declare global {
