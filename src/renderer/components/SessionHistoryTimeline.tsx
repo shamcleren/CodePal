@@ -436,7 +436,6 @@ export type SessionHistoryTimelineProps = {
   session: MonitorSessionRow;
   historyVersion?: number;
   expanded: boolean;
-  showExperimentalControls: boolean;
   onRespond: (sessionId: string, actionId: string, option: string) => void;
 };
 
@@ -444,7 +443,6 @@ export function SessionHistoryTimeline({
   session,
   historyVersion = 0,
   expanded,
-  showExperimentalControls,
   onRespond,
 }: SessionHistoryTimelineProps) {
   const i18n = useI18n();
@@ -940,7 +938,7 @@ export function SessionHistoryTimeline({
           scrollContainerRef={detailsRef}
         />
       ) : null}
-      {showExperimentalControls && (session.pendingActions?.length ?? 0) > 0 ? (
+      {(session.pendingActions?.length ?? 0) > 0 ? (
         <div className="session-row__interaction">
           {(session.pendingActions ?? []).map((action) => (
             <div key={action.id} className="pending-action" aria-label={action.title}>

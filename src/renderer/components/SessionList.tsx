@@ -70,6 +70,18 @@ export function SessionList({
     });
   }, []);
 
+  const prevPendingCounts = useRef<Record<string, number>>({});
+  useEffect(() => {
+    for (const session of sessions) {
+      const prev = prevPendingCounts.current[session.id] ?? 0;
+      const next = session.pendingCount ?? 0;
+      if (prev === 0 && next > 0) {
+        setExpandedSessionId(session.id);
+      }
+      prevPendingCounts.current[session.id] = next;
+    }
+  }, [sessions]);
+
   const registerRow = useCallback((sessionId: string) => {
     return (node: HTMLElement | null) => {
       if (!node) {
@@ -94,7 +106,6 @@ export function SessionList({
           historyVersion={historyVersion}
           expanded={expandedSessionId === session.id}
           deemphasized={hasExpandedSession && expandedSessionId !== session.id}
-          showExperimentalControls={false}
           onToggleExpanded={toggleExpanded}
           onRespond={onRespond}
         />

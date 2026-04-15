@@ -24,14 +24,13 @@ function baseRow(overrides: Partial<MonitorSessionRow> = {}): MonitorSessionRow 
   };
 }
 
-function renderRow(row: MonitorSessionRow, options?: { expanded?: boolean; showExperimentalControls?: boolean }) {
+function renderRow(row: MonitorSessionRow, options?: { expanded?: boolean }) {
   return renderToStaticMarkup(
     <I18nProvider locale="en">
       <SessionRow
         session={row}
         expanded={options?.expanded ?? false}
         deemphasized={false}
-        showExperimentalControls={options?.showExperimentalControls}
         onToggleExpanded={vi.fn()}
         onRespond={vi.fn()}
       />
@@ -52,7 +51,7 @@ describe("SessionRow pending action", () => {
             },
           ],
         }),
-      { expanded: true, showExperimentalControls: true },
+      { expanded: true },
     );
     expect(html).toContain("Proceed?");
     expect(html).toContain("Awaiting decision");
@@ -78,7 +77,7 @@ describe("SessionRow pending action", () => {
             },
           ],
         }),
-      { expanded: true, showExperimentalControls: true },
+      { expanded: true },
     );
     expect(html).toContain("First decision");
     expect(html).toContain("Second decision");
@@ -129,7 +128,7 @@ describe("SessionRow pending action", () => {
           ],
           hoverSummary: "scan repo",
         }),
-      { expanded: true, showExperimentalControls: true },
+      { expanded: true },
     );
 
     expect(html).toContain("session-stream");
@@ -211,7 +210,7 @@ describe("SessionRow pending action", () => {
             },
           ],
         }),
-      { expanded: true, showExperimentalControls: true },
+      { expanded: true },
     );
 
     expect(html).toContain("session-row__details");
@@ -243,7 +242,7 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("</div><div class=\"session-row__footer\">");
   });
 
-  it("hides pending action UI in dashboard mode even when pending actions exist", () => {
+  it("renders pending action UI when pending actions exist", () => {
     const html = renderRow(
       baseRow({
           pendingActions: [
@@ -255,12 +254,12 @@ describe("SessionRow pending action", () => {
             },
           ],
         }),
-      { expanded: true, showExperimentalControls: false },
+      { expanded: true },
     );
 
-    expect(html).not.toContain("Awaiting decision");
-    expect(html).not.toContain(">Allow<");
-    expect(html).not.toContain("session-row__interaction");
+    expect(html).toContain("Awaiting decision");
+    expect(html).toContain(">Allow<");
+    expect(html).toContain("session-row__interaction");
   });
 
   it("renders inline code and external-style markdown links inside assistant messages", () => {

@@ -107,7 +107,6 @@ type SessionRowProps = {
   historyVersion?: number;
   expanded: boolean;
   deemphasized: boolean;
-  showExperimentalControls?: boolean;
   onToggleExpanded: (sessionId: string) => void;
   onRespond: (sessionId: string, actionId: string, option: string) => void;
 };
@@ -117,7 +116,6 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
   historyVersion = 0,
   expanded,
   deemphasized,
-  showExperimentalControls = true,
   onToggleExpanded,
   onRespond,
 }, ref) {
@@ -174,7 +172,6 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
           session={session}
           historyVersion={historyVersion}
           expanded={expanded}
-          showExperimentalControls={showExperimentalControls}
           onRespond={onRespond}
         />
       ) : null}
