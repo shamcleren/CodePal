@@ -1739,4 +1739,88 @@ describe("createSessionStore", () => {
       expect(store.getSession("s1")!.status).toBe("running");
     });
   });
+
+  describe("onPendingActionCreated", () => {
+    it("fires when pendingCount goes from 0 to 1", () => {
+      const onPendingActionCreated = vi.fn();
+      const store = createSessionStore({ onPendingActionCreated });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 1,
+        pendingAction: { id: "act-1", type: "approval", title: "Run?", options: ["Allow", "Deny"] },
+      });
+      expect(onPendingActionCreated).toHaveBeenCalledTimes(1);
+      expect(onPendingActionCreated).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: "s1", tool: "cursor", pendingCount: 1 }),
+      );
+    });
+
+    it("does not fire when a second pending action is added to non-zero count", () => {
+      const onPendingActionCreated = vi.fn();
+      const store = createSessionStore({ onPendingActionCreated });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 1,
+        pendingAction: { id: "act-1", type: "approval", title: "First", options: ["Allow", "Deny"] },
+      });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 2,
+        pendingAction: { id: "act-2", type: "approval", title: "Second", options: ["Allow", "Deny"] },
+      });
+      expect(onPendingActionCreated).toHaveBeenCalledTimes(1);
+    });
+
+    it("fires again when new pending action arrives after all previous were closed", () => {
+      const onPendingActionCreated = vi.fn();
+      const store = createSessionStore({ onPendingActionCreated });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 1,
+        pendingAction: { id: "act-1", type: "approval", title: "First", options: ["Allow", "Deny"] },
+      });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 2,
+        pendingClosed: { actionId: "act-1", reason: "consumed_remote" },
+      });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 3,
+        pendingAction: { id: "act-2", type: "approval", title: "Second", options: ["Allow", "Deny"] },
+      });
+      expect(onPendingActionCreated).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not fire when no pendingAction in event", () => {
+      const onPendingActionCreated = vi.fn();
+      const store = createSessionStore({ onPendingActionCreated });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "cursor",
+        status: "running",
+        timestamp: 1,
+      });
+      expect(onPendingActionCreated).not.toHaveBeenCalled();
+    });
+  });
 });

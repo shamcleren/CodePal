@@ -668,8 +668,17 @@ export type SessionStatusChange = {
   lastUserMessage?: string;
 };
 
+export type PendingActionCreated = {
+  sessionId: string;
+  tool: string;
+  pendingCount: number;
+  title?: string;
+  task?: string;
+};
+
 type SessionStoreOptions = {
   onStatusChange?: (change: SessionStatusChange) => void;
+  onPendingActionCreated?: (params: PendingActionCreated) => void;
 };
 
 export function createSessionStore(options?: SessionStoreOptions) {
@@ -942,6 +951,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
       const preservePreviousStatus = shouldPreservePreviousStatus(prev, event);
       const nextUpdatedAt = Math.max(prev?.updatedAt ?? Number.NEGATIVE_INFINITY, event.timestamp);
 
+      const prevPendingSize = prev?.pendingById.size ?? 0;
       const internal: InternalSessionRecord = {
         id: sessionId,
         tool: event.tool,
@@ -974,6 +984,20 @@ export function createSessionStore(options?: SessionStoreOptions) {
           title: internal.title,
           task: internal.task,
           lastUserMessage: latestUserMessageBody(internal),
+        });
+      }
+
+      if (
+        options?.onPendingActionCreated &&
+        prevPendingSize === 0 &&
+        internal.pendingById.size > 0
+      ) {
+        options.onPendingActionCreated({
+          sessionId: internal.id,
+          tool: internal.tool,
+          pendingCount: internal.pendingById.size,
+          title: internal.title,
+          task: internal.task,
         });
       }
     },
