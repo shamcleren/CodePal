@@ -2,6 +2,14 @@ import type { PendingCloseReason, ResponseTarget } from "../../shared/sessionTyp
 import type { ActionResponseTransport } from "./actionResponseTransport";
 import { createActionResponseTransportFromResponseTarget } from "./createActionResponseTransport";
 
+export type ActionResponseResult = {
+  sessionId: string;
+  actionId: string;
+  result: "success" | "error";
+  option: string;
+  error?: string;
+};
+
 export type PendingActionResponsePrep = {
   line: string;
   responseTarget?: ResponseTarget;
@@ -31,6 +39,7 @@ export async function dispatchActionResponse(
   sessionId: string,
   actionId: string,
   option: string,
+  emitResult?: (result: ActionResponseResult) => void,
 ): Promise<boolean> {
   const inFlightKey = getPendingActionResponseKey(sessionId, actionId);
   if (inFlightPendingActionResponseKeys.has(inFlightKey)) {
@@ -60,7 +69,17 @@ export async function dispatchActionResponse(
     await transport.send(prep.line);
     sessionStore.closePendingAction(sessionId, actionId, "consumed_local");
     broadcastSessions();
+    emitResult?.({ sessionId, actionId, result: "success", option });
     return true;
+  } catch (err) {
+    emitResult?.({
+      sessionId,
+      actionId,
+      result: "error",
+      option,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
   } finally {
     inFlightPendingActionResponseKeys.delete(inFlightKey);
   }

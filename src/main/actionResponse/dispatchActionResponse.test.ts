@@ -310,6 +310,75 @@ describe("dispatchActionResponse", () => {
     warnSpy.mockRestore();
   });
 
+  it("when send succeeds: calls emitResult with success result", async () => {
+    const store = createSessionStore();
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "cursor",
+      status: "waiting",
+      timestamp: 1,
+      pendingAction: { id: "act-1", type: "approval", title: "Run?", options: ["Allow", "Deny"] },
+    });
+
+    const transport = { send: vi.fn(async () => {}) };
+    const broadcastSessions = vi.fn();
+    const emitResult = vi.fn();
+
+    await dispatchActionResponse(store, transport, broadcastSessions, "s1", "act-1", "Allow", emitResult);
+
+    expect(emitResult).toHaveBeenCalledWith({
+      sessionId: "s1",
+      actionId: "act-1",
+      result: "success",
+      option: "Allow",
+    });
+  });
+
+  it("when send fails: calls emitResult with error result then rethrows", async () => {
+    const store = createSessionStore();
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "cursor",
+      status: "waiting",
+      timestamp: 1,
+      pendingAction: { id: "act-1", type: "approval", title: "Run?", options: ["Allow", "Deny"] },
+    });
+
+    const transport = { send: vi.fn(async () => { throw new Error("socket refused"); }) };
+    const broadcastSessions = vi.fn();
+    const emitResult = vi.fn();
+
+    await expect(
+      dispatchActionResponse(store, transport, broadcastSessions, "s1", "act-1", "Allow", emitResult),
+    ).rejects.toThrow("socket refused");
+
+    expect(emitResult).toHaveBeenCalledWith({
+      sessionId: "s1",
+      actionId: "act-1",
+      result: "error",
+      option: "Allow",
+      error: "socket refused",
+    });
+  });
+
+  it("when emitResult is omitted: does not throw", async () => {
+    const store = createSessionStore();
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "cursor",
+      status: "waiting",
+      timestamp: 1,
+      pendingAction: { id: "act-1", type: "approval", title: "Run?", options: ["Allow", "Deny"] },
+    });
+    const transport = { send: vi.fn(async () => {}) };
+    await expect(
+      dispatchActionResponse(store, { send: transport.send }, vi.fn(), "s1", "act-1", "Allow"),
+    ).resolves.toBe(true);
+  });
+
   it("when pending does not match: returns false and does not call transport.send", async () => {
     const store = createSessionStore();
     store.applyEvent({
