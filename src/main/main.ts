@@ -63,6 +63,7 @@ if (requestedHomeDir) {
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let ipcHubRef: ReturnType<typeof createIpcHub> | null = null;
 let pendingExpirySweepTimer: ReturnType<typeof setInterval> | null = null;
 let claudeQuotaRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let codeBuddyQuotaRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -316,6 +317,41 @@ function wireActionResponseIpc(
       console.error("[CodePal] action_response transport error:", err);
     });
   });
+  ipcMain.on("codepal:send-message", (_event, payload: unknown) => {
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      typeof (payload as Record<string, unknown>).sessionId !== "string" ||
+      typeof (payload as Record<string, unknown>).text !== "string"
+    ) {
+      return;
+    }
+    const { sessionId, text } = payload as { sessionId: string; text: string };
+    if (!sessionId || !text) return;
+
+    const hubRef = ipcHubRef;
+    if (!hubRef) {
+      const win = mainWindow;
+      if (win && !win.isDestroyed()) {
+        win.webContents.send("codepal:send-message-result", {
+          sessionId,
+          result: "error",
+          error: "IPC hub not initialized",
+        });
+      }
+      return;
+    }
+
+    const result = hubRef.sendMessageToSession(sessionId, text);
+    const win = mainWindow;
+    if (win && !win.isDestroyed()) {
+      win.webContents.send("codepal:send-message-result", {
+        sessionId,
+        result: result.ok ? "success" : "error",
+        error: result.ok ? undefined : result.error,
+      });
+    }
+  });
 }
 
 function getOrCreateMainWindow(): BrowserWindow {
@@ -337,36 +373,48 @@ async function wireIpcHub(
   currentHistoryStore: ReturnType<typeof createAppHistoryStore>,
   usageSnapshotCache?: ReturnType<typeof createUsageSnapshotCache>,
 ): Promise<"listening" | "already_running" | "error"> {
-  const { server } = createIpcHub((line) => {
-    const usageSnapshot = lineToUsageSnapshot(line);
-    if (usageSnapshot) {
-      usageStore.applySnapshot(usageSnapshot);
-      if (
-        usageSnapshot.agent === "claude" &&
-        usageSnapshot.source === "statusline-derived" &&
-        usageSnapshot.rateLimit
-      ) {
-        usageSnapshotCache?.saveClaudeRateLimitSnapshot(usageSnapshot);
+  const hub = createIpcHub({
+    onMessage: (line) => {
+      const usageSnapshot = lineToUsageSnapshot(line);
+      if (usageSnapshot) {
+        usageStore.applySnapshot(usageSnapshot);
+        if (
+          usageSnapshot.agent === "claude" &&
+          usageSnapshot.source === "statusline-derived" &&
+          usageSnapshot.rateLimit
+        ) {
+          usageSnapshotCache?.saveClaudeRateLimitSnapshot(usageSnapshot);
+        }
+        broadcastUsageOverview();
       }
-      broadcastUsageOverview();
-    }
-    const event = lineToSessionEvent(line);
-    if (event) {
-      sessionStore.applyEvent(event);
-      integrationService.recordEvent(event.tool, event.status, event.timestamp);
+      const event = lineToSessionEvent(line);
+      if (event) {
+        sessionStore.applyEvent(event);
+        integrationService.recordEvent(event.tool, event.status, event.timestamp);
+        sessionBroadcastScheduler.request();
+        const session = sessionStore.getSession(event.sessionId) ?? undefined;
+        if (!historyWriter) {
+          return;
+        }
+        queueAcceptedSessionEventWrite({
+          historyWriter,
+          event,
+          session,
+          persistenceEnabled: settingsService.getSettings().history.persistenceEnabled,
+        });
+      }
+    },
+    onConnectionRegistered: (sessionId) => {
+      sessionStore.setInputChannel(sessionId, true);
       sessionBroadcastScheduler.request();
-      const session = sessionStore.getSession(event.sessionId) ?? undefined;
-      if (!historyWriter) {
-        return;
-      }
-      queueAcceptedSessionEventWrite({
-        historyWriter,
-        event,
-        session,
-        persistenceEnabled: settingsService.getSettings().history.persistenceEnabled,
-      });
-    }
+    },
+    onConnectionLost: (sessionId) => {
+      sessionStore.setInputChannel(sessionId, false);
+      sessionBroadcastScheduler.request();
+    },
   });
+  ipcHubRef = hub;
+  const { server } = hub;
 
   const socketPath = process.env.CODEPAL_SOCKET_PATH?.trim();
 
