@@ -65,6 +65,7 @@ type InternalSessionRecord = {
   externalApproval?: ExternalApprovalState;
   /** 最近关闭的 action（新 upsert 同 id 时会移除），供控制器去重 */
   closedLedger: Map<string, PendingCloseReason>;
+  hasInputChannel: boolean;
 };
 
 export type PendingActionResponsePrep = {
@@ -385,6 +386,7 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
       : {}),
     ...(internal.activityItems.length > 0 ? { activityItems: internal.activityItems } : {}),
     ...(internal.activities.length > 0 ? { activities: internal.activities } : {}),
+    hasInputChannel: internal.hasInputChannel,
   };
   if (internal.pendingById.size === 0) {
     return internal.externalApproval ? { ...base, externalApproval: internal.externalApproval } : base;
@@ -996,6 +998,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
         pendingById: nextPendingById,
         externalApproval: nextExternalApproval,
         closedLedger: nextClosedLedger,
+        hasInputChannel: prev?.hasInputChannel ?? false,
       };
       sessions.set(sessionId, internal);
       if (resolvedTarget.absorbedSessionId && resolvedTarget.absorbedSessionId !== sessionId) {
@@ -1096,6 +1099,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
         pendingById: new Map(),
         externalApproval: undefined,
         closedLedger: new Map(),
+        hasInputChannel: false,
       };
       sessions.set(record.id, internal);
     },
@@ -1117,6 +1121,12 @@ export function createSessionStore(options?: SessionStoreOptions) {
           return a.id.localeCompare(b.id);
         })
         .map(toSessionRecord);
+    },
+
+    setInputChannel(sessionId: string, connected: boolean) {
+      const internal = sessions.get(sessionId);
+      if (!internal) return;
+      sessions.set(sessionId, { ...internal, hasInputChannel: connected });
     },
   };
 }
