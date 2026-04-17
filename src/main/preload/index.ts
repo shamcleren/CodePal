@@ -260,4 +260,17 @@ contextBridge.exposeInMainWorld("codepal", {
       ipcRenderer.removeListener(channel, listener);
     };
   },
+  sendMessage(sessionId: string, text: string) {
+    ipcRenderer.send("codepal:send-message", { sessionId, text });
+  },
+  onSendMessageResult(handler: (result: { sessionId: string; result: "success" | "error"; error?: string }) => void) {
+    const channel = "codepal:send-message-result";
+    const listener = (_event: Electron.IpcRendererEvent, result: { sessionId: string; result: "success" | "error"; error?: string }) => {
+      handler(result);
+    };
+    ipcRenderer.on(channel, listener);
+    return () => {
+      ipcRenderer.removeListener(channel, listener);
+    };
+  },
 });

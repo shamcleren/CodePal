@@ -72,6 +72,8 @@ export type CodePalApi = {
   >;
   respondToPendingAction: (sessionId: string, actionId: string, option: string) => void;
   onActionResponseResult: (handler: (result: { sessionId: string; actionId: string; result: "success" | "error"; option: string; error?: string }) => void) => () => void;
+  sendMessage: (sessionId: string, text: string) => void;
+  onSendMessageResult: (handler: (result: { sessionId: string; result: "success" | "error"; error?: string }) => void) => () => void;
 };
 
 declare global {
