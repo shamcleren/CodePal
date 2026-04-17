@@ -282,4 +282,5 @@ export interface SessionRecord {
   activities?: string[];
   pendingActions?: PendingAction[];
   externalApproval?: ExternalApprovalState;
+  hasInputChannel?: boolean;
 }
