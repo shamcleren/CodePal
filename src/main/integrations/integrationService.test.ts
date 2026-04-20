@@ -336,6 +336,16 @@ describe("createIntegrationService", () => {
                 ],
               },
             ],
+            PreToolUse: [
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command: `"${wrapperHookPath}"`,
+                  },
+                ],
+              },
+            ],
             Stop: [
               {
                 hooks: [

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildClaudeEventLine } from "./claudeHook";
+import {
+  buildClaudeEventLine,
+  formatClaudePreToolUseResponse,
+  isClaudePreToolUsePayload,
+} from "./claudeHook";
 
 describe("claudeHook", () => {
   it("normalizes UserPromptSubmit into a running user-message event", () => {
@@ -114,6 +118,67 @@ describe("claudeHook", () => {
         message: "需要授权后才能继续",
         sourceTool: "claude",
       },
+    });
+  });
+
+  describe("isClaudePreToolUsePayload", () => {
+    it("returns true for PreToolUse payloads", () => {
+      expect(
+        isClaudePreToolUsePayload(
+          JSON.stringify({ session_id: "s", hook_event_name: "PreToolUse", tool_name: "Bash" }),
+        ),
+      ).toBe(true);
+    });
+
+    it("returns false for other hook events", () => {
+      expect(
+        isClaudePreToolUsePayload(
+          JSON.stringify({ session_id: "s", hook_event_name: "UserPromptSubmit" }),
+        ),
+      ).toBe(false);
+    });
+
+    it("returns false for non-JSON input", () => {
+      expect(isClaudePreToolUsePayload("not json")).toBe(false);
+    });
+  });
+
+  describe("formatClaudePreToolUseResponse", () => {
+    it("maps allow decisions to Claude Code permissionDecision: allow", () => {
+      const line = JSON.stringify({
+        type: "action_response",
+        sessionId: "s",
+        actionId: "a",
+        response: { kind: "approval", decision: "allow" },
+      });
+      expect(JSON.parse(formatClaudePreToolUseResponse(line))).toEqual({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "allow",
+          permissionDecisionReason: "User approved in CodePal",
+        },
+      });
+    });
+
+    it("maps deny decisions to Claude Code permissionDecision: deny", () => {
+      const line = JSON.stringify({
+        type: "action_response",
+        sessionId: "s",
+        actionId: "a",
+        response: { kind: "approval", decision: "deny" },
+      });
+      expect(JSON.parse(formatClaudePreToolUseResponse(line))).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+        },
+      });
+    });
+
+    it("defaults to deny when the response line is malformed", () => {
+      expect(JSON.parse(formatClaudePreToolUseResponse("not json"))).toMatchObject({
+        hookSpecificOutput: { permissionDecision: "deny" },
+      });
     });
   });
 });

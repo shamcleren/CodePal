@@ -1,5 +1,9 @@
 import { runBlockingHookFromRaw } from "./blockingHookBridge";
-import { runClaudeHookPipeline } from "./claudeHook";
+import {
+  isClaudePreToolUsePayload,
+  runClaudeHookPipeline,
+  runClaudePreToolUsePipeline,
+} from "./claudeHook";
 import { buildClaudeStatusLineUsageLine } from "./claudeStatusLine";
 import { runCodexHookPipeline } from "./codexHook";
 import { buildCursorLifecycleEventLine } from "./cursorLifecycleHook";
@@ -190,6 +194,13 @@ export async function runHookCli(
     if (parsed.kind === "claude") {
       if (!rawText) {
         throw new Error("claudeHook: empty payload");
+      }
+      if (isClaudePreToolUsePayload(rawText)) {
+        const responseJson = await runClaudePreToolUsePipeline(rawText, env);
+        if (responseJson) {
+          stdout.write(`${responseJson}\n`);
+        }
+        return 0;
       }
       const line = await runClaudeHookPipeline(rawText, env);
       await sendEventLine(line, env);

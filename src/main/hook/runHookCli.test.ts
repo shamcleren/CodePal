@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const sendEventLine = vi.hoisted(() => vi.fn<[], Promise<void>>());
 const runBlockingHookFromRaw = vi.hoisted(() => vi.fn<[], Promise<string | undefined>>());
 const runClaudeHookPipeline = vi.hoisted(() => vi.fn<[], Promise<string>>());
+const isClaudePreToolUsePayload = vi.hoisted(() => vi.fn<[], boolean>());
+const runClaudePreToolUsePipeline = vi.hoisted(() => vi.fn<[], Promise<string | undefined>>());
 const buildClaudeStatusLineUsageLine = vi.hoisted(() => vi.fn<[], string | null>());
 const runCodexHookPipeline = vi.hoisted(() => vi.fn<[], Promise<string | undefined>>());
 const runCursorHookPipeline = vi.hoisted(() => vi.fn<[], Promise<string | undefined>>());
@@ -18,6 +20,8 @@ vi.mock("./blockingHookBridge", () => ({
 
 vi.mock("./claudeHook", () => ({
   runClaudeHookPipeline,
+  isClaudePreToolUsePayload,
+  runClaudePreToolUsePipeline,
 }));
 
 vi.mock("./claudeStatusLine", () => ({
@@ -68,6 +72,8 @@ describe("runHookCli", () => {
     vi.clearAllMocks();
     sendEventLine.mockResolvedValue(undefined);
     runBlockingHookFromRaw.mockResolvedValue(undefined);
+    isClaudePreToolUsePayload.mockReturnValue(false);
+    runClaudePreToolUsePipeline.mockResolvedValue(undefined);
     runClaudeHookPipeline.mockResolvedValue(
       JSON.stringify({
         type: "status_change",
@@ -317,6 +323,71 @@ describe("runHookCli", () => {
       }),
       { CLAUDE_PROJECT_DIR: "/proj" },
     );
+  });
+
+  it("claude PreToolUse writes the blocking pipeline response to stdout and skips sendEventLine", async () => {
+    isClaudePreToolUsePayload.mockReturnValue(true);
+    runClaudePreToolUsePipeline.mockResolvedValue(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "allow",
+          permissionDecisionReason: "User approved in CodePal",
+        },
+      }),
+    );
+
+    const stdout = createMockWritable();
+    const code = await runHookCli(
+      argvWithHook("--codepal-hook", "claude"),
+      stdinFromString(
+        JSON.stringify({
+          session_id: "claude-1",
+          hook_event_name: "PreToolUse",
+          tool_name: "Bash",
+          tool_input: { command: "ls" },
+        }),
+      ),
+      stdout.stream,
+      createMockWritable().stream,
+      { CLAUDE_PROJECT_DIR: "/proj" },
+    );
+    expect(code).toBe(0);
+    expect(runClaudePreToolUsePipeline).toHaveBeenCalledTimes(1);
+    expect(runClaudeHookPipeline).not.toHaveBeenCalled();
+    expect(sendEventLine).not.toHaveBeenCalled();
+    expect(stdout.text()).toBe(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "allow",
+          permissionDecisionReason: "User approved in CodePal",
+        },
+      }) + "\n",
+    );
+  });
+
+  it("claude PreToolUse writes nothing on stdout when pipeline returns undefined (timeout)", async () => {
+    isClaudePreToolUsePayload.mockReturnValue(true);
+    runClaudePreToolUsePipeline.mockResolvedValue(undefined);
+
+    const stdout = createMockWritable();
+    const code = await runHookCli(
+      argvWithHook("--codepal-hook", "claude"),
+      stdinFromString(
+        JSON.stringify({
+          session_id: "claude-1",
+          hook_event_name: "PreToolUse",
+          tool_name: "Bash",
+          tool_input: { command: "ls" },
+        }),
+      ),
+      stdout.stream,
+      createMockWritable().stream,
+      {},
+    );
+    expect(code).toBe(0);
+    expect(stdout.text()).toBe("");
   });
 
   it("claude fails on empty stdin", async () => {
