@@ -6,6 +6,7 @@ import { buildCursorLifecycleEventLine } from "./cursorLifecycleHook";
 import { runCodeBuddyHookPipeline } from "./codeBuddyHook";
 import { runCursorHookPipeline } from "./cursorHook";
 import { sendEventLine } from "./sendEventBridge";
+import { runKeepAliveHook } from "./keepAliveHook";
 
 export const HOOK_CLI_NOT_HOOK_MODE = -1;
 
@@ -37,7 +38,8 @@ type ParsedArgv =
   | { kind: "cursor" }
   | { kind: "cursor-lifecycle"; phase: "sessionStart" | "stop" }
   | { kind: "send-event" }
-  | { kind: "blocking-hook" };
+  | { kind: "blocking-hook" }
+  | { kind: "keep-alive"; sessionId: string; tool: string };
 
 function parseArgv(argv: string[]): ParsedArgv {
   const index = argv.indexOf("--codepal-hook");
@@ -92,6 +94,16 @@ function parseArgv(argv: string[]): ParsedArgv {
     }
     return { kind: "cursor-lifecycle", phase };
   }
+  if (subcommand === "keep-alive") {
+    const sessionIdIdx = argv.indexOf("--session-id");
+    const toolIdx = argv.indexOf("--tool");
+    const sessionId = sessionIdIdx >= 0 ? argv[sessionIdIdx + 1] : undefined;
+    const tool = toolIdx >= 0 ? argv[toolIdx + 1] : undefined;
+    if (!sessionId || !tool) {
+      return { kind: "invalid", message: "keep-alive requires --session-id and --tool" };
+    }
+    return { kind: "keep-alive", sessionId, tool };
+  }
 
   return {
     kind: "invalid",
@@ -113,6 +125,27 @@ export async function runHookCli(
   if (parsed.kind === "invalid") {
     stderr.write(`${parsed.message}\n`);
     return 1;
+  }
+
+  if (parsed.kind === "keep-alive") {
+    const host = env.CODEPAL_IPC_HOST ?? "127.0.0.1";
+    const port = Number(env.CODEPAL_IPC_PORT) || 17371;
+    const socketPath = env.CODEPAL_SOCKET_PATH;
+
+    const abort = new AbortController();
+    process.on("SIGTERM", () => abort.abort());
+    process.on("SIGINT", () => abort.abort());
+
+    await runKeepAliveHook({
+      sessionId: parsed.sessionId,
+      tool: parsed.tool,
+      host,
+      port,
+      writeStdout: (line) => stdout.write(line + "\n"),
+      signal: abort.signal,
+      socketPath,
+    });
+    return 0;
   }
 
   let rawText: string;
