@@ -6,6 +6,7 @@ import type { PendingAction } from "../../shared/sessionTypes";
 import { useI18n } from "../i18n";
 import type { MonitorSessionRow, TimelineItem } from "../monitorSession";
 import { HoverDetails } from "./HoverDetails";
+import { SessionMessageInput } from "./SessionMessageInput";
 
 const HISTORY_INITIAL_PAGE_LIMIT = 100;
 const HISTORY_INCREMENTAL_PAGE_LIMIT = 60;
@@ -496,11 +497,33 @@ export function SessionHistoryTimeline({
   const [bufferedHistoryPage, setBufferedHistoryPage] = useState<SessionHistoryPage | null>(null);
   const [isNearHistoryTop, setIsNearHistoryTop] = useState(false);
   const [summaryCopied, setSummaryCopied] = useState(false);
+  const [localUserMessages, setLocalUserMessages] = useState<ActivityItem[]>([]);
 
-  const mergedItems = useMemo(
+  const mergedItemsBase = useMemo(
     () => mergeSessionTimelineItems(session.timelineItems, persistedItems),
     [session.timelineItems, persistedItems],
   );
+
+  const mergedItems = useMemo(() => {
+    if (localUserMessages.length === 0) return mergedItemsBase;
+    const realIds = new Set(mergedItemsBase.map((item) => item.id));
+    const realBodies = new Set(
+      mergedItemsBase
+        .filter((item) => item.source === "user")
+        .map((item) => item.body.trim()),
+    );
+    const remaining = localUserMessages.filter(
+      (msg) => !realIds.has(msg.id) && !realBodies.has(msg.body.trim()),
+    );
+    if (remaining.length === 0) return mergedItemsBase;
+    return [
+      ...mergedItemsBase,
+      ...remaining.map((item): TimelineItem => ({
+        ...item,
+        label: "",
+      })),
+    ];
+  }, [mergedItemsBase, localUserMessages]);
   const summaryText = buildSessionSummaryText(session, mergedItems);
   const latestToolItem = mergedItems.find((item) => item.kind === "tool");
   const hasRenderablePrimaryContent = mergedItems.some(
@@ -684,6 +707,20 @@ export function SessionHistoryTimeline({
     });
     setCardLastOptions((prev) => ({ ...prev, [actionId]: option }));
     onRespond(sessionId, actionId, option);
+  }
+
+  function handleSendMessage(sessionId: string, text: string) {
+    const localItem: ActivityItem = {
+      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: "message",
+      source: "user",
+      title: "",
+      body: text,
+      timestamp: Date.now(),
+    };
+    setLocalUserMessages((prev) => [...prev, localItem]);
+    shouldStickToBottomRef.current = true;
+    window.codepal.sendMessage(sessionId, text);
   }
 
   async function handleJumpToOriginalTool() {
@@ -1132,6 +1169,15 @@ export function SessionHistoryTimeline({
         </div>
       ) : null}
       </div>
+      {(session.status === "running" || session.status === "waiting") ? (
+        <SessionMessageInput
+          sessionId={session.id}
+          status={session.status}
+          hasInputChannel={session.hasInputChannel ?? false}
+          tool={session.tool}
+          onSend={handleSendMessage}
+        />
+      ) : null}
       {footer}
     </div>
   );
