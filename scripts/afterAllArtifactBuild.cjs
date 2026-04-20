@@ -122,5 +122,17 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   }
 
   console.log("[release] macOS release validation finished.");
+
+  // electron-builder creates a draft release by default.
+  // Publish it so the auto-updater can detect the new version.
+  const version = buildResult.configuration.buildVersion || require("../package.json").version;
+  const tag = `v${version}`;
+  try {
+    run("gh", ["release", "edit", tag, "--draft=false"]);
+    console.log(`[release] Published GitHub release ${tag}.`);
+  } catch (err) {
+    console.warn(`[release] Failed to publish release ${tag} — publish it manually on GitHub.`);
+  }
+
   return [];
 };
