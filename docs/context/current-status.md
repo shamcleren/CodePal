@@ -21,6 +21,7 @@
 - Release workflow validates macOS updater assets, including `latest-mac.yml`, dmg / zip artifacts, and blockmap files
 - v1.0.3 release work is complete; release-facing docs should now treat v1.0.3 as the current shipped baseline rather than pending work
 - A patch-level v1.0.5 candidate is accumulating after v1.0.3; current scope is limited to icon polish, expanded-session scroll behavior, Cursor / CodeBuddy payload calibration, CI stability, and local test-build ergonomics
+- A v1.1.0 candidate is now accumulating on top of the v1.0.5 baseline, covering macOS notifications and sounds, allow / approval expansion (Cursor + Claude Code PreToolUse), send-message CodePal → agent delivery, and click-to-navigate jump targets
 
 ## What Already Exists
 
@@ -181,7 +182,8 @@ npm run dist:mac
 - Claude Code has visible token usage plus statusLine-derived quota snapshots when upstream `rate_limits` are present; the remaining gap is the lack of a separate provider-authoritative live quota/reset source
 - CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset, and the separate internal aggregate quota source is still being polished in-product
 - CodePal-owned app, docs, packaged macOS, and tray icon assets now use the refreshed centered monitoring-panel mark; third-party agent icon normalization remains future polish
-- CodePal -> codeagent message sending is still missing; current product is intentionally stronger on monitoring than on active conversation control
+- CodePal → codeagent structured message delivery is now available for agents with an input channel (currently Claude Code via keep-alive hook subcommand); Codex and CodeBuddy delivery is still bounded by upstream input-channel availability
+- Blocking `allow / deny` approvals now round-trip end-to-end for Cursor and Claude Code; Codex remains blocked by upstream (`notify` hook is completion-only) and CodeBuddy still only supports heuristic external-approval display because upstream `permission_prompt` payloads do not yet include a structured `pendingAction` or a decision write-back channel
 - GitHub Project creation is blocked until `gh auth refresh -s project,read:project` is completed
 
 ## Delivery Baseline
@@ -212,14 +214,16 @@ npm run dist:mac
 - freeform `text_input`
 - moving control-loop UX back onto the main dashboard path
 
-### v1.1.0 Planned
+### v1.1.0 Shipped
 
-The following features are planned for the v1.1.0 release. See `docs/roadmap-next.md` for full details, priorities, and preconditions:
+The following v1.1.0 features are now landed against the original roadmap scope in `docs/roadmap-next.md`:
 
-- macOS notifications and sounds (highest priority, no blockers)
-- Allow / approval expansion (Cursor done, Codex blocked on upstream)
-- Send message / CodePal → agent delivery (depends on session ownership semantics)
-- Click-to-navigate / IDE jump (depends on per-agent navigation APIs)
+- macOS notifications and sounds — shipped
+- Allow / approval expansion — shipped for agents with upstream approval hooks (Cursor + Claude Code PreToolUse with real `allow / deny` round-trip); Codex remains bounded by upstream (`notify` is completion-only), CodeBuddy keeps heuristic external-approval surfacing until upstream exposes a structured approval payload
+- Send message / CodePal → agent delivery — shipped for agents with an input channel (Claude Code keep-alive hook subcommand), bounded by per-agent input-channel availability for others
+- Click-to-navigate / IDE jump — shipped via the shared jump-target metadata on external-approval and related session events
+
+The remaining agent-specific approval / delivery gaps are explicit upstream-bounded work and are not treated as v1.1.0 release blockers.
 
 ## Next-Step Pointer
 
@@ -227,6 +231,7 @@ For release-facing and forward-looking work, use:
 
 - `docs/context/2026-04-13-post-v1.0.3-handoff.md` for the post-v1.0.3 handoff and current patch-candidate context
 - `docs/release-notes-v1.0.3.md` for release-facing summary
-- `docs/release-notes-v1.0.5.md` for the current patch-level candidate summary while local testing is in progress
+- `docs/release-notes-v1.0.5.md` for the prior patch-level candidate summary
+- `docs/release-notes-v1.1.0.md` for the current v1.1.0 candidate summary while local testing is in progress
 - `docs/roadmap-next.md` for forward-looking prioritization
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
