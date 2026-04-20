@@ -128,7 +128,7 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   const version = buildResult.configuration.buildVersion || require("../package.json").version;
   const tag = `v${version}`;
   try {
-    run("gh", ["release", "edit", tag, "--draft=false"]);
+    run("gh", ["release", "edit", tag, "--draft=false", "--generate-notes"]);
     console.log(`[release] Published GitHub release ${tag}.`);
   } catch (err) {
     console.warn(`[release] Failed to publish release ${tag} — publish it manually on GitHub.`);
