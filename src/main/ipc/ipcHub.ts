@@ -46,7 +46,10 @@ export function createIpcHub(optionsOrCallback: IpcHubOptions | ((line: string) 
     let registeredSessionId: string | null = null;
 
     attachLineStream(socket, (line) => {
-      // Try to register this socket for a sessionId
+      // Process the message first so the session exists in the store
+      // before onConnectionRegistered fires (which calls setInputChannel).
+      options.onMessage(line);
+
       if (!registeredSessionId) {
         const sessionId = extractSessionId(line);
         if (sessionId) {
@@ -55,7 +58,6 @@ export function createIpcHub(optionsOrCallback: IpcHubOptions | ((line: string) 
           options.onConnectionRegistered?.(sessionId);
         }
       }
-      options.onMessage(line);
     });
 
     socket.on("close", () => {

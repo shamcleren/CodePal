@@ -282,20 +282,25 @@ function buildPreToolUseOutbound(
  *     }
  *   }
  */
-export function formatClaudePreToolUseResponse(responseLine: string): string {
-  let decision: "allow" | "deny" = "deny";
-  let reason = "User denied in CodePal";
+export function formatClaudePreToolUseResponse(responseLine: string): string | undefined {
+  let decision: "allow" | "deny" | undefined;
   try {
     const parsed = JSON.parse(responseLine) as Record<string, unknown>;
     const response = parsed.response as Record<string, unknown> | undefined;
     if (response && response.kind === "approval" && (response.decision === "allow" || response.decision === "deny")) {
       decision = response.decision;
-      reason = decision === "allow" ? "User approved in CodePal" : "User denied in CodePal";
     }
   } catch {
-    // fall through — default to deny with generic reason
+    // Malformed response — fall through to native flow
   }
 
+  if (!decision) {
+    // Cannot determine a clear user decision — return undefined so the caller
+    // writes nothing to stdout and Claude falls back to its native permission flow.
+    return undefined;
+  }
+
+  const reason = decision === "allow" ? "User approved in CodePal" : "User denied in CodePal";
   return JSON.stringify({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -412,21 +417,32 @@ export async function runClaudePreToolUsePipeline(
   rawStdin: string,
   env: NodeJS.ProcessEnv,
 ): Promise<string | undefined> {
-  const trimmed = rawStdin.trim();
-  const payload = parseClaudeHookPayload(trimmed);
-  const sessionId = firstString(payload, ["session_id", "sessionId"]);
-  if (!sessionId) {
-    throw new Error("claudeHook: missing session_id");
-  }
+  try {
+    const trimmed = rawStdin.trim();
+    const payload = parseClaudeHookPayload(trimmed);
+    const sessionId = firstString(payload, ["session_id", "sessionId"]);
+    if (!sessionId) {
+      console.warn("[CodePal] PreToolUse: missing session_id, falling back to native flow");
+      return undefined;
+    }
 
-  const hookEventName = firstString(payload, ["hook_event_name", "event_name"]) ?? "PreToolUse";
-  const cwd = firstString(payload, ["cwd"]) ?? env.CLAUDE_PROJECT_DIR?.trim();
-  const timestamp = Date.now();
+    const hookEventName = firstString(payload, ["hook_event_name", "event_name"]) ?? "PreToolUse";
+    const cwd = firstString(payload, ["cwd"]) ?? env.CLAUDE_PROJECT_DIR?.trim();
+    const timestamp = Date.now();
 
-  const { outbound } = buildPreToolUseOutbound(payload, sessionId, timestamp, cwd, hookEventName);
-  const responseLine = await runBlockingHookFromRaw(outbound, env);
-  if (!responseLine) {
+    const { outbound } = buildPreToolUseOutbound(payload, sessionId, timestamp, cwd, hookEventName);
+    const responseLine = await runBlockingHookFromRaw(outbound, env);
+    if (!responseLine) {
+      return undefined;
+    }
+    return formatClaudePreToolUseResponse(responseLine);
+  } catch (error) {
+    // Design principle: CodePal must never block Claude's native flow.
+    // On any internal error, degrade gracefully — return undefined so
+    // nothing is written to stdout and Claude falls back to its own
+    // permission prompt.
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[CodePal] PreToolUse pipeline error, falling back to native flow: ${message}`);
     return undefined;
   }
-  return formatClaudePreToolUseResponse(responseLine);
 }

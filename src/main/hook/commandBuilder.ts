@@ -1,8 +1,32 @@
+import path from "node:path";
+import fs from "node:fs";
+
 export type HookCommandContext = {
   packaged: boolean;
   execPath: string;
   appPath: string;
 };
+
+/**
+ * In dev mode `app.getAppPath()` returns `.../out/main` which is NOT a valid
+ * Electron app root (no `package.json`).  Normalize to the project root.
+ * If the result still has no `package.json`, return `undefined` so callers
+ * can decide to skip rather than launching Electron into an error modal.
+ */
+export function normalizeAppPath(raw: string): string | undefined {
+  let resolved = raw;
+  // Strip trailing out/main (dev build artifact directory)
+  if (/[/\\]out[/\\]main\/?$/.test(resolved)) {
+    resolved = path.resolve(resolved, "..", "..");
+  }
+  // Validate: a usable Electron app root must contain package.json
+  try {
+    fs.accessSync(path.join(resolved, "package.json"), fs.constants.R_OK);
+  } catch {
+    return undefined;
+  }
+  return resolved;
+}
 
 function quoteArg(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;

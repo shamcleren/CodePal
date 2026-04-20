@@ -5,6 +5,7 @@ import type { AppSettingsPatch } from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
 import { dispatchActionResponse } from "./actionResponse/dispatchActionResponse";
 import type { ActionResponseResult } from "./actionResponse/dispatchActionResponse";
+import { normalizeAppPath } from "./hook/commandBuilder";
 import { HOOK_CLI_NOT_HOOK_MODE, runHookCli } from "./hook/runHookCli";
 import { lineToSessionEvent, lineToUsageSnapshot } from "./ingress/hookIngress";
 import { createIntegrationService } from "./integrations/integrationService";
@@ -581,17 +582,18 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       const usageSnapshotCache = createUsageSnapshotCache({
         filePath: path.join(app.getPath("userData"), "usage-snapshot-cache.json"),
       });
+      const resolvedAppPath = normalizeAppPath(app.getAppPath()) ?? app.getAppPath();
       const integrationService = createIntegrationService({
         homeDir,
         hookScriptsRoot: resolveHookScriptsRoot(),
         packaged: app.isPackaged,
         execPath: process.execPath,
-        appPath: app.getAppPath(),
+        appPath: resolvedAppPath,
       });
       ensureAgentWrapperFiles(homeDir, {
         packaged: app.isPackaged,
         execPath: process.execPath,
-        appPath: app.getAppPath(),
+        appPath: resolvedAppPath,
       });
       const cursorDashboardService = createCursorDashboardService({
         onUsageSnapshot: (snapshot: UsageSnapshot) => {

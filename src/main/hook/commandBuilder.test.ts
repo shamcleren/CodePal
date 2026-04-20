@@ -8,6 +8,7 @@ import {
   buildCursorHookCommand,
   buildCursorLifecycleHookCommand,
   detectLegacyHookCommand,
+  normalizeAppPath,
 } from "./commandBuilder";
 
 describe("commandBuilder", () => {
@@ -178,6 +179,28 @@ describe("commandBuilder", () => {
       expect(command).toBe(
         '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook cursor',
       );
+    });
+  });
+
+  describe("normalizeAppPath", () => {
+    it("strips out/main and returns project root when package.json exists", () => {
+      // The repo root has package.json, so this should resolve
+      const repoRoot = process.cwd();
+      const devAppPath = `${repoRoot}/out/main`;
+      expect(normalizeAppPath(devAppPath)).toBe(repoRoot);
+    });
+
+    it("returns the path unchanged when it already has package.json", () => {
+      const repoRoot = process.cwd();
+      expect(normalizeAppPath(repoRoot)).toBe(repoRoot);
+    });
+
+    it("returns undefined when the resolved path has no package.json", () => {
+      expect(normalizeAppPath("/nonexistent/path/out/main")).toBeUndefined();
+    });
+
+    it("returns undefined for a random directory without package.json", () => {
+      expect(normalizeAppPath("/tmp")).toBeUndefined();
     });
   });
 

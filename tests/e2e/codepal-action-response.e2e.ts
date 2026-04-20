@@ -18,7 +18,7 @@ function firstCurrentSessionRow(page: import("@playwright/test").Page) {
 }
 
 function pendingBadge(row: import("@playwright/test").Locator, count: number) {
-  return row.getByText(new RegExp(`(?:${count} pending|${count} 个待处理)`));
+  return row.getByText(new RegExp(`(?:${count} pending|${count} 个待处理)`)).first();
 }
 
 test("cursor phase1: installs cursor hooks and surfaces degraded unsupported actions", async () => {
@@ -103,7 +103,7 @@ test("cursor phase1: installs cursor hooks and surfaces degraded unsupported act
     );
 
     await expect(
-      firstCurrentSessionRow(mainPage).getByText("Unsupported Cursor action: text_input"),
+      firstCurrentSessionRow(mainPage).getByText("Unsupported Cursor action: text_input").first(),
     ).toBeVisible({ timeout: 15_000 });
   } finally {
     await codepal.close().catch(() => undefined);

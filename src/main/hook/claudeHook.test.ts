@@ -151,7 +151,9 @@ describe("claudeHook", () => {
         actionId: "a",
         response: { kind: "approval", decision: "allow" },
       });
-      expect(JSON.parse(formatClaudePreToolUseResponse(line))).toEqual({
+      const result = formatClaudePreToolUseResponse(line);
+      expect(result).toBeDefined();
+      expect(JSON.parse(result!)).toEqual({
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "allow",
@@ -167,7 +169,9 @@ describe("claudeHook", () => {
         actionId: "a",
         response: { kind: "approval", decision: "deny" },
       });
-      expect(JSON.parse(formatClaudePreToolUseResponse(line))).toMatchObject({
+      const result = formatClaudePreToolUseResponse(line);
+      expect(result).toBeDefined();
+      expect(JSON.parse(result!)).toMatchObject({
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
@@ -175,10 +179,18 @@ describe("claudeHook", () => {
       });
     });
 
-    it("defaults to deny when the response line is malformed", () => {
-      expect(JSON.parse(formatClaudePreToolUseResponse("not json"))).toMatchObject({
-        hookSpecificOutput: { permissionDecision: "deny" },
+    it("returns undefined when the response line is malformed (falls back to native flow)", () => {
+      expect(formatClaudePreToolUseResponse("not json")).toBeUndefined();
+    });
+
+    it("returns undefined when the response has no clear decision (falls back to native flow)", () => {
+      const line = JSON.stringify({
+        type: "action_response",
+        sessionId: "s",
+        actionId: "a",
+        response: { kind: "option", value: "something" },
       });
+      expect(formatClaudePreToolUseResponse(line)).toBeUndefined();
     });
   });
 });

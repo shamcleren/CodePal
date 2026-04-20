@@ -390,6 +390,31 @@ describe("runHookCli", () => {
     expect(stdout.text()).toBe("");
   });
 
+  it("claude PreToolUse degrades gracefully on pipeline error (exit 0, no stdout)", async () => {
+    isClaudePreToolUsePayload.mockReturnValue(true);
+    runClaudePreToolUsePipeline.mockRejectedValue(new Error("unexpected failure"));
+
+    const stdout = createMockWritable();
+    const stderr = createMockWritable();
+    const code = await runHookCli(
+      argvWithHook("--codepal-hook", "claude"),
+      stdinFromString(
+        JSON.stringify({
+          session_id: "claude-1",
+          hook_event_name: "PreToolUse",
+          tool_name: "Bash",
+          tool_input: { command: "ls" },
+        }),
+      ),
+      stdout.stream,
+      stderr.stream,
+      {},
+    );
+    expect(code).toBe(0);
+    expect(stdout.text()).toBe("");
+    expect(stderr.text()).toContain("degraded to native flow");
+  });
+
   it("claude fails on empty stdin", async () => {
     const stderr = createMockWritable();
     const code = await runHookCli(

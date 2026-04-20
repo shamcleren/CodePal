@@ -64,15 +64,20 @@ test("renders notification settings and persists notification toggles", async ()
       .toBe(true);
     await expect(enabledToggle).toBeChecked();
     await expect(soundToggle).toBeVisible();
+    // Sound toggle should start unchecked (soundEnabled defaults to false).
+    // Wait for it to settle before clicking to avoid race conditions.
+    await expect(soundToggle).not.toBeChecked({ timeout: 5_000 });
     await soundToggle.click();
-    await expect(soundToggle).toBeChecked();
     await expect
-      .poll(() =>
-        page.evaluate(() =>
-          window.codepal.getAppSettings().then((settings) => settings.notifications.soundEnabled),
-        ),
+      .poll(
+        () =>
+          page.evaluate(() =>
+            window.codepal.getAppSettings().then((settings) => settings.notifications.soundEnabled),
+          ),
+        { timeout: 10_000 },
       )
       .toBe(true);
+    await expect(soundToggle).toBeChecked();
   } finally {
     await codepal.close().catch(() => undefined);
     await collector.close().catch(() => undefined);

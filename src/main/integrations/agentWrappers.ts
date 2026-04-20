@@ -47,22 +47,27 @@ function wrapperScriptBody(kind: WrappedAgentKind, runtimeEnvPath: string): stri
   return [
     "#!/bin/sh",
     `RUNTIME_ENV=${shellSingleQuote(runtimeEnvPath)}`,
-    'FALLBACK_EXEC="/Applications/CodePal.app/Contents/MacOS/CodePal"',
     'CODEPAL_PACKAGED="${CODEPAL_PACKAGED:-}"',
     'CODEPAL_EXEC_PATH="${CODEPAL_EXEC_PATH:-}"',
     'CODEPAL_APP_PATH="${CODEPAL_APP_PATH:-}"',
     'if [ -f "$RUNTIME_ENV" ]; then',
     '  . "$RUNTIME_ENV"',
     "fi",
+    // Packaged mode: execPath alone is enough
     'if [ "$CODEPAL_PACKAGED" = "1" ] && [ -n "$CODEPAL_EXEC_PATH" ] && [ -x "$CODEPAL_EXEC_PATH" ]; then',
     `  exec /usr/bin/env -u ELECTRON_RUN_AS_NODE "$CODEPAL_EXEC_PATH" --codepal-hook ${kind}`,
     "fi",
-    'if [ "$CODEPAL_PACKAGED" != "1" ] && [ -n "$CODEPAL_EXEC_PATH" ] && [ -x "$CODEPAL_EXEC_PATH" ] && [ -n "$CODEPAL_APP_PATH" ] && [ -d "$CODEPAL_APP_PATH" ]; then',
-    `  exec /usr/bin/env -u ELECTRON_RUN_AS_NODE "$CODEPAL_EXEC_PATH" "$CODEPAL_APP_PATH" --codepal-hook ${kind}`,
+    // Dev mode: appPath must be a valid Electron app root (has package.json).
+    // If out/main was written, normalize to project root.
+    'if [ "$CODEPAL_PACKAGED" != "1" ] && [ -n "$CODEPAL_EXEC_PATH" ] && [ -x "$CODEPAL_EXEC_PATH" ] && [ -n "$CODEPAL_APP_PATH" ]; then',
+    '  case "$CODEPAL_APP_PATH" in',
+    "    */out/main) CODEPAL_APP_PATH=$(cd \"$CODEPAL_APP_PATH/../..\" 2>/dev/null && pwd) ;;",
+    "  esac",
+    '  if [ -f "$CODEPAL_APP_PATH/package.json" ]; then',
+    `    exec /usr/bin/env -u ELECTRON_RUN_AS_NODE "$CODEPAL_EXEC_PATH" "$CODEPAL_APP_PATH" --codepal-hook ${kind}`,
+    "  fi",
     "fi",
-    'if [ -x "$FALLBACK_EXEC" ]; then',
-    `  exec /usr/bin/env -u ELECTRON_RUN_AS_NODE "$FALLBACK_EXEC" --codepal-hook ${kind}`,
-    "fi",
+    // No valid path found — exit silently so the agent falls back to its native flow.
     "exit 0",
     "",
   ].join("\n");

@@ -196,9 +196,18 @@ export async function runHookCli(
         throw new Error("claudeHook: empty payload");
       }
       if (isClaudePreToolUsePayload(rawText)) {
-        const responseJson = await runClaudePreToolUsePipeline(rawText, env);
-        if (responseJson) {
-          stdout.write(`${responseJson}\n`);
+        // PreToolUse is a blocking approval path — errors must NEVER propagate
+        // as a non-zero exit code, which could affect Claude's native flow.
+        // runClaudePreToolUsePipeline already catches internally, but we
+        // guard here as well for defense-in-depth.
+        try {
+          const responseJson = await runClaudePreToolUsePipeline(rawText, env);
+          if (responseJson) {
+            stdout.write(`${responseJson}\n`);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          stderr.write(`codepal-hook: PreToolUse degraded to native flow: ${message}\n`);
         }
         return 0;
       }

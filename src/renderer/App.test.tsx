@@ -12,7 +12,8 @@ describe("App", () => {
     expect(html).not.toContain("Wait ");
     expect(html).not.toContain("Err ");
     expect(html).toContain("Sessions");
-    expect(html).toContain("Panel Display");
+    // Locale-dependent text: en or zh-CN depending on test environment
+    expect(html.includes("Panel Display") || html.includes("\u9762\u677f\u663e\u793a")).toBe(true);
     expect(html).toContain("app-shell");
     expect(html).toContain("app-header__meta");
     expect(html).toContain("app-header__actions");
@@ -20,15 +21,21 @@ describe("App", () => {
     expect(html).toContain("app-settings-drawer__content");
     expect(html).toContain("settings-nav");
     expect(html).toContain("settings-content");
-    expect(html).toContain("Integrations");
-    expect(html).toContain("Integrations &amp; Diagnostics");
-    expect(html).toContain("Panel Display");
+    expect(html.includes("Integrations") || html.includes("\u63a5\u5165")).toBe(true);
+    expect(
+      html.includes("Integrations &amp; Diagnostics") || html.includes("\u63a5\u5165\u4e0e\u8bca\u65ad"),
+    ).toBe(true);
+    expect(html.includes("Panel Display") || html.includes("\u9762\u677f\u663e\u793a")).toBe(true);
     expect(html).not.toContain("Handle listener state, hook repairs, and login issues in one place.");
     expect(html).not.toContain(
       "Keep Claude, Cursor, and CodeBuddy sign-ins plus quota sync together.",
     );
-    expect(html).toContain("aria-label=\"Open settings\"");
-    expect(html).toContain("aria-label=\"Integrations\"");
+    expect(
+      html.includes('aria-label="Open settings"') || html.includes('aria-label="\u6253\u5f00\u8bbe\u7f6e"'),
+    ).toBe(true);
+    expect(
+      html.includes('aria-label="Integrations"') || html.includes('aria-label="\u63a5\u5165\u7ba1\u7406"'),
+    ).toBe(true);
   });
 
   it("builds fallback history diagnostics from the intended enabled state", () => {
