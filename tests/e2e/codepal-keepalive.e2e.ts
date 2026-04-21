@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
-import net from "node:net";
 import { launchCodePal } from "./helpers/launchCodePal";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
 import { codePalMainJs, resolveElectronExecutable } from "./helpers/startHookCliProcess";

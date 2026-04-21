@@ -117,6 +117,38 @@ export interface PendingAction {
   options: string[];
 }
 
+/**
+ * Terminal metadata captured by the hook wrapper. Populated only when the
+ * surrounding shell actually exposes the relevant env signals; every field is
+ * optional so consumers must degrade gracefully (e.g. `canReply` returns false
+ * when neither tmuxPane nor a Ghostty session id is present).
+ */
+export interface TerminalContext {
+  /** Normalized app identifier: "iTerm.app" / "ghostty" / "Terminal" / "kitty" / "wezterm" / "warp" / "zellij" / "vscode" / "tmux" / "unknown" */
+  app?: string;
+  /** Controlling TTY device path, e.g. "/dev/ttys001" */
+  tty?: string;
+  /** iTerm2 / Ghostty / kitty terminal session id */
+  terminalSessionId?: string;
+  /** tmux pane target (e.g. "%42" or "session:window.pane") */
+  tmuxPane?: string;
+  /** tmux socket path (leading component of $TMUX before the comma) */
+  tmuxSocket?: string;
+  /** Raw terminal title, if known */
+  windowTitle?: string;
+}
+
+export function isTerminalContext(value: unknown): value is TerminalContext {
+  if (!value || typeof value !== "object") return false;
+  const o = value as Record<string, unknown>;
+  for (const key of ["app", "tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "windowTitle"]) {
+    if (key in o && o[key] !== undefined && typeof o[key] !== "string") {
+      return false;
+    }
+  }
+  return true;
+}
+
 export interface SessionJumpTarget {
   agent: JumpTargetAgent;
   appName?: string;
@@ -124,6 +156,14 @@ export interface SessionJumpTarget {
   sessionId?: string;
   conversationId?: string;
   windowHint?: string;
+  /** Controlling TTY of the originating terminal (for Terminal.app / iTerm2 tab lookup) */
+  tty?: string;
+  /** iTerm2 / Ghostty session id (for AppleScript `tell session id ...`) */
+  terminalSessionId?: string;
+  /** tmux pane target (e.g. "%42") for `tmux switch-client -t` */
+  tmuxPane?: string;
+  /** tmux socket path when the source tmux runs on a non-default socket */
+  tmuxSocket?: string;
   fallbackBehavior: "activate_app";
 }
 
@@ -178,6 +218,11 @@ export function isSessionJumpTarget(value: unknown): value is SessionJumpTarget 
   }
   if ("windowHint" in o && o.windowHint !== undefined && typeof o.windowHint !== "string") {
     return false;
+  }
+  for (const key of ["tty", "terminalSessionId", "tmuxPane", "tmuxSocket"]) {
+    if (key in o && o[key] !== undefined && typeof o[key] !== "string") {
+      return false;
+    }
   }
   return true;
 }
@@ -283,4 +328,6 @@ export interface SessionRecord {
   pendingActions?: PendingAction[];
   externalApproval?: ExternalApprovalState;
   hasInputChannel?: boolean;
+  /** Terminal-side metadata captured at hook time; absent when the wrapper could not observe a terminal */
+  terminalContext?: TerminalContext;
 }

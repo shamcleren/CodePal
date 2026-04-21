@@ -1,6 +1,7 @@
 import net from "node:net";
 import { stringifyActionResponsePayload } from "../../shared/actionResponsePayload";
 import type { PendingActionType } from "../../shared/sessionTypes";
+import { readTerminalContextFromEnv, stampTerminalMetaOnEventLine } from "./terminalMeta";
 
 export function buildActionResponseLine(
   sessionId: string,
@@ -46,6 +47,12 @@ export async function sendEventLine(
     throw new Error("sendEventLine: empty body");
   }
 
+  // Stamp wrapper-captured terminal metadata onto event lines before they hit
+  // the IPC hub. Non-JSON / non-object bodies pass through unchanged, and the
+  // stamp is a no-op when no CODEPAL_TERM_* env vars are set (e.g. unit
+  // tests, or when the wrapper couldn't observe a terminal).
+  const stamped = stampTerminalMetaOnEventLine(trimmed, readTerminalContextFromEnv(env));
+
   const socketPath = resolveSocketPath(env);
 
   await new Promise<void>((resolve, reject) => {
@@ -60,7 +67,7 @@ export async function sendEventLine(
         );
 
     function onConnect() {
-      void sendLine(client, trimmed).then(resolve).catch(reject);
+      void sendLine(client, stamped).then(resolve).catch(reject);
     }
 
     client.once("error", reject);

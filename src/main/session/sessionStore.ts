@@ -8,7 +8,9 @@ import {
   type ResponseTarget,
   type SessionRecord,
   type SessionStatus,
+  type TerminalContext,
   isSessionStatus,
+  isTerminalContext,
 } from "./sessionTypes";
 
 /** 无 responseTarget.timeoutMs 时用于计算 pending 过期时间 */
@@ -66,7 +68,34 @@ type InternalSessionRecord = {
   /** 最近关闭的 action（新 upsert 同 id 时会移除），供控制器去重 */
   closedLedger: Map<string, PendingCloseReason>;
   hasInputChannel: boolean;
+  terminalContext?: TerminalContext;
 };
+
+function terminalContextFromEvent(
+  event: SessionEvent,
+): TerminalContext | undefined {
+  const raw = event.meta?.terminal;
+  if (!raw) return undefined;
+  return isTerminalContext(raw) ? raw : undefined;
+}
+
+function mergeTerminalContext(
+  previous: TerminalContext | undefined,
+  next: TerminalContext | undefined,
+): TerminalContext | undefined {
+  if (!next) return previous;
+  if (!previous) return next;
+  // Later events overwrite field-by-field only when the new event actually
+  // carries a value, so a hook that drops some env vars (e.g. tmux pane
+  // disappearing mid-session) does not clobber the last good snapshot.
+  const merged: TerminalContext = { ...previous };
+  for (const key of ["app", "tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "windowTitle"] as const) {
+    if (next[key]) {
+      merged[key] = next[key];
+    }
+  }
+  return merged;
+}
 
 export type PendingActionResponsePrep = {
   line: string;
@@ -387,6 +416,7 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
     ...(internal.activityItems.length > 0 ? { activityItems: internal.activityItems } : {}),
     ...(internal.activities.length > 0 ? { activities: internal.activities } : {}),
     hasInputChannel: internal.hasInputChannel,
+    ...(internal.terminalContext ? { terminalContext: internal.terminalContext } : {}),
   };
   if (internal.pendingById.size === 0) {
     return internal.externalApproval ? { ...base, externalApproval: internal.externalApproval } : base;
@@ -981,6 +1011,10 @@ export function createSessionStore(options?: SessionStoreOptions) {
       const nextUpdatedAt = Math.max(prev?.updatedAt ?? Number.NEGATIVE_INFINITY, event.timestamp);
 
       const prevPendingSize = prev?.pendingById.size ?? 0;
+      const nextTerminalContext = mergeTerminalContext(
+        prev?.terminalContext,
+        terminalContextFromEvent(event),
+      );
       const internal: InternalSessionRecord = {
         id: sessionId,
         tool: event.tool,
@@ -999,6 +1033,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
         externalApproval: nextExternalApproval,
         closedLedger: nextClosedLedger,
         hasInputChannel: prev?.hasInputChannel ?? false,
+        ...(nextTerminalContext ? { terminalContext: nextTerminalContext } : {}),
       };
       sessions.set(sessionId, internal);
       if (resolvedTarget.absorbedSessionId && resolvedTarget.absorbedSessionId !== sessionId) {

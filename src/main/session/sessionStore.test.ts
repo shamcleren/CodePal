@@ -1923,4 +1923,78 @@ describe("createSessionStore", () => {
       expect(store.getSession("nonexistent")).toBeNull();
     });
   });
+
+  describe("terminalContext", () => {
+    it("captures meta.terminal on the first event and exposes it on SessionRecord", () => {
+      const store = createSessionStore();
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "t-1",
+        tool: "claude",
+        status: "running",
+        timestamp: 1,
+        meta: {
+          hook_event_name: "SessionStart",
+          terminal: {
+            app: "iTerm.app",
+            tty: "/dev/ttys002",
+            terminalSessionId: "w0t0p0:DEADBEEF",
+          },
+        },
+      });
+      expect(store.getSession("t-1")?.terminalContext).toEqual({
+        app: "iTerm.app",
+        tty: "/dev/ttys002",
+        terminalSessionId: "w0t0p0:DEADBEEF",
+      });
+    });
+
+    it("merges subsequent terminal snapshots field-by-field without clobbering with missing values", () => {
+      const store = createSessionStore();
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "t-2",
+        tool: "claude",
+        status: "running",
+        timestamp: 1,
+        meta: {
+          terminal: {
+            app: "iTerm.app",
+            tty: "/dev/ttys002",
+            tmuxPane: "%7",
+            tmuxSocket: "/private/tmp/tmux-501/default",
+          },
+        },
+      });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "t-2",
+        tool: "claude",
+        status: "running",
+        timestamp: 2,
+        meta: {
+          terminal: { app: "iTerm.app", tty: "/dev/ttys002" },
+        },
+      });
+      expect(store.getSession("t-2")?.terminalContext).toEqual({
+        app: "iTerm.app",
+        tty: "/dev/ttys002",
+        tmuxPane: "%7",
+        tmuxSocket: "/private/tmp/tmux-501/default",
+      });
+    });
+
+    it("ignores malformed meta.terminal payloads", () => {
+      const store = createSessionStore();
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "t-3",
+        tool: "claude",
+        status: "running",
+        timestamp: 1,
+        meta: { terminal: { app: 42 } as unknown as Record<string, unknown> },
+      });
+      expect(store.getSession("t-3")?.terminalContext).toBeUndefined();
+    });
+  });
 });

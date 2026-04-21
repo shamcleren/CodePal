@@ -53,6 +53,23 @@ function wrapperScriptBody(kind: WrappedAgentKind, runtimeEnvPath: string): stri
     'if [ -f "$RUNTIME_ENV" ]; then',
     '  . "$RUNTIME_ENV"',
     "fi",
+    // Capture terminal metadata before exec. The wrapper's stdin is a pipe
+    // from the agent, so `tty` on stdin won't resolve — use `ps` against the
+    // parent (agent) process instead, which inherits the controlling TTY from
+    // the originating terminal. All values are passed via CODEPAL_TERM_* env
+    // vars; normalization / fallback handling lives in hook-cli side so this
+    // script stays POSIX-portable.
+    'CODEPAL_TERM_TTY=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d " ")',
+    'CODEPAL_TERM_APP="${TERM_PROGRAM:-}"',
+    'CODEPAL_TERM_ITERM_SESSION_ID="${ITERM_SESSION_ID:-}"',
+    'CODEPAL_TERM_TMUX="${TMUX:-}"',
+    'CODEPAL_TERM_TMUX_PANE="${TMUX_PANE:-}"',
+    'CODEPAL_TERM_GHOSTTY_RESOURCES_DIR="${GHOSTTY_RESOURCES_DIR:-}"',
+    'CODEPAL_TERM_KITTY_WINDOW_ID="${KITTY_WINDOW_ID:-}"',
+    'CODEPAL_TERM_WEZTERM_PANE="${WEZTERM_PANE:-}"',
+    'CODEPAL_TERM_ZELLIJ="${ZELLIJ:-}"',
+    'CODEPAL_TERM_WARP="${WARP_IS_LOCAL_SHELL_SESSION:-}"',
+    "export CODEPAL_TERM_TTY CODEPAL_TERM_APP CODEPAL_TERM_ITERM_SESSION_ID CODEPAL_TERM_TMUX CODEPAL_TERM_TMUX_PANE CODEPAL_TERM_GHOSTTY_RESOURCES_DIR CODEPAL_TERM_KITTY_WINDOW_ID CODEPAL_TERM_WEZTERM_PANE CODEPAL_TERM_ZELLIJ CODEPAL_TERM_WARP",
     // Packaged mode: execPath alone is enough
     'if [ "$CODEPAL_PACKAGED" = "1" ] && [ -n "$CODEPAL_EXEC_PATH" ] && [ -x "$CODEPAL_EXEC_PATH" ]; then',
     `  exec /usr/bin/env -u ELECTRON_RUN_AS_NODE "$CODEPAL_EXEC_PATH" --codepal-hook ${kind}`,
