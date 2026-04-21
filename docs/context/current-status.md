@@ -22,6 +22,7 @@
 - v1.0.3 release work is complete; release-facing docs should now treat v1.0.3 as the current shipped baseline rather than pending work
 - A patch-level v1.0.5 candidate is accumulating after v1.0.3; current scope is limited to icon polish, expanded-session scroll behavior, Cursor / CodeBuddy payload calibration, CI stability, and local test-build ergonomics
 - A v1.1.0 candidate is now accumulating on top of the v1.0.5 baseline, covering macOS notifications and sounds, allow / approval expansion (Cursor + Claude Code PreToolUse), send-message CodePal → agent delivery, and click-to-navigate jump targets
+- A v1.1.1 patch candidate now sits on top of v1.1.0 and closes the two Tier 1 gaps originally deferred ("UI scaffolding only" send-message and best-effort `open -a` jump): terminal metadata is captured at hook time, send-message is capability-gated and delivers into tmux / Ghostty, and click-to-navigate dispatches per-terminal (tmux switch-client, iTerm2 by session id, Terminal.app by tty, Ghostty activate) before falling back to `open -a`
 
 ## What Already Exists
 
@@ -182,7 +183,7 @@ npm run dist:mac
 - Claude Code has visible token usage plus statusLine-derived quota snapshots when upstream `rate_limits` are present; the remaining gap is the lack of a separate provider-authoritative live quota/reset source
 - CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset, and the separate internal aggregate quota source is still being polished in-product
 - CodePal-owned app, docs, packaged macOS, and tray icon assets now use the refreshed centered monitoring-panel mark; third-party agent icon normalization remains future polish
-- CodePal → codeagent structured message delivery is **UI scaffolding only** in v1.1.0 (composer, IPC, shared types, `--codepal-hook keep-alive` subcommand groundwork); no agent currently exposes a reachable inbound channel, so messages do not round-trip end-to-end. Capability-gated terminal delivery (tmux / Ghostty) is planned for a v1.1.x patch
+- CodePal → codeagent structured message delivery is now **capability-gated terminal delivery** in v1.1.1 (tmux `send-keys`, Ghostty AppleScript best-effort); the composer renders only when the session has a concrete delivery channel. Terminal.app / iTerm2 / Warp / kitty / WezTerm remain without a reliable text-injection surface, so the composer is hidden rather than disabled there. The earlier `--codepal-hook keep-alive` groundwork was removed in v1.1.1
 - Blocking `allow / deny` approvals now round-trip end-to-end for Cursor and Claude Code; Codex remains blocked by upstream (`notify` hook is completion-only) and CodeBuddy still only supports heuristic external-approval display because upstream `permission_prompt` payloads do not yet include a structured `pendingAction` or a decision write-back channel
 - GitHub Project creation is blocked until `gh auth refresh -s project,read:project` is completed
 
@@ -220,10 +221,18 @@ The following v1.1.0 features are now landed against the original roadmap scope 
 
 - macOS notifications and sounds — shipped
 - Allow / approval expansion — shipped for agents with upstream approval hooks (Cursor + Claude Code PreToolUse with real `allow / deny` round-trip); Codex remains bounded by upstream (`notify` is completion-only), CodeBuddy keeps heuristic external-approval surfacing until upstream exposes a structured approval payload
-- Send message / CodePal → agent delivery — **UI scaffolding only** in v1.1.0; no agent has a reachable inbound channel yet, so the composer does not round-trip. Capability-gated terminal delivery (tmux / Ghostty) is planned for a v1.1.x patch
-- Click-to-navigate / IDE jump — shared jump-target metadata now flows through external-approval and related session events, and the initial implementation uses `open -a` as a best-effort activation. Precise focus of an existing terminal / IDE session (Terminal.app / iTerm2 / Ghostty / tmux) is deferred to a v1.1.x patch
+- Send message / CodePal → agent delivery — **UI scaffolding only** in v1.1.0; no agent has a reachable inbound channel yet, so the composer does not round-trip. Capability-gated terminal delivery (tmux / Ghostty) is delivered in the v1.1.1 patch
+- Click-to-navigate / IDE jump — shared jump-target metadata now flows through external-approval and related session events, and the initial v1.1.0 implementation uses `open -a` as a best-effort activation. Precise per-terminal focus (tmux switch-client, iTerm2 by session id, Terminal.app by tty, Ghostty activate) is delivered in the v1.1.1 patch
 
 The remaining agent-specific approval / delivery gaps are explicit upstream-bounded work and are not treated as v1.1.0 release blockers.
+
+### v1.1.1 Shipped
+
+- Terminal metadata capture at hook time (agent wrapper reads `$TTY`, `$TERM_PROGRAM`, `$ITERM_SESSION_ID`, `$TMUX` / `$TMUX_PANE`, `$GHOSTTY_RESOURCES_DIR`, etc., and `sendEventLine` stamps `meta.terminal` onto every event). `SessionRecord.terminalContext` is merged field-by-field so transient env drops do not clobber the last good snapshot
+- Send-message capability-gated delivery: tmux (`send-keys -l <text>` + Enter, with optional `-S socket`) and Ghostty (AppleScript activate + `System Events` keystroke + Return, best-effort, first use triggers macOS Automation permission). Other terminals hide the composer entirely
+- Precise click-to-navigate dispatch: tmux `switch-client` + `select-window`, iTerm2 AppleScript by session id, Terminal.app AppleScript by tty, Ghostty `activate`; `open -a` remains the final fallback
+- Removed the `--codepal-hook keep-alive` subcommand, `keepAliveHook` module, `SessionRecord.hasInputChannel`, `setInputChannel`, and two coupled e2e specs (`codepal-keepalive.e2e.ts`, `codepal-send-message.e2e.ts`). `ipcHub.sendMessageToSession` is retained on the hub for a future IPC fallback but is no longer wired into the UI send path
+- Composer gating moved to a shared `canReply(session)` helper (tmux pane present, or Ghostty with a known `terminalSessionId`); `SessionMessageInput` no longer carries `hasInputChannel` or the "not connected to …" placeholder
 
 ## Next-Step Pointer
 
@@ -232,6 +241,7 @@ For release-facing and forward-looking work, use:
 - `docs/context/2026-04-13-post-v1.0.3-handoff.md` for the post-v1.0.3 handoff and current patch-candidate context
 - `docs/release-notes-v1.0.3.md` for release-facing summary
 - `docs/release-notes-v1.0.5.md` for the prior patch-level candidate summary
-- `docs/release-notes-v1.1.0.md` for the current v1.1.0 candidate summary while local testing is in progress
+- `docs/release-notes-v1.1.0.md` for the v1.1.0 candidate summary
+- `docs/release-notes-v1.1.1.md` (and `docs/release-notes-v1.1.1.zh-CN.md`) for the current v1.1.1 patch candidate summary while T1.1 manual verification is in progress
 - `docs/roadmap-next.md` for forward-looking prioritization
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist

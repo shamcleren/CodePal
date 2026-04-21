@@ -1,6 +1,7 @@
 import { isPendingAction } from "../../shared/sessionTypes";
 import { runBlockingHookFromRaw } from "./blockingHookBridge";
 import { sendEventLine } from "./sendEventBridge";
+import { jumpTargetFieldsFromEnv } from "./terminalMeta";
 
 export function augmentCodexPayloadJson(trimmed: string): string {
   if (!trimmed) {
@@ -65,6 +66,7 @@ function codexPermissionMessage(payload: Record<string, unknown>): string | unde
 function codexExternalApprovalEvent(
   payload: Record<string, unknown>,
   message: string,
+  env: NodeJS.ProcessEnv,
 ): string {
   const sessionId =
     (typeof payload.sessionId === "string" && payload.sessionId.trim()) ||
@@ -93,13 +95,22 @@ function codexExternalApprovalEvent(
       message,
       sourceTool: "codex",
       updatedAt: timestamp,
-      jumpTarget: {
-        agent: "codex",
-        appName: "Terminal",
-        ...(cwd ? { workspacePath: cwd } : {}),
-        sessionId,
-        fallbackBehavior: "activate_app",
-      },
+      jumpTarget: (() => {
+        const terminalFields = jumpTargetFieldsFromEnv(env);
+        return {
+          agent: "codex",
+          appName: terminalFields.appName ?? "Terminal",
+          ...(cwd ? { workspacePath: cwd } : {}),
+          sessionId,
+          ...(terminalFields.tty ? { tty: terminalFields.tty } : {}),
+          ...(terminalFields.terminalSessionId
+            ? { terminalSessionId: terminalFields.terminalSessionId }
+            : {}),
+          ...(terminalFields.tmuxPane ? { tmuxPane: terminalFields.tmuxPane } : {}),
+          ...(terminalFields.tmuxSocket ? { tmuxSocket: terminalFields.tmuxSocket } : {}),
+          fallbackBehavior: "activate_app" as const,
+        };
+      })(),
     },
   });
 }
@@ -125,6 +136,6 @@ export async function runCodexHookPipeline(
   }
 
   const permissionMessage = codexPermissionMessage(parsed);
-  await sendEventLine(permissionMessage ? codexExternalApprovalEvent(parsed, permissionMessage) : outbound, env);
+  await sendEventLine(permissionMessage ? codexExternalApprovalEvent(parsed, permissionMessage, env) : outbound, env);
   return undefined;
 }

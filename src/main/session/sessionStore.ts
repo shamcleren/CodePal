@@ -67,7 +67,6 @@ type InternalSessionRecord = {
   externalApproval?: ExternalApprovalState;
   /** 最近关闭的 action（新 upsert 同 id 时会移除），供控制器去重 */
   closedLedger: Map<string, PendingCloseReason>;
-  hasInputChannel: boolean;
   terminalContext?: TerminalContext;
 };
 
@@ -415,7 +414,6 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
       : {}),
     ...(internal.activityItems.length > 0 ? { activityItems: internal.activityItems } : {}),
     ...(internal.activities.length > 0 ? { activities: internal.activities } : {}),
-    hasInputChannel: internal.hasInputChannel,
     ...(internal.terminalContext ? { terminalContext: internal.terminalContext } : {}),
   };
   if (internal.pendingById.size === 0) {
@@ -1018,7 +1016,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
       const internal: InternalSessionRecord = {
         id: sessionId,
         tool: event.tool,
-        status: preservePreviousStatus ? prev.status : event.status,
+        status: preservePreviousStatus && prev ? prev.status : event.status,
         title:
           preservePreviousStatus && prev?.title
             ? prev.title
@@ -1032,7 +1030,6 @@ export function createSessionStore(options?: SessionStoreOptions) {
         pendingById: nextPendingById,
         externalApproval: nextExternalApproval,
         closedLedger: nextClosedLedger,
-        hasInputChannel: prev?.hasInputChannel ?? false,
         ...(nextTerminalContext ? { terminalContext: nextTerminalContext } : {}),
       };
       sessions.set(sessionId, internal);
@@ -1134,7 +1131,6 @@ export function createSessionStore(options?: SessionStoreOptions) {
         pendingById: new Map(),
         externalApproval: undefined,
         closedLedger: new Map(),
-        hasInputChannel: false,
       };
       sessions.set(record.id, internal);
     },
@@ -1156,12 +1152,6 @@ export function createSessionStore(options?: SessionStoreOptions) {
           return a.id.localeCompare(b.id);
         })
         .map(toSessionRecord);
-    },
-
-    setInputChannel(sessionId: string, connected: boolean) {
-      const internal = sessions.get(sessionId);
-      if (!internal) return;
-      sessions.set(sessionId, { ...internal, hasInputChannel: connected });
     },
   };
 }

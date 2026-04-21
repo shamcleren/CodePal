@@ -1876,54 +1876,6 @@ describe("createSessionStore", () => {
     });
   });
 
-  describe("hasInputChannel", () => {
-    it("defaults to false on new sessions", () => {
-      const store = createSessionStore();
-      store.applyEvent({
-        type: "status_change",
-        sessionId: "ch-1",
-        tool: "codebuddy",
-        status: "running",
-        timestamp: Date.now(),
-      });
-      const session = store.getSession("ch-1");
-      expect(session?.hasInputChannel).toBe(false);
-    });
-
-    it("setInputChannel(true) makes hasInputChannel true", () => {
-      const store = createSessionStore();
-      store.applyEvent({
-        type: "status_change",
-        sessionId: "ch-2",
-        tool: "claude",
-        status: "running",
-        timestamp: Date.now(),
-      });
-      store.setInputChannel("ch-2", true);
-      expect(store.getSession("ch-2")?.hasInputChannel).toBe(true);
-    });
-
-    it("setInputChannel(false) makes hasInputChannel false", () => {
-      const store = createSessionStore();
-      store.applyEvent({
-        type: "status_change",
-        sessionId: "ch-3",
-        tool: "codex",
-        status: "running",
-        timestamp: Date.now(),
-      });
-      store.setInputChannel("ch-3", true);
-      store.setInputChannel("ch-3", false);
-      expect(store.getSession("ch-3")?.hasInputChannel).toBe(false);
-    });
-
-    it("setInputChannel on nonexistent session is a no-op", () => {
-      const store = createSessionStore();
-      store.setInputChannel("nonexistent", true);
-      expect(store.getSession("nonexistent")).toBeNull();
-    });
-  });
-
   describe("terminalContext", () => {
     it("captures meta.terminal on the first event and exposes it on SessionRecord", () => {
       const store = createSessionStore();

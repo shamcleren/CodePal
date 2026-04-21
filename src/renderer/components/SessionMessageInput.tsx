@@ -5,40 +5,24 @@ import { useI18n } from "../i18n";
 type SessionMessageInputProps = {
   sessionId: string;
   status: SessionStatus;
-  hasInputChannel: boolean;
   tool: string;
   onSend: (sessionId: string, text: string) => void;
 };
 
 export function getPlaceholder(
   status: SessionStatus,
-  hasInputChannel: boolean,
   tool: string,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
-  if (!hasInputChannel) {
-    return t("sendMessage.placeholder.disconnected", { agent: tool });
-  }
   if (status === "waiting") {
     return t("sendMessage.placeholder.waiting");
   }
   return t("sendMessage.placeholder.running", { agent: tool });
 }
 
-export function renderSessionMessageInputProps(options: {
-  status: SessionStatus;
-  hasInputChannel: boolean;
-  tool: string;
-}) {
-  const disabled = !options.hasInputChannel;
-  const isWaiting = options.status === "waiting" && options.hasInputChannel;
-  return { disabled, isWaiting };
-}
-
 export function SessionMessageInput({
   sessionId,
   status,
-  hasInputChannel,
   tool,
   onSend,
 }: SessionMessageInputProps) {
@@ -48,13 +32,8 @@ export function SessionMessageInput({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const errorTimerRef = useRef(0);
 
-  const { disabled, isWaiting } = renderSessionMessageInputProps({
-    status,
-    hasInputChannel,
-    tool,
-  });
-
-  const placeholder = getPlaceholder(status, hasInputChannel, tool, i18n.t);
+  const isWaiting = status === "waiting";
+  const placeholder = getPlaceholder(status, tool, i18n.t);
 
   useEffect(() => {
     return window.codepal.onSendMessageResult((result) => {
@@ -75,7 +54,7 @@ export function SessionMessageInput({
 
   function handleSubmit() {
     const trimmed = text.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed) return;
     onSend(sessionId, trimmed);
     setText("");
     setError(null);
@@ -106,13 +85,12 @@ export function SessionMessageInput({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={disabled}
         />
         <button
           type="button"
           className="session-message-input__btn"
           onClick={handleSubmit}
-          disabled={disabled || text.trim().length === 0}
+          disabled={text.trim().length === 0}
         >
           {i18n.t("sendMessage.send")} ↵
         </button>

@@ -327,7 +327,25 @@ export interface SessionRecord {
   activities?: string[];
   pendingActions?: PendingAction[];
   externalApproval?: ExternalApprovalState;
-  hasInputChannel?: boolean;
   /** Terminal-side metadata captured at hook time; absent when the wrapper could not observe a terminal */
   terminalContext?: TerminalContext;
+}
+
+/**
+ * Capability predicate for send-message. True when the session's terminal
+ * context gives us a concrete channel to deliver text into the agent's stdin:
+ *   - tmux: any pane target (we can `tmux send-keys -l` against it)
+ *   - Ghostty: app identified AND a terminal session id is known
+ * Other terminals (Terminal.app / iTerm2 / Warp / kitty) have no reliable text
+ * injection path in v1.1.x — callers should hide the input UI rather than
+ * render a disabled control.
+ */
+export function canReply(session: Pick<SessionRecord, "terminalContext">): boolean {
+  const ctx = session.terminalContext;
+  if (!ctx) return false;
+  if (ctx.tmuxPane && ctx.tmuxPane.length > 0) return true;
+  if (ctx.app === "ghostty" && ctx.terminalSessionId && ctx.terminalSessionId.length > 0) {
+    return true;
+  }
+  return false;
 }

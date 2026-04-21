@@ -1,5 +1,6 @@
 import type { ExternalApprovalState } from "../../shared/sessionTypes";
 import { runBlockingHookFromRaw } from "./blockingHookBridge";
+import { jumpTargetFieldsFromEnv } from "./terminalMeta";
 
 function firstString(payload: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
@@ -16,6 +17,7 @@ function maybeBuildClaudeExternalApproval(
   sessionId: string,
   timestamp: number,
   cwd: string | undefined,
+  env: NodeJS.ProcessEnv,
 ): ExternalApprovalState | undefined {
   const message = firstString(payload, ["message", "notification", "prompt"]);
   if (!message) {
@@ -25,6 +27,7 @@ function maybeBuildClaudeExternalApproval(
     return undefined;
   }
 
+  const terminalFields = jumpTargetFieldsFromEnv(env);
   return {
     kind: "approval_required",
     title: "Approval required in Claude Code",
@@ -33,9 +36,15 @@ function maybeBuildClaudeExternalApproval(
     updatedAt: timestamp,
     jumpTarget: {
       agent: "claude",
-      appName: "Terminal",
+      appName: terminalFields.appName ?? "Terminal",
       ...(cwd ? { workspacePath: cwd } : {}),
       sessionId,
+      ...(terminalFields.tty ? { tty: terminalFields.tty } : {}),
+      ...(terminalFields.terminalSessionId
+        ? { terminalSessionId: terminalFields.terminalSessionId }
+        : {}),
+      ...(terminalFields.tmuxPane ? { tmuxPane: terminalFields.tmuxPane } : {}),
+      ...(terminalFields.tmuxSocket ? { tmuxSocket: terminalFields.tmuxSocket } : {}),
       fallbackBehavior: "activate_app",
     },
   };
@@ -163,9 +172,10 @@ function buildNotificationEvent(
   timestamp: number,
   cwd: string | undefined,
   hookEventName: string,
+  env: NodeJS.ProcessEnv,
 ): string {
   const message = firstString(payload, ["message", "notification", "prompt"]) ?? "Claude notification";
-  const externalApproval = maybeBuildClaudeExternalApproval(payload, sessionId, timestamp, cwd);
+  const externalApproval = maybeBuildClaudeExternalApproval(payload, sessionId, timestamp, cwd, env);
   return JSON.stringify({
     type: "status_change",
     sessionId,
@@ -363,7 +373,7 @@ export function buildClaudeEventLine(rawStdin: string, env: NodeJS.ProcessEnv): 
     case "SessionEnd":
       return buildSessionEndEvent(sessionId, timestamp, cwd, hookEventName);
     case "Notification":
-      return buildNotificationEvent(payload, sessionId, timestamp, cwd, hookEventName);
+      return buildNotificationEvent(payload, sessionId, timestamp, cwd, hookEventName, env);
     default:
       return JSON.stringify({
         type: "status_change",

@@ -40,9 +40,11 @@ import { installMainProcessFileLogger } from "./logging/appLogger";
 import { createNotificationService } from "./notification/notificationService";
 import type { NotificationService } from "./notification/notificationService";
 import { createSessionJumpService } from "./jump/sessionJumpService";
+import { createTerminalTextSender } from "./terminal/terminalTextSender";
 
 let notificationServiceRef: NotificationService | null = null;
 const sessionJumpService = createSessionJumpService();
+const terminalTextSender = createTerminalTextSender();
 const sessionStore = createSessionStore({
   onStatusChange: (change) => {
     notificationServiceRef?.onSessionStateChange(change);
@@ -64,7 +66,6 @@ if (requestedHomeDir) {
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
-let ipcHubRef: ReturnType<typeof createIpcHub> | null = null;
 let pendingExpirySweepTimer: ReturnType<typeof setInterval> | null = null;
 let claudeQuotaRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let codeBuddyQuotaRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -330,28 +331,32 @@ function wireActionResponseIpc(
     const { sessionId, text } = payload as { sessionId: string; text: string };
     if (!sessionId || !text) return;
 
-    const hubRef = ipcHubRef;
-    if (!hubRef) {
+    const emit = (result: "success" | "error", error?: string) => {
       const win = mainWindow;
       if (win && !win.isDestroyed()) {
-        win.webContents.send("codepal:send-message-result", {
-          sessionId,
-          result: "error",
-          error: "IPC hub not initialized",
-        });
+        win.webContents.send("codepal:send-message-result", { sessionId, result, error });
       }
+    };
+
+    const session = sessionStore.getSession(sessionId);
+    if (!session) {
+      emit("error", "session_not_found");
       return;
     }
 
-    const result = hubRef.sendMessageToSession(sessionId, text);
-    const win = mainWindow;
-    if (win && !win.isDestroyed()) {
-      win.webContents.send("codepal:send-message-result", {
-        sessionId,
-        result: result.ok ? "success" : "error",
-        error: result.ok ? undefined : result.error,
+    terminalTextSender
+      .send(session, text)
+      .then((result) => {
+        if (result.ok) {
+          emit("success");
+        } else {
+          emit("error", result.error);
+        }
+      })
+      .catch((err) => {
+        console.error("[CodePal] send-message error:", err);
+        emit("error", err instanceof Error ? err.message : String(err));
       });
-    }
   });
 }
 
@@ -405,16 +410,7 @@ async function wireIpcHub(
         });
       }
     },
-    onConnectionRegistered: (sessionId) => {
-      sessionStore.setInputChannel(sessionId, true);
-      sessionBroadcastScheduler.request();
-    },
-    onConnectionLost: (sessionId) => {
-      sessionStore.setInputChannel(sessionId, false);
-      sessionBroadcastScheduler.request();
-    },
   });
-  ipcHubRef = hub;
   const { server } = hub;
 
   const socketPath = process.env.CODEPAL_SOCKET_PATH?.trim();

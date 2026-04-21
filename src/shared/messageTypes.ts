@@ -12,7 +12,9 @@ export type SendMessageResult = {
 };
 
 /**
- * JSON line format sent from CodePal to agent via keep-alive connection.
+ * JSON line format used on the internal IPC channel when CodePal forwards a
+ * user message to an agent over `sendMessageToSession` (future fallback path).
+ * Terminal-based delivery (tmux / Ghostty) does not use this shape.
  */
 export type UserMessageLine = {
   type: "user_message";

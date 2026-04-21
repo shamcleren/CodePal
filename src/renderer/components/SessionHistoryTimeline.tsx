@@ -3,6 +3,7 @@ import type { WheelEvent } from "react";
 import type { SessionHistoryPage } from "../../shared/historyTypes";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type { PendingAction } from "../../shared/sessionTypes";
+import { canReply } from "../../shared/sessionTypes";
 import { useI18n } from "../i18n";
 import type { MonitorSessionRow, TimelineItem } from "../monitorSession";
 import { HoverDetails } from "./HoverDetails";
@@ -1169,11 +1170,10 @@ export function SessionHistoryTimeline({
         </div>
       ) : null}
       </div>
-      {(session.status === "running" || session.status === "waiting") ? (
+      {(session.status === "running" || session.status === "waiting") && canReply(session) ? (
         <SessionMessageInput
           sessionId={session.id}
           status={session.status}
-          hasInputChannel={session.hasInputChannel ?? false}
           tool={session.tool}
           onSend={handleSendMessage}
         />

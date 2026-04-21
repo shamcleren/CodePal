@@ -146,3 +146,55 @@ export function stampTerminalMetaOnEventLine(
 }
 
 export const TERMINAL_META_ENV_KEYS = ENV_KEYS;
+
+/**
+ * Map a canonical terminal app id to the name `open -a` / AppleScript expect.
+ * Returns undefined when no sensible mapping exists (caller keeps its default).
+ */
+export function appNameForOpen(app: string | undefined): string | undefined {
+  if (!app) return undefined;
+  switch (app) {
+    case "iTerm.app":
+      return "iTerm";
+    case "Terminal":
+      return "Terminal";
+    case "ghostty":
+      return "Ghostty";
+    case "warp":
+      return "Warp";
+    case "wezterm":
+      return "WezTerm";
+    case "kitty":
+      return "kitty";
+    case "vscode":
+      return "Visual Studio Code";
+    default:
+      return undefined;
+  }
+}
+
+export type JumpTargetTerminalFields = {
+  appName?: string;
+  tty?: string;
+  terminalSessionId?: string;
+  tmuxPane?: string;
+  tmuxSocket?: string;
+};
+
+/**
+ * Derive the subset of SessionJumpTarget fields that come from terminal env
+ * capture. Returns an empty object when the wrapper did not observe anything —
+ * callers spread this into their jumpTarget and keep their own defaults.
+ */
+export function jumpTargetFieldsFromEnv(env: NodeJS.ProcessEnv): JumpTargetTerminalFields {
+  const context = readTerminalContextFromEnv(env);
+  if (!context) return {};
+  const appName = appNameForOpen(context.app);
+  const fields: JumpTargetTerminalFields = {};
+  if (appName) fields.appName = appName;
+  if (context.tty) fields.tty = context.tty;
+  if (context.terminalSessionId) fields.terminalSessionId = context.terminalSessionId;
+  if (context.tmuxPane) fields.tmuxPane = context.tmuxPane;
+  if (context.tmuxSocket) fields.tmuxSocket = context.tmuxSocket;
+  return fields;
+}
