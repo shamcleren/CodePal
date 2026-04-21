@@ -182,7 +182,7 @@ npm run dist:mac
 - Claude Code has visible token usage plus statusLine-derived quota snapshots when upstream `rate_limits` are present; the remaining gap is the lack of a separate provider-authoritative live quota/reset source
 - CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset, and the separate internal aggregate quota source is still being polished in-product
 - CodePal-owned app, docs, packaged macOS, and tray icon assets now use the refreshed centered monitoring-panel mark; third-party agent icon normalization remains future polish
-- CodePal → codeagent structured message delivery is now available for agents with an input channel (currently Claude Code via keep-alive hook subcommand); Codex and CodeBuddy delivery is still bounded by upstream input-channel availability
+- CodePal → codeagent structured message delivery is **UI scaffolding only** in v1.1.0 (composer, IPC, shared types, `--codepal-hook keep-alive` subcommand groundwork); no agent currently exposes a reachable inbound channel, so messages do not round-trip end-to-end. Capability-gated terminal delivery (tmux / Ghostty) is planned for a v1.1.x patch
 - Blocking `allow / deny` approvals now round-trip end-to-end for Cursor and Claude Code; Codex remains blocked by upstream (`notify` hook is completion-only) and CodeBuddy still only supports heuristic external-approval display because upstream `permission_prompt` payloads do not yet include a structured `pendingAction` or a decision write-back channel
 - GitHub Project creation is blocked until `gh auth refresh -s project,read:project` is completed
 
@@ -220,8 +220,8 @@ The following v1.1.0 features are now landed against the original roadmap scope 
 
 - macOS notifications and sounds — shipped
 - Allow / approval expansion — shipped for agents with upstream approval hooks (Cursor + Claude Code PreToolUse with real `allow / deny` round-trip); Codex remains bounded by upstream (`notify` is completion-only), CodeBuddy keeps heuristic external-approval surfacing until upstream exposes a structured approval payload
-- Send message / CodePal → agent delivery — shipped for agents with an input channel (Claude Code keep-alive hook subcommand), bounded by per-agent input-channel availability for others
-- Click-to-navigate / IDE jump — shipped via the shared jump-target metadata on external-approval and related session events
+- Send message / CodePal → agent delivery — **UI scaffolding only** in v1.1.0; no agent has a reachable inbound channel yet, so the composer does not round-trip. Capability-gated terminal delivery (tmux / Ghostty) is planned for a v1.1.x patch
+- Click-to-navigate / IDE jump — shared jump-target metadata now flows through external-approval and related session events, and the initial implementation uses `open -a` as a best-effort activation. Precise focus of an existing terminal / IDE session (Terminal.app / iTerm2 / Ghostty / tmux) is deferred to a v1.1.x patch
 
 The remaining agent-specific approval / delivery gaps are explicit upstream-bounded work and are not treated as v1.1.0 release blockers.
 
