@@ -125,10 +125,19 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
 
   // electron-builder creates a draft release by default.
   // Publish it so the auto-updater can detect the new version.
+  // Notes: `gh release edit` does NOT accept `--generate-notes` (that flag
+  // only exists on `gh release create`). Prefer the project's release-notes
+  // markdown when present; otherwise publish without notes and let the
+  // author edit the release on GitHub.
   const version = buildResult.configuration.buildVersion || require("../package.json").version;
   const tag = `v${version}`;
+  const notesFile = path.join(__dirname, "..", "docs", `release-notes-${tag}.md`);
+  const editArgs = ["release", "edit", tag, "--draft=false", "--latest"];
+  if (fs.existsSync(notesFile)) {
+    editArgs.push("--notes-file", notesFile);
+  }
   try {
-    run("gh", ["release", "edit", tag, "--draft=false", "--generate-notes"]);
+    run("gh", editArgs);
     console.log(`[release] Published GitHub release ${tag}.`);
   } catch (err) {
     console.warn(`[release] Failed to publish release ${tag} — publish it manually on GitHub.`);
