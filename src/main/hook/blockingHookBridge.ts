@@ -4,13 +4,40 @@ import path from "node:path";
 import { isPendingAction, type ResponseTarget } from "../../shared/sessionTypes";
 import { sendEventLine } from "./sendEventBridge";
 
+/**
+ * Max time the hook blocks waiting for CodePal to deliver an action_response.
+ * Two minutes is the upper bound on "user is still deciding" — longer than
+ * that and we'd rather fall back to Claude's native flow than keep the agent
+ * hostage. Env override `CODEPAL_HOOK_RESPONSE_WAIT_MS` still wins (e.g.
+ * someone who steps away from the desk can crank it to 1h for their setup).
+ */
+const DEFAULT_HOOK_WAIT_MS = 120_000;
+
+/**
+ * Max time the hook waits for CodePal's handshake after sending the event.
+ * If CodePal is not running, `net.createConnection` fails in ms via
+ * ECONNREFUSED (handled separately). This timeout catches the "CodePal hub is
+ * listening but the process is hung / crashed mid-event" case — we want to
+ * fall back to native flow in ~1.5s rather than waiting the full waitMs.
+ */
+const DEFAULT_HOOK_HANDSHAKE_TIMEOUT_MS = 1_500;
+
 function parseWaitMs(env: NodeJS.ProcessEnv): number {
   const raw = env.CODEPAL_HOOK_RESPONSE_WAIT_MS;
   if (raw === undefined || raw === "") {
-    return 3_600_000;
+    return DEFAULT_HOOK_WAIT_MS;
   }
   const value = Number(raw);
-  return Number.isFinite(value) && value > 0 ? value : 3_600_000;
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_HOOK_WAIT_MS;
+}
+
+function parseHandshakeTimeoutMs(env: NodeJS.ProcessEnv): number {
+  const raw = env.CODEPAL_HOOK_HANDSHAKE_TIMEOUT_MS;
+  if (raw === undefined || raw === "") {
+    return DEFAULT_HOOK_HANDSHAKE_TIMEOUT_MS;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_HOOK_HANDSHAKE_TIMEOUT_MS;
 }
 
 function parseSocketTimeoutMs(env: NodeJS.ProcessEnv): number {
@@ -236,6 +263,7 @@ export async function runBlockingHookFromRaw(
 
   const waitMs = parseWaitMs(env);
   const socketTimeoutMs = parseSocketTimeoutMs(env);
+  const handshakeTimeoutMs = parseHandshakeTimeoutMs(env);
   const collector = await createBlockingHookCollector(waitMs);
   let disposeReason: Error | undefined;
 
@@ -246,8 +274,19 @@ export async function runBlockingHookFromRaw(
         ...collector.responseTarget,
         timeoutMs: socketTimeoutMs,
       },
+      // Tell CodePal how long this pending action should live in the UI —
+      // aligned with our own blocking wait so the card doesn't disappear
+      // before the hook gives up. Separate from responseTarget.timeoutMs
+      // which is the socket write timeout when CodePal delivers the decision.
+      pendingLifetimeMs: waitMs,
     };
-    await sendEventLine(JSON.stringify(outbound), env);
+    await sendEventLine(JSON.stringify(outbound), env, {
+      // 1.5s handshake confirms CodePal's hub actually parsed our event.
+      // Without this, a half-alive CodePal (listening but not processing)
+      // would force the agent to wait the full waitMs before falling back.
+      waitForAck: true,
+      ackTimeoutMs: handshakeTimeoutMs,
+    });
     const line = await collector.linePromise;
     return line;
   } catch (error) {

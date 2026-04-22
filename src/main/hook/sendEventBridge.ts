@@ -26,6 +26,73 @@ function sendLine(client: net.Socket, body: string): Promise<void> {
   });
 }
 
+/**
+ * Write a line, then wait for the hub to write back any newline-terminated
+ * response before letting the caller proceed. Used by blocking-hook senders
+ * that want to confirm the hub actually parsed the event — a half-alive
+ * CodePal (listening but hung) would otherwise let the agent block for the
+ * full hook wait timeout. If no ack arrives before `ackTimeoutMs`, rejects
+ * with an error (caller falls back to native flow).
+ */
+function sendLineWithAck(
+  client: net.Socket,
+  body: string,
+  ackTimeoutMs: number,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let buffer = "";
+    let acked = false;
+    let settled = false;
+
+    const settle = (result: { ok: true } | { ok: false; error: Error }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (result.ok) {
+        resolve();
+      } else {
+        reject(result.error);
+      }
+      if (!client.destroyed) {
+        client.end();
+      }
+    };
+
+    const timer = setTimeout(() => {
+      settle({
+        ok: false,
+        error: new Error(`sendEventLine: handshake timed out after ${ackTimeoutMs}ms`),
+      });
+    }, ackTimeoutMs);
+
+    client.setEncoding("utf8");
+    client.on("data", (chunk: string) => {
+      buffer += chunk;
+      if (!acked && buffer.includes("\n")) {
+        acked = true;
+        settle({ ok: true });
+      }
+    });
+    client.on("error", (err) => {
+      settle({ ok: false, error: err });
+    });
+    client.on("close", () => {
+      if (!acked) {
+        settle({
+          ok: false,
+          error: new Error("sendEventLine: hub closed connection before ack"),
+        });
+      }
+    });
+
+    client.write(`${body}\n`, (err) => {
+      if (err) {
+        settle({ ok: false, error: err });
+      }
+    });
+  });
+}
+
 function resolveSocketPath(env: NodeJS.ProcessEnv): string | undefined {
   return env.CODEPAL_SOCKET_PATH;
 }
@@ -38,9 +105,22 @@ function resolveIpcPort(env: NodeJS.ProcessEnv): number {
   return Number(env.CODEPAL_IPC_PORT ?? "17371");
 }
 
+export type SendEventLineOptions = {
+  /**
+   * When true, `sendEventLine` waits for the hub to write back a newline-
+   * terminated ack before resolving. If no ack arrives within `ackTimeoutMs`,
+   * the promise rejects. Blocking-hook callers set this to detect a
+   * half-alive CodePal and fall back to the native flow quickly.
+   */
+  waitForAck?: boolean;
+  /** Ack wait budget when `waitForAck` is true. Default 1500ms. */
+  ackTimeoutMs?: number;
+};
+
 export async function sendEventLine(
   body: string,
   env: NodeJS.ProcessEnv = process.env,
+  options: SendEventLineOptions = {},
 ): Promise<void> {
   const trimmed = String(body).trim();
   if (!trimmed) {
@@ -67,7 +147,12 @@ export async function sendEventLine(
         );
 
     function onConnect() {
-      void sendLine(client, stamped).then(resolve).catch(reject);
+      if (options.waitForAck) {
+        const ackMs = options.ackTimeoutMs ?? 1_500;
+        void sendLineWithAck(client, stamped, ackMs).then(resolve).catch(reject);
+      } else {
+        void sendLine(client, stamped).then(resolve).catch(reject);
+      }
     }
 
     client.once("error", reject);

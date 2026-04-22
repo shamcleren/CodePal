@@ -61,6 +61,15 @@ function responseTargetFromRawPayload(
   return isResponseTarget(raw) ? raw : undefined;
 }
 
+function pendingLifetimeMsFromRawPayload(
+  o: Record<string, unknown>,
+): number | undefined {
+  if (!("pendingLifetimeMs" in o)) return undefined;
+  const raw = o.pendingLifetimeMs;
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw <= 0) return undefined;
+  return raw;
+}
+
 function externalApprovalFromRawPayload(
   o: Record<string, unknown>,
 ): ExternalApprovalState | null | undefined {
@@ -315,6 +324,13 @@ export function lineToSessionEvent(line: string): SessionEvent | null {
     responseTargetPart = responseTargetFromRawPayload(o);
   }
 
+  let pendingLifetimeMsPart: number | undefined;
+  if (isStatusChangeUpstreamEvent(parsed)) {
+    pendingLifetimeMsPart = normalized.pendingLifetimeMs;
+  } else {
+    pendingLifetimeMsPart = pendingLifetimeMsFromRawPayload(o);
+  }
+
   let pendingClosedPart: PendingClosed | undefined;
   if (isStatusChangeUpstreamEvent(parsed)) {
     pendingClosedPart = normalized.pendingClosed ?? undefined;
@@ -341,6 +357,7 @@ export function lineToSessionEvent(line: string): SessionEvent | null {
     ...(pendingPart !== undefined ? { pendingAction: pendingPart } : {}),
     ...(externalApprovalPart !== undefined ? { externalApproval: externalApprovalPart } : {}),
     ...(responseTargetPart !== undefined ? { responseTarget: responseTargetPart } : {}),
+    ...(pendingLifetimeMsPart !== undefined ? { pendingLifetimeMs: pendingLifetimeMsPart } : {}),
     ...(pendingClosedPart !== undefined ? { pendingClosed: pendingClosedPart } : {}),
   } as SessionEvent;
 }

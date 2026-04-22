@@ -1537,7 +1537,7 @@ describe("createSessionStore", () => {
         title: "Old",
         options: ["OK"],
       },
-      responseTarget: { mode: "socket", socketPath: "/a.sock", timeoutMs: 100 },
+      pendingLifetimeMs: 100,
     });
     store.applyEvent({
       sessionId: "s1",
@@ -1550,7 +1550,7 @@ describe("createSessionStore", () => {
         title: "New",
         options: ["OK"],
       },
-      responseTarget: { mode: "socket", socketPath: "/b.sock", timeoutMs: 10_000 },
+      pendingLifetimeMs: 10_000,
     });
     expect(store.expireStalePendingActions(1_500)).toBe(true);
     const rec = store.getSessions()[0];
@@ -1574,11 +1574,34 @@ describe("createSessionStore", () => {
         title: "New",
         options: ["OK"],
       },
-      responseTarget: { mode: "socket", socketPath: "/b.sock", timeoutMs: 10_000 },
+      pendingLifetimeMs: 10_000,
     });
 
     expect(store.expireStalePendingActions(1_500)).toBe(false);
     expect(store.getSessions()[0].pendingActions?.map((a) => a.id)).toEqual(["fresh"]);
+  });
+
+  it("ignores responseTarget.timeoutMs for pending expiry (decoupled from socket write timeout)", () => {
+    const store = createSessionStore();
+    store.applyEvent({
+      sessionId: "s1",
+      tool: "claude",
+      status: "waiting",
+      timestamp: 1_000,
+      pendingAction: {
+        id: "a1",
+        type: "approval",
+        title: "approve?",
+        options: ["Allow", "Deny"],
+      },
+      // socket write timeout is short (10s) but that must NOT drive pending
+      // lifetime — pending should live the default DEFAULT_PENDING_LIFECYCLE_TIMEOUT_MS
+      // (2min) when pendingLifetimeMs is not explicitly supplied.
+      responseTarget: { mode: "socket", socketPath: "/a.sock", timeoutMs: 10_000 },
+    });
+    // 15s later — would have expired under the old bug, should NOT expire now.
+    expect(store.expireStalePendingActions(16_000)).toBe(false);
+    expect(store.getSessions()[0].pendingActions?.map((a) => a.id)).toEqual(["a1"]);
   });
 
   it("preparePendingActionResponse returns null after closePendingAction (duplicate prep)", () => {

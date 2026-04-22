@@ -42,6 +42,12 @@ export interface StatusChangeUpstreamEvent {
   externalApproval?: ExternalApprovalState | null;
   /** 可选：action_response 回写目标 */
   responseTarget?: ResponseTarget;
+  /**
+   * 可选：pending action 在 UI 侧的存活时间（毫秒）。由发起 blocking hook 的一侧下发，
+   * 与 hook 的阻塞等待 waitMs 对齐，避免 UI 过早过期。
+   * 不提供时由 sessionStore 走默认值。
+   */
+  pendingLifetimeMs?: number;
   /** 可选：某条 pending 已结束（消费 / 过期 / 取消等）；null 视为未提供 */
   pendingClosed?: PendingClosed | null;
 }
@@ -77,6 +83,11 @@ export function isStatusChangeUpstreamEvent(
   }
   if ("responseTarget" in o && o.responseTarget !== undefined) {
     if (!isResponseTarget(o.responseTarget)) return false;
+  }
+  if ("pendingLifetimeMs" in o && o.pendingLifetimeMs !== undefined) {
+    if (typeof o.pendingLifetimeMs !== "number" || !Number.isFinite(o.pendingLifetimeMs) || o.pendingLifetimeMs <= 0) {
+      return false;
+    }
   }
   if ("pendingClosed" in o && o.pendingClosed !== undefined) {
     if (o.pendingClosed !== null && !isPendingClosed(o.pendingClosed)) return false;

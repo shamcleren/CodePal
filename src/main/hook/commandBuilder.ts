@@ -33,7 +33,11 @@ function quoteArg(value: string): string {
 }
 
 function wrapElectronShellCommand(command: string): string {
-  return `/usr/bin/env -u ELECTRON_RUN_AS_NODE ${command}`;
+  // NODE_NO_WARNINGS=1 suppresses Node's ExperimentalWarning for node:sqlite
+  // (loaded by historyStore during main-process startup). Without it, the
+  // warning prints to stderr every hook invocation, which Claude Code
+  // surfaces as "Stop hook error: Failed with non-blocking status code".
+  return `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 ${command}`;
 }
 
 function buildCodePalHookArgs(subcommand: string, eventSuffix?: string): string {

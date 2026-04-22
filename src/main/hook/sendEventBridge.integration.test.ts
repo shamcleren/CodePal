@@ -279,4 +279,65 @@ describe("runBlockingHookFromRaw", () => {
       vi.resetModules();
     },
   );
+
+  it.skipIf(process.platform === "win32")(
+    "handshake times out when the hub accepts but never parses the event (half-alive CodePal)",
+    async () => {
+      // Stand up a raw TCP server that accepts the connection but never reads
+      // or writes. This is the "CodePal hub listening but hung" failure mode —
+      // sendEventLine with waitForAck must abandon quickly rather than block
+      // for the full CODEPAL_HOOK_RESPONSE_WAIT_MS.
+      const net = await import("node:net");
+      const serverSockets: import("node:net").Socket[] = [];
+      const silentServer = net.createServer((socket) => {
+        // Track so cleanup can destroy them; sendLineWithAck only half-closes
+        // the client on timeout, so the server-side socket lingers and
+        // server.close() would otherwise wait forever.
+        serverSockets.push(socket);
+      });
+      await new Promise<void>((resolve, reject) => {
+        silentServer.listen(0, "127.0.0.1", () => resolve());
+        silentServer.once("error", reject);
+      });
+      const address = silentServer.address();
+      if (!address || typeof address === "string") {
+        silentServer.close();
+        throw new Error("expected TCP address");
+      }
+
+      const payload = JSON.stringify({
+        type: "status_change",
+        sessionId: "sess-half-alive",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 6,
+        pendingAction: {
+          id: "pa-half-alive",
+          type: "approval",
+          title: "Confirm?",
+          options: ["Allow", "Deny"],
+        },
+      });
+
+      const env = {
+        ...process.env,
+        CODEPAL_IPC_PORT: String(address.port),
+        CODEPAL_SOCKET_PATH: "",
+        // Generous user-wait budget — if the handshake weren't in place, the
+        // hook would block this long. With handshake, we bail in ~300ms.
+        CODEPAL_HOOK_RESPONSE_WAIT_MS: "60000",
+        CODEPAL_HOOK_HANDSHAKE_TIMEOUT_MS: "300",
+      };
+
+      const started = Date.now();
+      await expect(runBlockingHookFromRaw(payload, env)).rejects.toThrow(/handshake/);
+      const elapsed = Date.now() - started;
+      expect(elapsed).toBeLessThan(5_000);
+
+      for (const s of serverSockets) {
+        s.destroy();
+      }
+      await new Promise<void>((resolve) => silentServer.close(() => resolve()));
+    },
+  );
 });

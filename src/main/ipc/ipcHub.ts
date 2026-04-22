@@ -34,6 +34,26 @@ function extractSessionId(line: string): string | null {
   return null;
 }
 
+/**
+ * Blocking-hook senders (see `sendEventBridge.sendLineWithAck`) wait for the
+ * hub to echo back a newline-terminated ack before trusting that CodePal
+ * actually received the event. We only ack lines that look like blocking
+ * events — i.e. the sender attached a `responseTarget`. Non-blocking status
+ * lines are fire-and-forget and don't expect an ack, so writing one there
+ * would just confuse long-lived session streams that use the same hub.
+ */
+function shouldAckLine(line: string): boolean {
+  try {
+    const parsed = JSON.parse(line);
+    if (!parsed || typeof parsed !== "object") return false;
+    return "responseTarget" in (parsed as Record<string, unknown>);
+  } catch {
+    return false;
+  }
+}
+
+const HUB_ACK_LINE = '{"ok":true}\n';
+
 export function createIpcHub(optionsOrCallback: IpcHubOptions | ((line: string) => void)) {
   const options: IpcHubOptions =
     typeof optionsOrCallback === "function"
@@ -47,6 +67,10 @@ export function createIpcHub(optionsOrCallback: IpcHubOptions | ((line: string) 
 
     attachLineStream(socket, (line) => {
       options.onMessage(line);
+
+      if (shouldAckLine(line) && !socket.destroyed && socket.writable) {
+        socket.write(HUB_ACK_LINE);
+      }
 
       if (!registeredSessionId) {
         const sessionId = extractSessionId(line);

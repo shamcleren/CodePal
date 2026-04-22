@@ -13,8 +13,12 @@ import {
   isTerminalContext,
 } from "./sessionTypes";
 
-/** 无 responseTarget.timeoutMs 时用于计算 pending 过期时间 */
-export const DEFAULT_PENDING_LIFECYCLE_TIMEOUT_MS = 25_000;
+/**
+ * 无 event.pendingLifetimeMs 时用于计算 pending 过期时间。与 hook 端
+ * `blockingHookBridge.parseWaitMs` 的默认值对齐：hook 最多阻塞 2 分钟等用户决策，
+ * UI 侧的 pending 卡片也在 2 分钟后过期（避免 UI 提前消失但 hook 还在等的错位）。
+ */
+export const DEFAULT_PENDING_LIFECYCLE_TIMEOUT_MS = 120_000;
 export const ACTIVE_SESSION_STALENESS_MS = 24 * 60 * 60 * 1000;
 export const ACTIVE_SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 export const COMPLETED_SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -39,6 +43,12 @@ export type SessionEvent = {
   externalApproval?: ExternalApprovalState | null;
   /** 与 pendingAction 同条事件可选携带；按 action upsert 时写入该 action 的运行时路由 */
   responseTarget?: ResponseTarget;
+  /**
+   * pending action 在 UI 上的存活时间（毫秒）。与 hook 阻塞等待时长对齐，过期后
+   * UI 自动清掉卡片并标记 closed。未提供时退化到 DEFAULT_PENDING_LIFECYCLE_TIMEOUT_MS。
+   * 注意：这和 responseTarget.timeoutMs（socket 写回超时）是完全不同的两个时间。
+   */
+  pendingLifetimeMs?: number;
   /** 仅关闭该 action，不整会话清空 pending */
   pendingClosed?: PendingClosed;
 };
@@ -960,7 +970,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
             ? event.responseTarget
             : existing?.responseTarget;
         const effectiveTimeoutMs =
-          event.responseTarget?.timeoutMs ??
+          event.pendingLifetimeMs ??
           existing?.effectiveTimeoutMs ??
           DEFAULT_PENDING_LIFECYCLE_TIMEOUT_MS;
         const ts = event.timestamp;

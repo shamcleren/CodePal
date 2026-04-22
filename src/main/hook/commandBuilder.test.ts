@@ -20,7 +20,7 @@ describe("commandBuilder", () => {
         appPath: "/path/to/repo",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/path/to/Electron" "/path/to/repo" --codepal-hook cursor-lifecycle sessionStart',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook cursor-lifecycle sessionStart',
       );
     });
 
@@ -31,7 +31,7 @@ describe("commandBuilder", () => {
         appPath: "/ignored",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook cursor-lifecycle stop',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook cursor-lifecycle stop',
       );
     });
   });
@@ -44,7 +44,7 @@ describe("commandBuilder", () => {
         appPath: "/path/to/repo",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/path/to/Electron" "/path/to/repo" --codepal-hook codebuddy',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook codebuddy',
       );
     });
 
@@ -55,7 +55,7 @@ describe("commandBuilder", () => {
         appPath: "/ignored",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook codebuddy',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook codebuddy',
       );
     });
   });
@@ -68,7 +68,7 @@ describe("commandBuilder", () => {
         appPath: "/path/to/repo",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/path/to/Electron" "/path/to/repo" --codepal-hook claude',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook claude',
       );
     });
 
@@ -79,7 +79,7 @@ describe("commandBuilder", () => {
         appPath: "/ignored",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude',
       );
     });
   });
@@ -92,7 +92,7 @@ describe("commandBuilder", () => {
         appPath: "/path/to/repo",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/path/to/Electron" "/path/to/repo" --codepal-hook claude-statusline',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook claude-statusline',
       );
     });
 
@@ -103,7 +103,7 @@ describe("commandBuilder", () => {
         appPath: "/ignored",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude-statusline',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude-statusline',
       );
     });
   });
@@ -116,7 +116,7 @@ describe("commandBuilder", () => {
         appPath: "/path/to/repo",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/path/to/Electron" "/path/to/repo" --codepal-hook codex',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook codex',
       );
     });
 
@@ -127,7 +127,7 @@ describe("commandBuilder", () => {
         appPath: "/ignored",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook codex',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook codex',
       );
     });
   });
@@ -166,7 +166,7 @@ describe("commandBuilder", () => {
         appPath: "/path/to/repo",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/path/to/Electron" "/path/to/repo" --codepal-hook cursor',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook cursor',
       );
     });
 
@@ -177,7 +177,7 @@ describe("commandBuilder", () => {
         appPath: "/ignored",
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook cursor',
+        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook cursor',
       );
     });
   });
@@ -223,12 +223,12 @@ describe("commandBuilder", () => {
       );
       expect(
         detectLegacyHookCommand(
-          '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Electron" "/repo" --codepal-hook cursor',
+          '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Electron" "/repo" --codepal-hook cursor',
         ),
       ).toBe(false);
       expect(
         detectLegacyHookCommand(
-          '/usr/bin/env -u ELECTRON_RUN_AS_NODE "/CodePal" --codepal-hook codebuddy',
+          '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/CodePal" --codepal-hook codebuddy',
         ),
       ).toBe(false);
     });

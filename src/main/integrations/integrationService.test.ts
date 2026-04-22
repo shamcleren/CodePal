@@ -427,19 +427,19 @@ describe("createIntegrationService", () => {
                 hooks: [
                   {
                     type: "command",
-                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude`,
+                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude`,
                   },
                 ],
               },
             ],
-            UserPromptSubmit: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
-            Stop: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
-            Notification: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
-            SessionEnd: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
+            UserPromptSubmit: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
+            Stop: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
+            Notification: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
+            SessionEnd: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude` }] }],
           },
           statusLine: {
             type: "command",
-            command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude-statusline`,
+            command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude-statusline`,
           },
         },
         null,
@@ -818,7 +818,7 @@ describe("createIntegrationService", () => {
             "afterShellExecution",
           ].map((eventName) => [
             eventName,
-            [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
+            [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
           ]),
         ),
       }),
@@ -882,8 +882,8 @@ describe("createIntegrationService", () => {
       JSON.stringify({
         version: 1,
         hooks: {
-          sessionStart: [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
-          stop: [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
+          sessionStart: [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
+          stop: [{ command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/tmp/Electron.bin" "${appPath}" --codepal-hook cursor` }],
         },
       }),
     );
@@ -930,19 +930,19 @@ describe("createIntegrationService", () => {
                 hooks: [
                   {
                     type: "command",
-                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude`,
+                    command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "${packagedExecPath}" --codepal-hook claude`,
                   },
                 ],
               },
             ],
-            UserPromptSubmit: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude` }] }],
-            Stop: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude` }] }],
-            Notification: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude` }] }],
-            SessionEnd: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude` }] }],
+            UserPromptSubmit: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "${packagedExecPath}" --codepal-hook claude` }] }],
+            Stop: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "${packagedExecPath}" --codepal-hook claude` }] }],
+            Notification: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "${packagedExecPath}" --codepal-hook claude` }] }],
+            SessionEnd: [{ hooks: [{ type: "command", command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "${packagedExecPath}" --codepal-hook claude` }] }],
           },
           statusLine: {
             type: "command",
-            command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE "${packagedExecPath}" --codepal-hook claude-statusline`,
+            command: `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "${packagedExecPath}" --codepal-hook claude-statusline`,
           },
         },
         null,

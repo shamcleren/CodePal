@@ -72,7 +72,7 @@ function wrapperScriptBody(kind: WrappedAgentKind, runtimeEnvPath: string): stri
     "export CODEPAL_TERM_TTY CODEPAL_TERM_APP CODEPAL_TERM_ITERM_SESSION_ID CODEPAL_TERM_TMUX CODEPAL_TERM_TMUX_PANE CODEPAL_TERM_GHOSTTY_RESOURCES_DIR CODEPAL_TERM_KITTY_WINDOW_ID CODEPAL_TERM_WEZTERM_PANE CODEPAL_TERM_ZELLIJ CODEPAL_TERM_WARP",
     // Packaged mode: execPath alone is enough
     'if [ "$CODEPAL_PACKAGED" = "1" ] && [ -n "$CODEPAL_EXEC_PATH" ] && [ -x "$CODEPAL_EXEC_PATH" ]; then',
-    `  exec /usr/bin/env -u ELECTRON_RUN_AS_NODE "$CODEPAL_EXEC_PATH" --codepal-hook ${kind}`,
+    `  exec /usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "$CODEPAL_EXEC_PATH" --codepal-hook ${kind}`,
     "fi",
     // Dev mode: appPath must be a valid Electron app root (has package.json).
     // If out/main was written, normalize to project root.
@@ -81,7 +81,7 @@ function wrapperScriptBody(kind: WrappedAgentKind, runtimeEnvPath: string): stri
     "    */out/main) CODEPAL_APP_PATH=$(cd \"$CODEPAL_APP_PATH/../..\" 2>/dev/null && pwd) ;;",
     "  esac",
     '  if [ -f "$CODEPAL_APP_PATH/package.json" ]; then',
-    `    exec /usr/bin/env -u ELECTRON_RUN_AS_NODE "$CODEPAL_EXEC_PATH" "$CODEPAL_APP_PATH" --codepal-hook ${kind}`,
+    `    exec /usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "$CODEPAL_EXEC_PATH" "$CODEPAL_APP_PATH" --codepal-hook ${kind}`,
     "  fi",
     "fi",
     // No valid path found — exit silently so the agent falls back to its native flow.
