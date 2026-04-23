@@ -29,6 +29,14 @@ Running multiple AI coding agents means your attention is constantly split:
 
 CodePal pulls it all into one floating panel that stays visible while you work.
 
+## Non-Intrusive by Design
+
+CodePal is a dashboard, not a middleman. The agents you already use stay in charge of approval, execution, and output — CodePal just watches.
+
+- **Native flow untouched.** Approval prompts, tool calls, and decisions still happen inside Claude Code / Cursor / Codex / CodeBuddy. CodePal never blocks, gates, or rewrites them.
+- **Visibility-only default.** If CodePal is closed, crashing, or mid-update, your session keeps running exactly as if CodePal weren't installed. Every integration is additive.
+- **Gracefully degradable.** All hooks fail open. The worst case is a missed status update in the dashboard — never a stuck agent.
+
 ## Preview
 
 ![CodePal Dashboard](docs/hero-main.png)

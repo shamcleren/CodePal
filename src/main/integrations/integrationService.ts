@@ -803,12 +803,16 @@ function claudeRequiredEntriesForHome(homeDir: string): ClaudeRequiredEntry[] {
   return [
     { eventName: "SessionStart", matcher: "*", command },
     { eventName: "UserPromptSubmit", command },
-    { eventName: "PreToolUse", command },
     { eventName: "Notification", command },
     { eventName: "Stop", command },
     { eventName: "SessionEnd", command },
   ];
 }
+
+// Events that CodePal previously registered but no longer owns. On each
+// install pass we strip any CodePal-owned entries under these keys so users
+// who upgraded from <= v1.1.2 stop blocking Claude on PreToolUse.
+const CLAUDE_DEPRECATED_EVENT_NAMES: readonly string[] = ["PreToolUse"];
 
 function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
@@ -1005,7 +1009,7 @@ function claudeHooksMatch(
 }
 
 function claudeHooksEmpty(hooks: Record<string, unknown>): boolean {
-  const keys = ["SessionStart", "UserPromptSubmit", "PreToolUse", "Notification", "Stop", "SessionEnd"] as const;
+  const keys = ["SessionStart", "UserPromptSubmit", "Notification", "Stop", "SessionEnd"] as const;
   return keys.every((key) => {
     const value = hooks[key];
     return !Array.isArray(value) || value.length === 0;
@@ -1198,7 +1202,59 @@ function claudeConfigNeedsCleanup(homeDir: string): boolean {
   const entriesByEvent = Object.fromEntries(
     required.map((entry) => [entry.eventName, required.filter((item) => item.eventName === entry.eventName)]),
   ) as Record<string, CodeBuddyRequiredEntry[]>;
-  return nestedHooksConfigNeedsCleanup(claudeConfigPath(homeDir), entriesByEvent, "claude");
+  if (nestedHooksConfigNeedsCleanup(claudeConfigPath(homeDir), entriesByEvent, "claude")) {
+    return true;
+  }
+  return claudeDeprecatedEntriesPresent(homeDir);
+}
+
+function claudeDeprecatedEntriesPresent(homeDir: string): boolean {
+  const config = readOptionalJson(claudeConfigPath(homeDir));
+  if (!config.parsed) {
+    return false;
+  }
+  const hooksValue = config.parsed.hooks;
+  if (!hooksValue || typeof hooksValue !== "object" || Array.isArray(hooksValue)) {
+    return false;
+  }
+  const hooks = hooksValue as Record<string, unknown>;
+  return CLAUDE_DEPRECATED_EVENT_NAMES.some((eventName) => {
+    const stripped = stripCodePalOwnedNestedEntries(hooks[eventName], "claude");
+    return stripped.changed;
+  });
+}
+
+function stripCodePalOwnedNestedEntries(
+  entries: unknown,
+  hookName: WrappedAgentKind,
+): { entries: Array<Record<string, unknown>>; changed: boolean } {
+  if (!Array.isArray(entries)) {
+    return { entries: [], changed: false };
+  }
+  const nextEntries = entries
+    .map((entry): Record<string, unknown> | null => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as Record<string, unknown>;
+      if (!Array.isArray(record.hooks)) {
+        return record;
+      }
+      const remainingHooks = record.hooks.filter((hook) => {
+        if (!hook || typeof hook !== "object") return true;
+        const hookRecord = hook as Record<string, unknown>;
+        if (hookRecord.type !== "command") return true;
+        const command = String(hookRecord.command ?? "");
+        return !isCodePalOwnedAgentCommand(command, hookName);
+      });
+      if (remainingHooks.length === 0) {
+        return null;
+      }
+      return { ...record, hooks: remainingHooks };
+    })
+    .filter((entry): entry is Record<string, unknown> => entry !== null);
+
+  const currentJson = JSON.stringify(entries);
+  const nextJson = JSON.stringify(nextEntries);
+  return { entries: nextEntries, changed: currentJson !== nextJson };
 }
 
 function inspectCodeBuddyConfig(
@@ -1429,6 +1485,20 @@ function installClaudeHooksFile(
     hooks[required.eventName] = normalized.entries;
   }
 
+  for (const eventName of CLAUDE_DEPRECATED_EVENT_NAMES) {
+    if (!(eventName in hooks)) continue;
+    const existingEntries = hooks[eventName];
+    if (existingEntries !== undefined && !Array.isArray(existingEntries)) continue;
+    const stripped = stripCodePalOwnedNestedEntries(existingEntries, "claude");
+    if (!stripped.changed) continue;
+    changed = true;
+    if (stripped.entries.length === 0) {
+      delete hooks[eventName];
+    } else {
+      hooks[eventName] = stripped.entries;
+    }
+  }
+
   next.hooks = hooks;
   const desiredStatusLineCommand = buildWrapperCommand(homeDir, "claude-statusline");
   const existingStatusLineCommand = readClaudeStatusLineCommand(next);
@@ -1612,6 +1682,9 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
               diagnostics.health === "repair_needed" &&
               (isClaudeAutoMigrateCandidate(options.homeDir) ||
                 claudeConfigNeedsCleanup(options.homeDir))) ||
+            (agentId === "claude" &&
+              diagnostics.health === "active" &&
+              claudeDeprecatedEntriesPresent(options.homeDir)) ||
             (agentId === "cursor" &&
               cursorConfigNeedsCleanup(options.homeDir, desiredWrapperCommand)) ||
             (agentId === "codebuddy" &&

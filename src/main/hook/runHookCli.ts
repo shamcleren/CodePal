@@ -1,9 +1,5 @@
 import { runBlockingHookFromRaw } from "./blockingHookBridge";
-import {
-  isClaudePreToolUsePayload,
-  runClaudeHookPipeline,
-  runClaudePreToolUsePipeline,
-} from "./claudeHook";
+import { isClaudePreToolUsePayload, runClaudeHookPipeline } from "./claudeHook";
 import { buildClaudeStatusLineUsageLine } from "./claudeStatusLine";
 import { runCodexHookPipeline } from "./codexHook";
 import { buildCursorLifecycleEventLine } from "./cursorLifecycleHook";
@@ -161,20 +157,11 @@ export async function runHookCli(
       if (!rawText) {
         throw new Error("claudeHook: empty payload");
       }
+      // As of v1.1.3 CodePal no longer participates in Claude's PreToolUse
+      // approval flow — the hook is no longer registered, and even if it
+      // is (stale config, manual edit), we short-circuit here so Claude's
+      // native allow/deny prompt stays authoritative.
       if (isClaudePreToolUsePayload(rawText)) {
-        // PreToolUse is a blocking approval path — errors must NEVER propagate
-        // as a non-zero exit code, which could affect Claude's native flow.
-        // runClaudePreToolUsePipeline already catches internally, but we
-        // guard here as well for defense-in-depth.
-        try {
-          const responseJson = await runClaudePreToolUsePipeline(rawText, env);
-          if (responseJson) {
-            stdout.write(`${responseJson}\n`);
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          stderr.write(`codepal-hook: PreToolUse degraded to native flow: ${message}\n`);
-        }
         return 0;
       }
       const line = await runClaudeHookPipeline(rawText, env);

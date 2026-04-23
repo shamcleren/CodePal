@@ -29,6 +29,14 @@
 
 CodePal 把这一切收拢进一个始终悬浮在桌面上的面板。
 
+## 无干扰、无侵入
+
+CodePal 是一个 dashboard，不是"中间层"。你原本用的 agent 仍然负责审批、执行和输出 — CodePal 只是在旁边看着。
+
+- **不改变原生流程。** 审批、工具调用、决策依然都发生在 Claude Code / Cursor / Codex / CodeBuddy 自己的界面里。CodePal 绝不阻塞、拦截或改写这些流程。
+- **默认只做可见性。** 即使 CodePal 已关闭、崩溃，或者正在更新，你的 session 照样按原生方式运行，就像没装过 CodePal 一样。所有接入都是"额外附加"。
+- **可优雅降级。** 所有 hook 都 fail-open — 最坏的结果只是 dashboard 少收到一条状态更新，而不是把 agent 卡住。
+
 ## 界面预览
 
 ![CodePal Dashboard](docs/hero-main.png)
