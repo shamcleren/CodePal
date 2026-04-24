@@ -1,7 +1,14 @@
 import type { SessionStatus } from "./sessionTypes";
 import type { MessageParams } from "./i18nTypes";
 
-export type IntegrationAgentId = "claude" | "cursor" | "codebuddy" | "codex";
+export type IntegrationAgentId =
+  | "claude"
+  | "cursor"
+  | "codebuddy"
+  | "codex"
+  | "qoder"
+  | "qwen"
+  | "factory";
 
 export type IntegrationHealth =
   | "active"

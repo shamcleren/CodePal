@@ -12,6 +12,7 @@ import type {
   CursorDashboardDiagnostics,
 } from "../shared/cursorDashboardTypes";
 import type {
+  IntegrationAgentId,
   IntegrationDiagnostics,
   IntegrationInstallResult,
 } from "../shared/integrationTypes";
@@ -47,7 +48,7 @@ export type CodePalApi = {
   getSessionHistoryPage: (input: SessionHistoryPageRequest) => Promise<SessionHistoryPage>;
   clearHistoryStore: () => Promise<HistoryDiagnostics>;
   installIntegrationHooks: (
-    agentId: "claude" | "cursor" | "codebuddy" | "codex",
+    agentId: IntegrationAgentId,
   ) => Promise<IntegrationInstallResult>;
   getClaudeQuotaDiagnostics: () => Promise<ClaudeQuotaDiagnostics>;
   refreshClaudeQuota: () => Promise<ClaudeQuotaSyncResult>;

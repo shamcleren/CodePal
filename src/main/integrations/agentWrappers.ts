@@ -7,7 +7,10 @@ export type WrappedAgentKind =
   | "codebuddy"
   | "codex"
   | "claude"
-  | "claude-statusline";
+  | "claude-statusline"
+  | "qoder"
+  | "qwen"
+  | "factory";
 
 function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
@@ -36,6 +39,12 @@ export function wrapperScriptPath(homeDir: string, kind: WrappedAgentKind): stri
       return path.join(binDir, "claude-hook");
     case "claude-statusline":
       return path.join(binDir, "claude-statusline");
+    case "qoder":
+      return path.join(binDir, "qoder-hook");
+    case "qwen":
+      return path.join(binDir, "qwen-hook");
+    case "factory":
+      return path.join(binDir, "factory-hook");
   }
 }
 
@@ -126,6 +135,9 @@ const ALL_WRAPPED_AGENTS: WrappedAgentKind[] = [
   "codex",
   "claude",
   "claude-statusline",
+  "qoder",
+  "qwen",
+  "factory",
 ];
 
 export function ensureAgentWrapperFiles(

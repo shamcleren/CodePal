@@ -13,6 +13,7 @@ import type {
   CursorDashboardDiagnostics,
 } from "../../shared/cursorDashboardTypes";
 import type {
+  IntegrationAgentId,
   IntegrationDiagnostics,
   IntegrationInstallResult,
 } from "../../shared/integrationTypes";
@@ -125,7 +126,7 @@ contextBridge.exposeInMainWorld("codepal", {
   clearHistoryStore() {
     return ipcRenderer.invoke("codepal:clear-history-store") as Promise<HistoryDiagnostics>;
   },
-  installIntegrationHooks(agentId: "claude" | "cursor" | "codebuddy" | "codex") {
+  installIntegrationHooks(agentId: IntegrationAgentId) {
     return ipcRenderer.invoke("codepal:install-integration-hooks", {
       agentId,
     }) as Promise<IntegrationInstallResult>;

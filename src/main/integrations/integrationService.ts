@@ -42,6 +42,9 @@ const AGENT_LABELS: Record<IntegrationAgentId, string> = {
   codex: "Codex",
   cursor: "Cursor",
   codebuddy: "CodeBuddy",
+  qoder: "Qoder",
+  qwen: "Qwen",
+  factory: "Factory",
 };
 
 function defaultNow() {
