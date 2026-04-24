@@ -1013,4 +1013,90 @@ describe("createIntegrationService", () => {
       hookInstalled: true,
     });
   });
+
+  describe.each([
+    { id: "qoder" as const, configDir: ".qoder", wrapperName: "qoder-hook" },
+    { id: "qwen" as const, configDir: ".qwen", wrapperName: "qwen-hook" },
+    { id: "factory" as const, configDir: ".factory", wrapperName: "factory-hook" },
+  ])("claude-compatible fork: $id", ({ id, configDir, wrapperName }) => {
+    it(`surfaces ${id} as not_configured by default`, () => {
+      const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+      const service = createIntegrationService({
+        homeDir,
+        hookScriptsRoot,
+        packaged: false,
+        execPath,
+        appPath,
+      });
+
+      const agent = service.getDiagnostics().agents.find((a) => a.id === id);
+      expect(agent).toMatchObject({
+        id,
+        configExists: false,
+        hookInstalled: false,
+        health: "not_configured",
+        supported: true,
+      });
+      // Forks should not expose the statusLine check.
+      expect(agent?.checks?.some((c) => c.id === "statusLine")).toBeFalsy();
+    });
+
+    it(`installs ${id} hooks into ${configDir}/settings.json without statusLine`, () => {
+      const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+      const service = createIntegrationService({
+        homeDir,
+        hookScriptsRoot,
+        packaged: false,
+        execPath,
+        appPath,
+        now: () => 100,
+      });
+
+      const first = service.installHooks(id);
+      const second = service.installHooks(id);
+
+      const configPath = join(homeDir, configDir, "settings.json");
+      const wrapperPath = join(homeDir, ".codepal", "bin", wrapperName);
+      const parsed = JSON.parse(readFileSync(configPath, "utf8")) as {
+        hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+        statusLine?: unknown;
+      };
+
+      expect(first.changed).toBe(true);
+      expect(first.hookInstalled).toBe(true);
+      expect(second.changed).toBe(false);
+      expect(existsSync(wrapperPath)).toBe(true);
+      expect(parsed.statusLine).toBeUndefined();
+      for (const eventName of ["SessionStart", "UserPromptSubmit", "Notification", "Stop", "SessionEnd"]) {
+        expect(parsed.hooks[eventName]).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              hooks: expect.arrayContaining([
+                expect.objectContaining({ command: `"${wrapperPath}"` }),
+              ]),
+            }),
+          ]),
+        );
+      }
+    });
+
+    it(`reports ${id} as active once hooks match`, () => {
+      const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+      const service = createIntegrationService({
+        homeDir,
+        hookScriptsRoot,
+        packaged: false,
+        execPath,
+        appPath,
+      });
+      service.installHooks(id);
+
+      const agent = service.getDiagnostics().agents.find((a) => a.id === id);
+      expect(agent).toMatchObject({
+        id,
+        health: "active",
+        hookInstalled: true,
+      });
+    });
+  });
 });
