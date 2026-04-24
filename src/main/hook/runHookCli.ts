@@ -36,6 +36,9 @@ type ParsedArgv =
   | { kind: "codex"; payloadArg?: string }
   | { kind: "cursor" }
   | { kind: "cursor-lifecycle"; phase: "sessionStart" | "stop" }
+  | { kind: "qoder" }
+  | { kind: "qwen" }
+  | { kind: "factory" }
   | { kind: "send-event" }
   | { kind: "blocking-hook" };
 
@@ -69,6 +72,15 @@ function parseArgv(argv: string[]): ParsedArgv {
   }
   if (subcommand === "cursor") {
     return { kind: "cursor" };
+  }
+  if (subcommand === "qoder") {
+    return { kind: "qoder" };
+  }
+  if (subcommand === "qwen") {
+    return { kind: "qwen" };
+  }
+  if (subcommand === "factory") {
+    return { kind: "factory" };
   }
   if (subcommand === "send-event") {
     return { kind: "send-event" };
@@ -200,6 +212,20 @@ export async function runHookCli(
       if (line !== undefined && line !== "") {
         stdout.write(`${line}\n`);
       }
+      return 0;
+    }
+
+    if (parsed.kind === "qoder" || parsed.kind === "qwen" || parsed.kind === "factory") {
+      if (!rawText) {
+        throw new Error(`${parsed.kind}Hook: empty payload`);
+      }
+      // Claude-compatible forks share the hook schema. Short-circuit PreToolUse
+      // just like Claude (dashboard-only policy — native flow stays authoritative).
+      if (isClaudePreToolUsePayload(rawText)) {
+        return 0;
+      }
+      const line = await runClaudeHookPipeline(rawText, env, parsed.kind);
+      await sendEventLine(line, env);
       return 0;
     }
 

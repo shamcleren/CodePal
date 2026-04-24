@@ -25,6 +25,9 @@ export type JumpTargetAgent =
   | "codex"
   | "claude"
   | "codebuddy"
+  | "qoder"
+  | "qwen"
+  | "factory"
   | "goland"
   | "pycharm";
 

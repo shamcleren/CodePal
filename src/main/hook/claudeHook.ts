@@ -1,6 +1,25 @@
-import type { ExternalApprovalState } from "../../shared/sessionTypes";
+import type { ExternalApprovalState, JumpTargetAgent } from "../../shared/sessionTypes";
 import { runBlockingHookFromRaw } from "./blockingHookBridge";
 import { jumpTargetFieldsFromEnv } from "./terminalMeta";
+
+export type ClaudeHookToolTag = Extract<
+  JumpTargetAgent,
+  "claude" | "qoder" | "qwen" | "factory"
+>;
+
+const AGENT_DISPLAY_LABELS: Record<ClaudeHookToolTag, string> = {
+  claude: "Claude",
+  qoder: "Qoder",
+  qwen: "Qwen",
+  factory: "Factory",
+};
+
+const AGENT_APPROVAL_TITLES: Record<ClaudeHookToolTag, string> = {
+  claude: "Approval required in Claude Code",
+  qoder: "Approval required in Qoder",
+  qwen: "Approval required in Qwen",
+  factory: "Approval required in Factory",
+};
 
 function firstString(payload: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
@@ -18,6 +37,7 @@ function maybeBuildClaudeExternalApproval(
   timestamp: number,
   cwd: string | undefined,
   env: NodeJS.ProcessEnv,
+  toolTag: ClaudeHookToolTag,
 ): ExternalApprovalState | undefined {
   const message = firstString(payload, ["message", "notification", "prompt"]);
   if (!message) {
@@ -30,12 +50,12 @@ function maybeBuildClaudeExternalApproval(
   const terminalFields = jumpTargetFieldsFromEnv(env);
   return {
     kind: "approval_required",
-    title: "Approval required in Claude Code",
+    title: AGENT_APPROVAL_TITLES[toolTag],
     message,
-    sourceTool: "claude",
+    sourceTool: toolTag,
     updatedAt: timestamp,
     jumpTarget: {
-      agent: "claude",
+      agent: toolTag,
       appName: terminalFields.appName ?? "Terminal",
       ...(cwd ? { workspacePath: cwd } : {}),
       sessionId,
@@ -73,6 +93,7 @@ function buildUserPromptEvent(
   timestamp: number,
   cwd: string | undefined,
   hookEventName: string,
+  toolTag: ClaudeHookToolTag,
 ): string {
   const prompt =
     firstString(payload, ["prompt", "user_prompt", "message"]) ??
@@ -81,7 +102,7 @@ function buildUserPromptEvent(
   return JSON.stringify({
     type: "status_change",
     sessionId,
-    tool: "claude",
+    tool: toolTag,
     status: "running",
     task: prompt,
     timestamp,
@@ -91,7 +112,7 @@ function buildUserPromptEvent(
     },
     activityItems: [
       {
-        id: `claude-hook:${sessionId}:${timestamp}:user`,
+        id: `${toolTag}-hook:${sessionId}:${timestamp}:user`,
         kind: "message",
         source: "user",
         title: "User",
@@ -107,13 +128,15 @@ function buildSessionStartEvent(
   timestamp: number,
   cwd: string | undefined,
   hookEventName: string,
+  toolTag: ClaudeHookToolTag,
 ): string {
+  const label = AGENT_DISPLAY_LABELS[toolTag];
   return JSON.stringify({
     type: "status_change",
     sessionId,
-    tool: "claude",
+    tool: toolTag,
     status: "running",
-    task: "Claude session started",
+    task: `${label} session started`,
     timestamp,
     meta: {
       hook_event_name: hookEventName,
@@ -121,11 +144,11 @@ function buildSessionStartEvent(
     },
     activityItems: [
       {
-        id: `claude-hook:${sessionId}:${timestamp}:start`,
+        id: `${toolTag}-hook:${sessionId}:${timestamp}:start`,
         kind: "system",
         source: "system",
         title: "Session started",
-        body: "Claude session started",
+        body: `${label} session started`,
         timestamp,
       },
     ],
@@ -138,12 +161,14 @@ function buildStopEvent(
   timestamp: number,
   cwd: string | undefined,
   hookEventName: string,
+  toolTag: ClaudeHookToolTag,
 ): string {
   const stopReason = firstString(payload, ["stop_reason", "reason"]) ?? "end_turn";
+  const label = AGENT_DISPLAY_LABELS[toolTag];
   return JSON.stringify({
     type: "status_change",
     sessionId,
-    tool: "claude",
+    tool: toolTag,
     status: "completed",
     task: "completed",
     timestamp,
@@ -154,11 +179,11 @@ function buildStopEvent(
     },
     activityItems: [
       {
-        id: `claude-hook:${sessionId}:${timestamp}:stop`,
+        id: `${toolTag}-hook:${sessionId}:${timestamp}:stop`,
         kind: "system",
         source: "system",
         title: "Session ended",
-        body: "Claude request finished",
+        body: `${label} request finished`,
         timestamp,
         tone: "completed",
       },
@@ -173,25 +198,27 @@ function buildNotificationEvent(
   cwd: string | undefined,
   hookEventName: string,
   env: NodeJS.ProcessEnv,
+  toolTag: ClaudeHookToolTag,
 ): string {
-  const message = firstString(payload, ["message", "notification", "prompt"]) ?? "Claude notification";
-  const externalApproval = maybeBuildClaudeExternalApproval(payload, sessionId, timestamp, cwd, env);
+  const label = AGENT_DISPLAY_LABELS[toolTag];
+  const message = firstString(payload, ["message", "notification", "prompt"]) ?? `${label} notification`;
+  const externalApproval = maybeBuildClaudeExternalApproval(payload, sessionId, timestamp, cwd, env, toolTag);
   return JSON.stringify({
     type: "status_change",
     sessionId,
-    tool: "claude",
+    tool: toolTag,
     status: "waiting",
     task: message,
     timestamp,
     meta: {
       hook_event_name: hookEventName,
-      notification_type: "claude_notification",
+      notification_type: `${toolTag}_notification`,
       ...(cwd ? { cwd } : {}),
     },
     ...(externalApproval ? { externalApproval } : {}),
     activityItems: [
       {
-        id: `claude-hook:${sessionId}:${timestamp}:notification`,
+        id: `${toolTag}-hook:${sessionId}:${timestamp}:notification`,
         kind: "note",
         source: "system",
         title: "Notification",
@@ -238,17 +265,18 @@ function buildPreToolUseOutbound(
   timestamp: number,
   cwd: string | undefined,
   hookEventName: string,
+  toolTag: ClaudeHookToolTag,
 ): { outbound: string; actionId: string } {
   const toolName = firstString(payload, ["tool_name", "toolName"]) ?? "tool";
   const toolInput = payload.tool_input ?? payload.toolInput;
   const summary = summarizeToolInput(toolName, toolInput);
-  const actionId = `claude-pretooluse:${sessionId}:${timestamp}`;
-  const title = `Claude wants to run ${toolName}: ${summary}`;
+  const actionId = `${toolTag}-pretooluse:${sessionId}:${timestamp}`;
+  const title = `${AGENT_DISPLAY_LABELS[toolTag]} wants to run ${toolName}: ${summary}`;
 
   const outbound = {
     type: "status_change",
     sessionId,
-    tool: "claude",
+    tool: toolTag,
     status: "waiting",
     task: title,
     timestamp,
@@ -265,7 +293,7 @@ function buildPreToolUseOutbound(
     },
     activityItems: [
       {
-        id: `claude-hook:${sessionId}:${timestamp}:pretooluse`,
+        id: `${toolTag}-hook:${sessionId}:${timestamp}:pretooluse`,
         kind: "note",
         source: "system",
         title: "Approval required",
@@ -325,11 +353,13 @@ function buildSessionEndEvent(
   timestamp: number,
   cwd: string | undefined,
   hookEventName: string,
+  toolTag: ClaudeHookToolTag,
 ): string {
+  const label = AGENT_DISPLAY_LABELS[toolTag];
   return JSON.stringify({
     type: "status_change",
     sessionId,
-    tool: "claude",
+    tool: toolTag,
     status: "idle",
     task: "session ended",
     timestamp,
@@ -339,11 +369,11 @@ function buildSessionEndEvent(
     },
     activityItems: [
       {
-        id: `claude-hook:${sessionId}:${timestamp}:session-end`,
+        id: `${toolTag}-hook:${sessionId}:${timestamp}:session-end`,
         kind: "system",
         source: "system",
         title: "Session ended",
-        body: "Claude session ended",
+        body: `${label} session ended`,
         timestamp,
         tone: "idle",
       },
@@ -351,7 +381,11 @@ function buildSessionEndEvent(
   });
 }
 
-export function buildClaudeEventLine(rawStdin: string, env: NodeJS.ProcessEnv): string {
+export function buildClaudeEventLine(
+  rawStdin: string,
+  env: NodeJS.ProcessEnv,
+  toolTag: ClaudeHookToolTag = "claude",
+): string {
   const payload = parseClaudeHookPayload(rawStdin.trim());
   const sessionId = firstString(payload, ["session_id", "sessionId"]);
   if (!sessionId) {
@@ -359,26 +393,30 @@ export function buildClaudeEventLine(rawStdin: string, env: NodeJS.ProcessEnv): 
   }
 
   const hookEventName = firstString(payload, ["hook_event_name", "event_name"]) ?? "unknown";
-  const cwd = firstString(payload, ["cwd"]) ?? env.CLAUDE_PROJECT_DIR?.trim();
+  const projectDirEnvVar = `${toolTag.toUpperCase()}_PROJECT_DIR`;
+  const cwd =
+    firstString(payload, ["cwd"]) ??
+    env[projectDirEnvVar]?.trim() ??
+    env.CLAUDE_PROJECT_DIR?.trim();
   const timestamp = Date.now();
 
   switch (hookEventName) {
     case "UserPromptSubmit":
-      return buildUserPromptEvent(payload, sessionId, timestamp, cwd, hookEventName);
+      return buildUserPromptEvent(payload, sessionId, timestamp, cwd, hookEventName, toolTag);
     case "SessionStart":
-      return buildSessionStartEvent(sessionId, timestamp, cwd, hookEventName);
+      return buildSessionStartEvent(sessionId, timestamp, cwd, hookEventName, toolTag);
     case "Stop":
     case "SubagentStop":
-      return buildStopEvent(payload, sessionId, timestamp, cwd, hookEventName);
+      return buildStopEvent(payload, sessionId, timestamp, cwd, hookEventName, toolTag);
     case "SessionEnd":
-      return buildSessionEndEvent(sessionId, timestamp, cwd, hookEventName);
+      return buildSessionEndEvent(sessionId, timestamp, cwd, hookEventName, toolTag);
     case "Notification":
-      return buildNotificationEvent(payload, sessionId, timestamp, cwd, hookEventName, env);
+      return buildNotificationEvent(payload, sessionId, timestamp, cwd, hookEventName, env, toolTag);
     default:
       return JSON.stringify({
         type: "status_change",
         sessionId,
-        tool: "claude",
+        tool: toolTag,
         status: "running",
         task: hookEventName,
         timestamp,
@@ -393,8 +431,9 @@ export function buildClaudeEventLine(rawStdin: string, env: NodeJS.ProcessEnv): 
 export async function runClaudeHookPipeline(
   rawStdin: string,
   env: NodeJS.ProcessEnv,
+  toolTag: ClaudeHookToolTag = "claude",
 ): Promise<string> {
-  return buildClaudeEventLine(rawStdin, env);
+  return buildClaudeEventLine(rawStdin, env, toolTag);
 }
 
 /**
@@ -426,6 +465,7 @@ export function isClaudePreToolUsePayload(rawStdin: string): boolean {
 export async function runClaudePreToolUsePipeline(
   rawStdin: string,
   env: NodeJS.ProcessEnv,
+  toolTag: ClaudeHookToolTag = "claude",
 ): Promise<string | undefined> {
   try {
     const trimmed = rawStdin.trim();
@@ -437,10 +477,14 @@ export async function runClaudePreToolUsePipeline(
     }
 
     const hookEventName = firstString(payload, ["hook_event_name", "event_name"]) ?? "PreToolUse";
-    const cwd = firstString(payload, ["cwd"]) ?? env.CLAUDE_PROJECT_DIR?.trim();
+    const projectDirEnvVar = `${toolTag.toUpperCase()}_PROJECT_DIR`;
+    const cwd =
+      firstString(payload, ["cwd"]) ??
+      env[projectDirEnvVar]?.trim() ??
+      env.CLAUDE_PROJECT_DIR?.trim();
     const timestamp = Date.now();
 
-    const { outbound } = buildPreToolUseOutbound(payload, sessionId, timestamp, cwd, hookEventName);
+    const { outbound } = buildPreToolUseOutbound(payload, sessionId, timestamp, cwd, hookEventName, toolTag);
     const responseLine = await runBlockingHookFromRaw(outbound, env);
     if (!responseLine) {
       return undefined;
