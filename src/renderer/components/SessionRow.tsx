@@ -40,7 +40,7 @@ function ToolGlyph({ tool }: { tool: string }) {
     );
   }
 
-  if (tool === "claude") {
+  if (tool === "claude" || tool === "qoder" || tool === "qwen" || tool === "factory") {
     return (
       <img src={claudeAppIcon} alt="" aria-hidden="true" className="tool-icon__img" />
     );

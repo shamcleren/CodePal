@@ -1,6 +1,13 @@
 import type { AppLocale } from "./i18nTypes";
 
-export type UsageAgentId = "claude" | "codex" | "cursor" | "codebuddy";
+export type UsageAgentId =
+  | "claude"
+  | "codex"
+  | "cursor"
+  | "codebuddy"
+  | "qoder"
+  | "qwen"
+  | "factory";
 
 export type UsageDisplaySettings = {
   showInStatusBar: boolean;
@@ -140,7 +147,15 @@ export function cloneAppSettings(settings: AppSettings): AppSettings {
 }
 
 function isUsageAgentId(value: unknown): value is UsageAgentId {
-  return value === "claude" || value === "codex" || value === "cursor" || value === "codebuddy";
+  return (
+    value === "claude" ||
+    value === "codex" ||
+    value === "cursor" ||
+    value === "codebuddy" ||
+    value === "qoder" ||
+    value === "qwen" ||
+    value === "factory"
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

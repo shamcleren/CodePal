@@ -17,6 +17,9 @@ const AGENTS: Array<{ id: UsageAgentId; label: string }> = [
   { id: "codex", label: "Codex" },
   { id: "cursor", label: "Cursor" },
   { id: "codebuddy", label: "CodeBuddy" },
+  { id: "qoder", label: "Qoder" },
+  { id: "qwen", label: "Qwen" },
+  { id: "factory", label: "Factory" },
 ];
 
 export function DisplayPreferencesPanel({

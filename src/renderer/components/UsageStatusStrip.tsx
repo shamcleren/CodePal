@@ -3,7 +3,7 @@ import codebuddyAppIcon from "../assets/codebuddy-app-icon.png";
 import codexAppIcon from "../assets/codex-app-icon.png";
 import cursorAppIcon from "../assets/cursor-app-icon.png";
 import type { UsageOverview } from "../../shared/usageTypes";
-import type { UsageDisplaySettings } from "../usageDisplaySettings";
+import type { UsageAgentId, UsageDisplaySettings } from "../usageDisplaySettings";
 import { useI18n, translateWindowLabel } from "../i18n";
 
 type UsageStatusStripProps = {
@@ -293,7 +293,7 @@ export function hasVisibleUsageStatus(
   return buildSummaries(overview, settings, i18n).some(
     (item) =>
       !settings.hiddenAgents.includes(
-        item.agent as "claude" | "codex" | "cursor" | "codebuddy",
+        item.agent as UsageAgentId,
       ),
   );
 }
@@ -305,7 +305,7 @@ export function UsageStatusStrip({ overview, settings }: UsageStatusStripProps) 
   }
 
   const summaries = buildSummaries(overview, settings, i18n).filter(
-    (item) => !settings.hiddenAgents.includes(item.agent as "claude" | "codex" | "cursor" | "codebuddy"),
+    (item) => !settings.hiddenAgents.includes(item.agent as UsageAgentId),
   );
 
   if (summaries.length === 0) {
