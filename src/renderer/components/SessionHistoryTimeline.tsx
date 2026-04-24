@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WheelEvent } from "react";
-import type { SessionHistoryPage } from "../../shared/historyTypes";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type { PendingAction } from "../../shared/sessionTypes";
 import { canReply } from "../../shared/sessionTypes";
@@ -13,9 +12,7 @@ const HISTORY_INITIAL_PAGE_LIMIT = 100;
 const HISTORY_INCREMENTAL_PAGE_LIMIT = 60;
 const HISTORY_SCROLL_TOP_THRESHOLD_PX = 72;
 const HISTORY_SCROLL_BOTTOM_THRESHOLD_PX = 32;
-const HISTORY_LOADING_MIN_MS = 220;
 const HISTORY_PREFETCH_TRIGGER_PX = 220;
-const HISTORY_CONSUME_TRIGGER_PX = 18;
 const SUMMARY_MESSAGE_LIMIT = 10;
 const LOW_VALUE_LIFECYCLE_BODIES = new Set([
   "Claude session started",
@@ -212,21 +209,12 @@ export function shouldPrefetchHistoryPage(options: {
   scrollTop: number;
   hasMore: boolean;
   loading: boolean;
-  hasBufferedPage: boolean;
 }) {
   return (
     options.scrollTop <= HISTORY_PREFETCH_TRIGGER_PX &&
     options.hasMore &&
-    !options.loading &&
-    !options.hasBufferedPage
+    !options.loading
   );
-}
-
-export function shouldConsumeBufferedHistoryPage(options: {
-  scrollTop: number;
-  hasBufferedPage: boolean;
-}) {
-  return options.hasBufferedPage && options.scrollTop <= HISTORY_CONSUME_TRIGGER_PX;
 }
 
 type ScrollAnchor = {
@@ -495,8 +483,6 @@ export function SessionHistoryTimeline({
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [bufferedHistoryPage, setBufferedHistoryPage] = useState<SessionHistoryPage | null>(null);
-  const [isNearHistoryTop, setIsNearHistoryTop] = useState(false);
   const [summaryCopied, setSummaryCopied] = useState(false);
   const [localUserMessages, setLocalUserMessages] = useState<ActivityItem[]>([]);
 
@@ -542,17 +528,6 @@ export function SessionHistoryTimeline({
     historyHasMore,
   });
 
-  async function withMinimumLoadingVisibility<T>(startedAt: number, task: Promise<T>): Promise<T> {
-    try {
-      return await task;
-    } finally {
-      const remaining = HISTORY_LOADING_MIN_MS - (Date.now() - startedAt);
-      if (remaining > 0) {
-        await new Promise((resolve) => window.setTimeout(resolve, remaining));
-      }
-    }
-  }
-
   useEffect(() => {
     requestIdRef.current += 1;
     setPersistedItems([]);
@@ -560,8 +535,6 @@ export function SessionHistoryTimeline({
     setHistoryHasMore(false);
     setHistoryLoading(false);
     setHistoryError(null);
-    setBufferedHistoryPage(null);
-    setIsNearHistoryTop(false);
     initialLoadDoneRef.current = false;
     pendingScrollRestoreRef.current = null;
     shouldStickToBottomRef.current = true;
@@ -572,8 +545,6 @@ export function SessionHistoryTimeline({
     if (!expanded) {
       requestIdRef.current += 1;
       setHistoryLoading(false);
-      setBufferedHistoryPage(null);
-      setIsNearHistoryTop(false);
       if (persistedItems.length === 0) {
         initialLoadDoneRef.current = false;
       }
@@ -596,18 +567,14 @@ export function SessionHistoryTimeline({
     let cancelled = false;
 
     async function loadHistoryPages() {
-      const startedAt = Date.now();
       setHistoryLoading(true);
       setHistoryError(null);
 
       try {
-        const page = await withMinimumLoadingVisibility(
-          startedAt,
-          window.codepal.getSessionHistoryPage({
-            sessionId: session.id,
-            limit: HISTORY_INITIAL_PAGE_LIMIT,
-          }),
-        );
+        const page = await window.codepal.getSessionHistoryPage({
+          sessionId: session.id,
+          limit: HISTORY_INITIAL_PAGE_LIMIT,
+        });
 
         if (cancelled || requestIdRef.current !== requestId) {
           return;
@@ -619,7 +586,6 @@ export function SessionHistoryTimeline({
         setPersistedItems((current) => appendUniqueHistoryItems(current, page.items));
         setHistoryCursor(page.nextCursor);
         setHistoryHasMore(page.hasMore);
-        setBufferedHistoryPage(null);
         initialLoadDoneRef.current = true;
       } catch (error) {
         if (!cancelled && requestIdRef.current === requestId) {
@@ -641,38 +607,6 @@ export function SessionHistoryTimeline({
       setHistoryLoading(false);
     };
   }, [expanded, historyError, initialLoadAttempt, session.id]);
-
-  useEffect(() => {
-    if (!expanded || historyLoading || bufferedHistoryPage !== null) {
-      return;
-    }
-    const node = detailsRef.current;
-    if (!node) {
-      return;
-    }
-    if (!isNearHistoryTop) {
-      return;
-    }
-    maybePrefetchHistory(node);
-  }, [bufferedHistoryPage, expanded, historyCursor, historyHasMore, historyLoading, isNearHistoryTop]);
-
-  useEffect(() => {
-    if (!expanded || !bufferedHistoryPage) {
-      return;
-    }
-    const node = detailsRef.current;
-    if (!node) {
-      return;
-    }
-    if (
-      shouldConsumeBufferedHistoryPage({
-        scrollTop: node.scrollTop,
-        hasBufferedPage: true,
-      })
-    ) {
-      applyBufferedHistoryPage(node);
-    }
-  }, [bufferedHistoryPage, expanded]);
 
   useEffect(() => {
     return window.codepal.onActionResponseResult((result) => {
@@ -737,7 +671,6 @@ export function SessionHistoryTimeline({
         scrollTop: node.scrollTop,
         hasMore: historyHasMore,
         loading: historyLoading,
-        hasBufferedPage: bufferedHistoryPage !== null,
       })
     ) {
       return;
@@ -749,23 +682,27 @@ export function SessionHistoryTimeline({
 
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    const startedAt = Date.now();
     setHistoryLoading(true);
     setHistoryError(null);
 
-    void withMinimumLoadingVisibility(
-      startedAt,
-      window.codepal.getSessionHistoryPage({
+    window.codepal
+      .getSessionHistoryPage({
         sessionId: session.id,
         cursor: historyCursor,
         limit: HISTORY_INCREMENTAL_PAGE_LIMIT,
-      }),
-    )
+      })
       .then((page) => {
         if (requestIdRef.current !== requestId) {
           return;
         }
-        setBufferedHistoryPage(page);
+        const target = detailsRef.current;
+        if (target) {
+          pendingScrollRestoreRef.current = captureScrollAnchor(target);
+        }
+        setPersistedItems((current) => appendUniqueHistoryItems(current, page.items));
+        setHistoryCursor(page.nextCursor);
+        setHistoryHasMore(page.hasMore);
+        setHistoryError(null);
       })
       .catch((error: unknown) => {
         if (requestIdRef.current !== requestId) {
@@ -778,19 +715,6 @@ export function SessionHistoryTimeline({
           setHistoryLoading(false);
         }
       });
-  }
-
-  function applyBufferedHistoryPage(node: HTMLDivElement) {
-    if (!bufferedHistoryPage) {
-      return;
-    }
-
-    pendingScrollRestoreRef.current = captureScrollAnchor(node);
-    setPersistedItems((current) => appendUniqueHistoryItems(current, bufferedHistoryPage.items));
-    setHistoryCursor(bufferedHistoryPage.nextCursor);
-    setHistoryHasMore(bufferedHistoryPage.hasMore);
-    setBufferedHistoryPage(null);
-    setHistoryError(null);
   }
 
   useLayoutEffect(() => {
@@ -850,6 +774,30 @@ export function SessionHistoryTimeline({
     lastExpandedRef.current = expanded;
   }, [expanded, mergedItems.length, historyLoading, historyError, session.updatedAt, session.pendingCount]);
 
+  // While the user is anchored to the latest message, HoverDetails can still
+  // grow the content after React's commit (ResizeObserver-measured heights,
+  // font-dependent reflow). Re-pin on any subsequent size change so the most
+  // recent message stays in view instead of drifting off the bottom.
+  useEffect(() => {
+    const node = detailsRef.current;
+    if (!expanded || !node || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (isRestoringScrollRef.current) return;
+      if (pendingScrollRestoreRef.current) return;
+      if (!shouldStickToBottomRef.current) return;
+      node.scrollTop = node.scrollHeight;
+    });
+    observer.observe(node);
+    for (const child of Array.from(node.children)) {
+      observer.observe(child as Element);
+    }
+    return () => {
+      observer.disconnect();
+    };
+  }, [expanded, session.id, historyVersion]);
+
   if (!expanded) {
     return null;
   }
@@ -859,12 +807,6 @@ export function SessionHistoryTimeline({
     if (!node) {
       return;
     }
-
-    if (shouldConsumeBufferedHistoryPage({ scrollTop: node.scrollTop, hasBufferedPage: bufferedHistoryPage !== null })) {
-      applyBufferedHistoryPage(node);
-      return;
-    }
-
     maybePrefetchHistory(node);
   }
 
@@ -888,10 +830,6 @@ export function SessionHistoryTimeline({
 
     const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
     shouldStickToBottomRef.current = distanceFromBottom < HISTORY_SCROLL_BOTTOM_THRESHOLD_PX;
-    const nearTop = node.scrollTop <= HISTORY_PREFETCH_TRIGGER_PX;
-    if (nearTop !== isNearHistoryTop) {
-      setIsNearHistoryTop(nearTop);
-    }
     loadOlderHistory();
   }
 
@@ -905,10 +843,6 @@ export function SessionHistoryTimeline({
     }
 
     if (event.deltaY < 0) {
-      const nearTop = node.scrollTop <= HISTORY_PREFETCH_TRIGGER_PX;
-      if (nearTop !== isNearHistoryTop) {
-        setIsNearHistoryTop(nearTop);
-      }
       loadOlderHistory();
     }
   }
@@ -932,10 +866,8 @@ export function SessionHistoryTimeline({
   }
 
   const showTopHistoryLoadingHint =
-    isNearHistoryTop &&
     historyLoading &&
     persistedItems.length > 0 &&
-    bufferedHistoryPage === null &&
     historyError === null;
 
   const footer = (

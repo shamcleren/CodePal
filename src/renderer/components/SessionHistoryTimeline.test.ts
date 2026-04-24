@@ -6,7 +6,6 @@ import {
   buildSessionSummaryText,
   mergeHistoryStatusState,
   mergeSessionTimelineItems,
-  shouldConsumeBufferedHistoryPage,
   shouldPrefetchHistoryPage,
   shouldLoadNextHistoryPageFromWheel,
   shouldStartInitialHistoryLoad,
@@ -285,7 +284,6 @@ describe("shouldPrefetchHistoryPage", () => {
         scrollTop: 180,
         hasMore: true,
         loading: false,
-        hasBufferedPage: false,
       }),
     ).toBe(true);
 
@@ -294,52 +292,16 @@ describe("shouldPrefetchHistoryPage", () => {
         scrollTop: 260,
         hasMore: true,
         loading: false,
-        hasBufferedPage: false,
       }),
     ).toBe(false);
   });
 
-  it("does not prefetch when loading is already in flight or a buffered page is ready", () => {
+  it("does not prefetch when loading is already in flight", () => {
     expect(
       shouldPrefetchHistoryPage({
         scrollTop: 120,
         hasMore: true,
         loading: true,
-        hasBufferedPage: false,
-      }),
-    ).toBe(false);
-
-    expect(
-      shouldPrefetchHistoryPage({
-        scrollTop: 120,
-        hasMore: true,
-        loading: false,
-        hasBufferedPage: true,
-      }),
-    ).toBe(false);
-  });
-});
-
-describe("shouldConsumeBufferedHistoryPage", () => {
-  it("consumes a prepared page only once the viewport actually reaches the top edge", () => {
-    expect(
-      shouldConsumeBufferedHistoryPage({
-        scrollTop: 8,
-        hasBufferedPage: true,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldConsumeBufferedHistoryPage({
-        scrollTop: 42,
-        hasBufferedPage: true,
-      }),
-    ).toBe(false);
-
-    expect(
-      shouldConsumeBufferedHistoryPage({
-        scrollTop: 8,
-        hasBufferedPage: false,
       }),
     ).toBe(false);
   });
