@@ -47,6 +47,61 @@ const AGENT_LABELS: Record<IntegrationAgentId, string> = {
   factory: "Factory",
 };
 
+// Claude Code and its forks (Qoder / Qwen / Factory) share the hook schema.
+// A ClaudeCompatibleAgentDef captures the per-agent divergences: config
+// directory, wrapper kind, i18n message key prefix and whether the agent
+// exposes a statusLine mechanism we can configure. install/inspect flows
+// are parameterized by this def so the claude codepath doesn't need to be
+// copy-pasted per fork.
+type ClaudeCompatibleAgentDef = {
+  id: Extract<IntegrationAgentId, "claude" | "qoder" | "qwen" | "factory">;
+  label: string;
+  configDir: string;
+  wrapperKind: WrappedAgentKind;
+  statusLineWrapperKind?: WrappedAgentKind;
+  messageKeyPrefix: string;
+};
+
+const CLAUDE_COMPATIBLE_AGENTS: ClaudeCompatibleAgentDef[] = [
+  {
+    id: "claude",
+    label: "Claude",
+    configDir: ".claude",
+    wrapperKind: "claude",
+    statusLineWrapperKind: "claude-statusline",
+    messageKeyPrefix: "integration.message.claude",
+  },
+  {
+    id: "qoder",
+    label: "Qoder",
+    configDir: ".qoder",
+    wrapperKind: "qoder",
+    messageKeyPrefix: "integration.message.qoder",
+  },
+  {
+    id: "qwen",
+    label: "Qwen",
+    configDir: ".qwen",
+    wrapperKind: "qwen",
+    messageKeyPrefix: "integration.message.qwen",
+  },
+  {
+    id: "factory",
+    label: "Factory",
+    configDir: ".factory",
+    wrapperKind: "factory",
+    messageKeyPrefix: "integration.message.factory",
+  },
+];
+
+const CLAUDE_DEF = CLAUDE_COMPATIBLE_AGENTS[0];
+
+function claudeCompatAgentDef(
+  agentId: IntegrationAgentId,
+): ClaudeCompatibleAgentDef | undefined {
+  return CLAUDE_COMPATIBLE_AGENTS.find((def) => def.id === agentId);
+}
+
 function defaultNow() {
   return Date.now();
 }
@@ -358,8 +413,8 @@ function codeBuddyConfigPath(homeDir: string): string {
   return path.join(homeDir, ".codebuddy", "settings.json");
 }
 
-function claudeConfigPath(homeDir: string): string {
-  return path.join(homeDir, ".claude", "settings.json");
+function claudeConfigPath(homeDir: string, def: ClaudeCompatibleAgentDef = CLAUDE_DEF): string {
+  return path.join(homeDir, def.configDir, "settings.json");
 }
 
 function cursorHookScriptPath(hookScriptsRoot: string): string {
@@ -801,8 +856,11 @@ function codeBuddyRequiredWrapperEntries(homeDir: string): CodeBuddyRequiredEntr
   ];
 }
 
-function claudeRequiredEntriesForHome(homeDir: string): ClaudeRequiredEntry[] {
-  const command = buildWrapperCommand(homeDir, "claude");
+function claudeRequiredEntriesForHome(
+  homeDir: string,
+  def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
+): ClaudeRequiredEntry[] {
+  const command = buildWrapperCommand(homeDir, def.wrapperKind);
   return [
     { eventName: "SessionStart", matcher: "*", command },
     { eventName: "UserPromptSubmit", command },
@@ -1030,16 +1088,21 @@ function inspectClaudeConfig(
   homeDir: string,
   hookCtx: HookCommandContext,
   lastEvent?: LastEvent,
+  def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
 ): IntegrationAgentDiagnostics {
-  const configPath = claudeConfigPath(homeDir);
+  const configPath = claudeConfigPath(homeDir, def);
   const config = readOptionalJson(configPath);
-  const required = claudeRequiredEntriesForHome(homeDir);
-  const wrapperFilesReady = wrapperFilesExist(homeDir, ["claude", "claude-statusline"]);
+  const required = claudeRequiredEntriesForHome(homeDir, def);
+  const wrapperKinds: WrappedAgentKind[] = def.statusLineWrapperKind
+    ? [def.wrapperKind, def.statusLineWrapperKind]
+    : [def.wrapperKind];
+  const wrapperFilesReady = wrapperFilesExist(homeDir, wrapperKinds);
+  const checksStatusLine = def.statusLineWrapperKind !== undefined;
 
   let health: IntegrationHealth = "not_configured";
   let hookInstalled = false;
-  let statusMessage = "未配置 CodePal Claude hooks";
-  let statusMessageKey = "integration.message.claude.notConfigured";
+  let statusMessage = `未配置 CodePal ${def.label} hooks`;
+  let statusMessageKey = `${def.messageKeyPrefix}.notConfigured`;
   let checks: IntegrationAgentCheck[] | undefined;
 
   if (config.error) {
@@ -1048,7 +1111,9 @@ function inspectClaudeConfig(
   } else if (!config.exists) {
     health = "not_configured";
   } else if (config.parsed) {
-    const hasStatusLine = hasClaudeStatusLineForHome(config.parsed, homeDir) && wrapperFilesReady;
+    const hasStatusLine = checksStatusLine
+      ? hasClaudeStatusLineForHome(config.parsed, homeDir) && wrapperFilesReady
+      : true;
     const hooksValue = config.parsed.hooks;
     const hasMatchingHooks =
       hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)
@@ -1058,59 +1123,67 @@ function inspectClaudeConfig(
       {
         id: "hooks",
         label: "Hooks",
-        labelKey: "integration.check.claude.hooks",
+        labelKey: `integration.check.${def.id}.hooks`,
         ok: hasMatchingHooks,
         statusLabel: hasMatchingHooks ? "正常" : "异常",
         statusLabelKey: hasMatchingHooks ? "integration.check.ok" : "integration.check.error",
       },
-      {
-        id: "statusLine",
-        label: "StatusLine(quota)",
-        labelKey: "integration.check.claude.statusLine",
-        ok: hasStatusLine,
-        statusLabel: hasStatusLine ? "正常" : "异常",
-        statusLabelKey: hasStatusLine ? "integration.check.ok" : "integration.check.error",
-      },
+      ...(checksStatusLine
+        ? [
+            {
+              id: "statusLine",
+              label: "StatusLine(quota)",
+              labelKey: `integration.check.${def.id}.statusLine`,
+              ok: hasStatusLine,
+              statusLabel: hasStatusLine ? "正常" : "异常",
+              statusLabelKey: hasStatusLine ? "integration.check.ok" : "integration.check.error",
+            },
+          ]
+        : []),
     ];
     if (hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)) {
       const hooks = hooksValue as Record<string, unknown>;
       if (claudeHooksMatch(hooks, required) && hasStatusLine) {
         health = "active";
         hookInstalled = true;
-        statusMessage = "已配置用户级 Claude hooks 与 statusLine";
-        statusMessageKey = "integration.message.claude.active";
+        statusMessage = checksStatusLine
+          ? `已配置用户级 ${def.label} hooks 与 statusLine`
+          : `已配置用户级 ${def.label} hooks`;
+        statusMessageKey = `${def.messageKeyPrefix}.active`;
       } else if (claudeHooksMatch(hooks, required)) {
         health = "repair_needed";
-        statusMessage = "Claude hooks 已配置，但缺少 CodePal statusLine";
-        statusMessageKey = "integration.message.claude.missingStatusLine";
+        statusMessage = `${def.label} hooks 已配置，但缺少 CodePal statusLine`;
+        statusMessageKey = `${def.messageKeyPrefix}.missingStatusLine`;
       } else if (!claudeHooksEmpty(hooks)) {
         health = "repair_needed";
-        statusMessage = "Claude settings.json hooks 与当前 CodePal 要求不一致";
-        statusMessageKey = "integration.message.claude.mismatch";
-      } else if (hasStatusLine) {
+        statusMessage = `${def.label} settings.json hooks 与当前 CodePal 要求不一致`;
+        statusMessageKey = `${def.messageKeyPrefix}.mismatch`;
+      } else if (hasStatusLine && checksStatusLine) {
         health = "repair_needed";
-        statusMessage = "Claude statusLine 已配置，但 hooks 未完成";
-        statusMessageKey = "integration.message.claude.statusLineOnly";
+        statusMessage = `${def.label} statusLine 已配置，但 hooks 未完成`;
+        statusMessageKey = `${def.messageKeyPrefix}.statusLineOnly`;
       }
     } else if (!("hooks" in config.parsed)) {
-      health = hasStatusLine ? "repair_needed" : "not_configured";
-      statusMessage = hasStatusLine
-        ? "Claude statusLine 已配置，但 hooks 未完成"
-        : statusMessage;
-      statusMessageKey = hasStatusLine
-        ? "integration.message.claude.statusLineOnly"
-        : "integration.message.claude.notConfigured";
+      health = hasStatusLine && checksStatusLine ? "repair_needed" : "not_configured";
+      statusMessage =
+        hasStatusLine && checksStatusLine
+          ? `${def.label} statusLine 已配置，但 hooks 未完成`
+          : statusMessage;
+      statusMessageKey =
+        hasStatusLine && checksStatusLine
+          ? `${def.messageKeyPrefix}.statusLineOnly`
+          : `${def.messageKeyPrefix}.notConfigured`;
     } else {
       health = "repair_needed";
-      statusMessage = "Claude settings.json hooks 结构不兼容";
-      statusMessageKey = "integration.message.claude.invalid";
+      statusMessage = `${def.label} settings.json hooks 结构不兼容`;
+      statusMessageKey = `${def.messageKeyPrefix}.invalid`;
     }
   }
 
   const { healthLabel, actionLabel, healthLabelKey, actionLabelKey } = labelsForHealth(health);
   return {
-    id: "claude",
-    label: AGENT_LABELS.claude,
+    id: def.id,
+    label: AGENT_LABELS[def.id],
     supported: true,
     configPath,
     configExists: config.exists,
@@ -1200,15 +1273,21 @@ function codeBuddyConfigNeedsCleanup(homeDir: string): boolean {
   return nestedHooksConfigNeedsCleanup(codeBuddyConfigPath(homeDir), entriesByEvent, "codebuddy");
 }
 
-function claudeConfigNeedsCleanup(homeDir: string): boolean {
-  const required = claudeRequiredEntriesForHome(homeDir);
+function claudeConfigNeedsCleanup(
+  homeDir: string,
+  def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
+): boolean {
+  const required = claudeRequiredEntriesForHome(homeDir, def);
   const entriesByEvent = Object.fromEntries(
     required.map((entry) => [entry.eventName, required.filter((item) => item.eventName === entry.eventName)]),
   ) as Record<string, CodeBuddyRequiredEntry[]>;
-  if (nestedHooksConfigNeedsCleanup(claudeConfigPath(homeDir), entriesByEvent, "claude")) {
+  if (nestedHooksConfigNeedsCleanup(claudeConfigPath(homeDir, def), entriesByEvent, def.wrapperKind)) {
     return true;
   }
-  return claudeDeprecatedEntriesPresent(homeDir);
+  if (def.id === "claude") {
+    return claudeDeprecatedEntriesPresent(homeDir);
+  }
+  return false;
 }
 
 function claudeDeprecatedEntriesPresent(homeDir: string): boolean {
@@ -1456,9 +1535,10 @@ function installClaudeHooksFile(
   homeDir: string,
   hookCtx: HookCommandContext,
   now: () => number,
+  def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
 ): { changed: boolean; backupPath?: string } {
   const wrapperResult = ensureAgentWrapperFiles(homeDir, hookCtx);
-  const configPath = claudeConfigPath(homeDir);
+  const configPath = claudeConfigPath(homeDir, def);
   const current = readOptionalJson(configPath);
   if (current.error) {
     throw new Error(current.error);
@@ -1470,16 +1550,16 @@ function installClaudeHooksFile(
     hooksValue !== undefined &&
     (!hooksValue || typeof hooksValue !== "object" || Array.isArray(hooksValue))
   ) {
-    throw new Error("Claude settings.json hooks 结构不兼容");
+    throw new Error(`${def.label} settings.json hooks 结构不兼容`);
   }
   const hooks = hooksValue ? ({ ...hooksValue } as Record<string, unknown>) : {};
 
   let changed = current.exists === false || wrapperResult.changed;
 
-  for (const required of claudeRequiredEntriesForHome(homeDir)) {
+  for (const required of claudeRequiredEntriesForHome(homeDir, def)) {
     const existingEntries = hooks[required.eventName];
     if (existingEntries !== undefined && !Array.isArray(existingEntries)) {
-      throw new Error(`Claude hooks.${required.eventName} 不是数组`);
+      throw new Error(`${def.label} hooks.${required.eventName} 不是数组`);
     }
     const normalized = normalizeClaudeHookEntries(existingEntries, required);
     if (normalized.changed) {
@@ -1492,7 +1572,7 @@ function installClaudeHooksFile(
     if (!(eventName in hooks)) continue;
     const existingEntries = hooks[eventName];
     if (existingEntries !== undefined && !Array.isArray(existingEntries)) continue;
-    const stripped = stripCodePalOwnedNestedEntries(existingEntries, "claude");
+    const stripped = stripCodePalOwnedNestedEntries(existingEntries, def.wrapperKind);
     if (!stripped.changed) continue;
     changed = true;
     if (stripped.entries.length === 0) {
@@ -1503,31 +1583,34 @@ function installClaudeHooksFile(
   }
 
   next.hooks = hooks;
-  const desiredStatusLineCommand = buildWrapperCommand(homeDir, "claude-statusline");
-  const existingStatusLineCommand = readClaudeStatusLineCommand(next);
-  if (!existingStatusLineCommand) {
-    next.statusLine = {
-      type: "command",
-      command: desiredStatusLineCommand,
-    };
-    changed = true;
-  } else if (existingStatusLineCommand === desiredStatusLineCommand) {
-    // already current
-  } else if (commandContainsCodePalSubcommand(existingStatusLineCommand, "claude-statusline")) {
-    next.statusLine = {
-      type: "command",
-      command: desiredStatusLineCommand,
-    };
-    changed = true;
-  } else {
-    next.statusLine = {
-      type: "command",
-      command: buildChainedClaudeStatusLineCommand(
-        existingStatusLineCommand,
-        desiredStatusLineCommand,
-      ),
-    };
-    changed = true;
+
+  if (def.statusLineWrapperKind) {
+    const desiredStatusLineCommand = buildWrapperCommand(homeDir, def.statusLineWrapperKind);
+    const existingStatusLineCommand = readClaudeStatusLineCommand(next);
+    if (!existingStatusLineCommand) {
+      next.statusLine = {
+        type: "command",
+        command: desiredStatusLineCommand,
+      };
+      changed = true;
+    } else if (existingStatusLineCommand === desiredStatusLineCommand) {
+      // already current
+    } else if (commandContainsCodePalSubcommand(existingStatusLineCommand, def.statusLineWrapperKind)) {
+      next.statusLine = {
+        type: "command",
+        command: desiredStatusLineCommand,
+      };
+      changed = true;
+    } else {
+      next.statusLine = {
+        type: "command",
+        command: buildChainedClaudeStatusLineCommand(
+          existingStatusLineCommand,
+          desiredStatusLineCommand,
+        ),
+      };
+      changed = true;
+    }
   }
 
   let backupPath: string | undefined;
@@ -1591,8 +1674,9 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
 
   function getAgentDiagnostics(agentId: IntegrationAgentId): IntegrationAgentDiagnostics {
     const hookCtx = integrationHookContext();
-    if (agentId === "claude") {
-      return inspectClaudeConfig(options.homeDir, hookCtx, lastEvents.get(agentId));
+    const compatDef = claudeCompatAgentDef(agentId);
+    if (compatDef) {
+      return inspectClaudeConfig(options.homeDir, hookCtx, lastEvents.get(agentId), compatDef);
     }
     if (agentId === "codex") {
       return inspectCodexConfig(options.homeDir, hookCtx, lastEvents.get(agentId));
@@ -1618,7 +1702,15 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
       listener = next;
     },
     recordEvent(tool: string, status: SessionStatus, timestamp: number) {
-      if (tool === "claude" || tool === "cursor" || tool === "codebuddy" || tool === "codex") {
+      if (
+        tool === "claude" ||
+        tool === "cursor" ||
+        tool === "codebuddy" ||
+        tool === "codex" ||
+        tool === "qoder" ||
+        tool === "qwen" ||
+        tool === "factory"
+      ) {
         lastEvents.set(tool, { at: timestamp, status });
       }
     },
@@ -1636,15 +1728,18 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
           getAgentDiagnostics("codex"),
           getAgentDiagnostics("cursor"),
           getAgentDiagnostics("codebuddy"),
+          getAgentDiagnostics("qoder"),
+          getAgentDiagnostics("qwen"),
+          getAgentDiagnostics("factory"),
         ],
       };
     },
     installHooks(agentId: IntegrationAgentId): IntegrationInstallResult {
       const hookCtx = integrationHookContext();
-      const result =
-        agentId === "claude"
-          ? installClaudeHooksFile(options.homeDir, hookCtx, now)
-          : agentId === "cursor"
+      const compatDef = claudeCompatAgentDef(agentId);
+      const result = compatDef
+        ? installClaudeHooksFile(options.homeDir, hookCtx, now, compatDef)
+        : agentId === "cursor"
           ? installCursorHooksFile(options.homeDir, hookCtx, now)
           : agentId === "codebuddy"
             ? installCodeBuddyHooksFile(options.homeDir, hookCtx, now)
@@ -1674,11 +1769,27 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
     },
     autoInstallMissingSupportedHooks(): IntegrationInstallResult[] {
       const results: IntegrationInstallResult[] = [];
-      for (const agentId of ["claude", "cursor", "codebuddy", "codex"] as const) {
+      for (const agentId of [
+        "claude",
+        "cursor",
+        "codebuddy",
+        "codex",
+        "qoder",
+        "qwen",
+        "factory",
+      ] as const) {
         const diagnostics = getAgentDiagnostics(agentId);
         const desiredWrapperCommand = agentId === "cursor" ? buildWrapperCommand(options.homeDir, "cursor") : "";
+        const forkDef = claudeCompatAgentDef(agentId);
+        const isFork = forkDef !== undefined && forkDef.id !== "claude";
+        // Forks: only auto-install when the user has installed the tool
+        // (config dir exists). Otherwise skip to avoid creating empty
+        // settings for tools the user doesn't have.
+        const forkDirExists =
+          !isFork || (forkDef ? fs.existsSync(path.join(options.homeDir, forkDef.configDir)) : false);
         const shouldInstall =
           diagnostics.supported &&
+          forkDirExists &&
           (diagnostics.health === "not_configured" ||
             diagnostics.health === "legacy_path" ||
             (agentId === "claude" &&
@@ -1688,6 +1799,10 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
             (agentId === "claude" &&
               diagnostics.health === "active" &&
               claudeDeprecatedEntriesPresent(options.homeDir)) ||
+            (isFork &&
+              diagnostics.health === "repair_needed" &&
+              forkDef &&
+              claudeConfigNeedsCleanup(options.homeDir, forkDef)) ||
             (agentId === "cursor" &&
               cursorConfigNeedsCleanup(options.homeDir, desiredWrapperCommand)) ||
             (agentId === "codebuddy" &&
