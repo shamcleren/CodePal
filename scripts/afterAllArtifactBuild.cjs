@@ -115,10 +115,31 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   }
 
   run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]);
-  run("xcrun", ["stapler", "validate", "-v", appPath]);
 
   for (const dmgPath of dmgPaths) {
     run("xcrun", ["notarytool", "submit", dmgPath, ...getNotaryAuthArgs(), "--wait"]);
+  }
+
+  // Staple the notary ticket onto the .app and the .dmg so Gatekeeper can
+  // verify them offline. Without this, downloads from GitHub still hit the
+  // "damaged / unidentified developer" prompt because macOS quarantines the
+  // file and there's no embedded ticket to short-circuit the online check.
+  run("xcrun", ["stapler", "staple", appPath]);
+  for (const dmgPath of dmgPaths) {
+    run("xcrun", ["stapler", "staple", dmgPath]);
+  }
+  run("xcrun", ["stapler", "validate", "-v", appPath]);
+
+  // electron-builder uploads artifacts to the draft release BEFORE this hook
+  // runs, so those uploaded copies are pre-staple. Re-upload the stapled dmg
+  // (the user-facing download) so the GitHub release matches what we just
+  // verified locally. The .zip is regenerated below from the stapled .app
+  // and re-uploaded for the auto-updater.
+  const tagForUpload = `v${
+    buildResult.configuration.buildVersion || require("../package.json").version
+  }`;
+  for (const dmgPath of dmgPaths) {
+    run("gh", ["release", "upload", tagForUpload, dmgPath, "--clobber"]);
   }
 
   console.log("[release] macOS release validation finished.");
