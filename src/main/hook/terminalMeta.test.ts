@@ -76,6 +76,17 @@ describe("readTerminalContextFromEnv", () => {
     expect(ctx?.tty).toBe("/dev/ttys003");
   });
 
+  it("captures wezterm pane id when WEZTERM_PANE is exported", () => {
+    const ctx = readTerminalContextFromEnv({
+      CODEPAL_TERM_APP: "WezTerm",
+      CODEPAL_TERM_WEZTERM_PANE: "12",
+      CODEPAL_TERM_TTY: "s003",
+    });
+    expect(ctx?.app).toBe("wezterm");
+    expect(ctx?.weztermPane).toBe("12");
+    expect(ctx?.tty).toBe("/dev/ttys003");
+  });
+
   it("maps common TERM_PROGRAM values to canonical app ids", () => {
     expect(
       readTerminalContextFromEnv({ CODEPAL_TERM_APP: "Apple_Terminal", CODEPAL_TERM_TTY: "s001" })?.app,

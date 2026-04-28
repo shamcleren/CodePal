@@ -124,6 +124,48 @@ describe("sessionJumpService", () => {
     expect(osa!.args[1]).toContain("w0t0p0:ABCDEF");
   });
 
+  it("uses `wezterm cli activate-pane` when weztermPane is present", async () => {
+    const { exec, calls } = mockExec((file) => {
+      if (file === "wezterm") return "ok";
+      if (file === "osascript") return "ok";
+      return "fail";
+    });
+    const service = createSessionJumpService({ execFileImpl: exec });
+
+    const result = await service.jumpTo({
+      agent: "claude",
+      appName: "WezTerm",
+      weztermPane: "12",
+      fallbackBehavior: "activate_app",
+    });
+
+    expect(result).toEqual({ ok: true, mode: "precise" });
+    expect(calls[0]).toEqual({
+      file: "wezterm",
+      args: ["cli", "activate-pane", "--pane-id", "12"],
+    });
+    // After CLI succeeds we activate the WezTerm app to make sure it's frontmost.
+    const osa = calls.find((c) => c.file === "osascript");
+    expect(osa).toBeDefined();
+    expect(osa!.args[1]).toContain(`tell application "WezTerm"`);
+  });
+
+  it("falls through when wezterm CLI is missing and lets app activation handle it", async () => {
+    const { exec, calls } = mockExec((file) => (file === "open" ? "ok" : "fail"));
+    const service = createSessionJumpService({ execFileImpl: exec });
+
+    const result = await service.jumpTo({
+      agent: "claude",
+      appName: "WezTerm",
+      weztermPane: "7",
+      fallbackBehavior: "activate_app",
+    });
+
+    expect(result).toEqual({ ok: true, mode: "activate_app" });
+    // We did try wezterm — it just failed, so we continued through the fallback chain.
+    expect(calls.some((c) => c.file === "wezterm")).toBe(true);
+  });
+
   it("returns activate_app when every precise strategy misses", async () => {
     const { exec } = mockExec((file) => (file === "open" ? "ok" : "fail"));
     const service = createSessionJumpService({ execFileImpl: exec });

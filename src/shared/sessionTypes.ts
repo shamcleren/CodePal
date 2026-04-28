@@ -137,6 +137,8 @@ export interface TerminalContext {
   tmuxPane?: string;
   /** tmux socket path (leading component of $TMUX before the comma) */
   tmuxSocket?: string;
+  /** WezTerm pane id (numeric string from $WEZTERM_PANE) — used by `wezterm cli` */
+  weztermPane?: string;
   /** Raw terminal title, if known */
   windowTitle?: string;
 }
@@ -144,7 +146,7 @@ export interface TerminalContext {
 export function isTerminalContext(value: unknown): value is TerminalContext {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
-  for (const key of ["app", "tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "windowTitle"]) {
+  for (const key of ["app", "tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "weztermPane", "windowTitle"]) {
     if (key in o && o[key] !== undefined && typeof o[key] !== "string") {
       return false;
     }
@@ -167,6 +169,8 @@ export interface SessionJumpTarget {
   tmuxPane?: string;
   /** tmux socket path when the source tmux runs on a non-default socket */
   tmuxSocket?: string;
+  /** WezTerm pane id (numeric, from $WEZTERM_PANE) for `wezterm cli activate-pane` */
+  weztermPane?: string;
   fallbackBehavior: "activate_app";
 }
 
@@ -222,7 +226,7 @@ export function isSessionJumpTarget(value: unknown): value is SessionJumpTarget 
   if ("windowHint" in o && o.windowHint !== undefined && typeof o.windowHint !== "string") {
     return false;
   }
-  for (const key of ["tty", "terminalSessionId", "tmuxPane", "tmuxSocket"]) {
+  for (const key of ["tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "weztermPane"]) {
     if (key in o && o[key] !== undefined && typeof o[key] !== "string") {
       return false;
     }

@@ -74,6 +74,19 @@ end tell`;
   return execQuiet(exec, "osascript", ["-e", script]);
 }
 
+async function focusWezTermPane(target: SessionJumpTarget, exec: ExecFileLike): Promise<boolean> {
+  const pane = target.weztermPane;
+  if (!pane) return false;
+  // `wezterm cli activate-pane --pane-id <id>` brings WezTerm forward and
+  // focuses the matching pane. WezTerm itself doesn't get app-activated by
+  // this call on macOS, so follow up with osascript to ensure it's frontmost.
+  if (!(await execQuiet(exec, "wezterm", ["cli", "activate-pane", "--pane-id", pane]))) {
+    return false;
+  }
+  await execQuiet(exec, "osascript", ["-e", `tell application "WezTerm" to activate`]);
+  return true;
+}
+
 async function focusGhosttySession(target: SessionJumpTarget, exec: ExecFileLike): Promise<boolean> {
   // Ghostty's AppleScript surface is minimal — it exposes "activate" but no
   // per-tab / per-session selection as of v1.x. Best-effort: bring the app
@@ -108,6 +121,7 @@ function buildDefaultFindWindow(exec: ExecFileLike) {
     // terminal emulator, so landing the client on the right pane implicitly
     // focuses the outer window), then the emulator-specific strategies.
     if (await focusTmuxPane(target, exec)) return true;
+    if (await focusWezTermPane(target, exec)) return true;
     if (await focusITerm2Session(target, exec)) return true;
     if (await focusTerminalAppByTty(target, exec)) return true;
     if (await focusGhosttySession(target, exec)) return true;
