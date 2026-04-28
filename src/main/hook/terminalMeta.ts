@@ -107,6 +107,7 @@ export function readTerminalContextFromEnv(
   if (tmuxPane) result.tmuxPane = tmuxPane;
   if (tmuxSocket && tmuxPane) result.tmuxSocket = tmuxSocket;
   if (weztermPane) result.weztermPane = weztermPane;
+  if (kittyWindow) result.kittyWindow = kittyWindow;
   if (windowTitle) result.windowTitle = windowTitle;
 
   return Object.keys(result).length > 0 ? result : undefined;
@@ -181,6 +182,7 @@ export type JumpTargetTerminalFields = {
   tmuxPane?: string;
   tmuxSocket?: string;
   weztermPane?: string;
+  kittyWindow?: string;
 };
 
 /**
@@ -199,5 +201,6 @@ export function jumpTargetFieldsFromEnv(env: NodeJS.ProcessEnv): JumpTargetTermi
   if (context.tmuxPane) fields.tmuxPane = context.tmuxPane;
   if (context.tmuxSocket) fields.tmuxSocket = context.tmuxSocket;
   if (context.weztermPane) fields.weztermPane = context.weztermPane;
+  if (context.kittyWindow) fields.kittyWindow = context.kittyWindow;
   return fields;
 }

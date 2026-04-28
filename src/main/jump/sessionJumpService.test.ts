@@ -166,6 +166,30 @@ describe("sessionJumpService", () => {
     expect(calls.some((c) => c.file === "wezterm")).toBe(true);
   });
 
+  it("uses `kitten @ focus-window` when kittyWindow is present", async () => {
+    const { exec, calls } = mockExec((file) => {
+      if (file === "kitten") return "ok";
+      if (file === "osascript") return "ok";
+      return "fail";
+    });
+    const service = createSessionJumpService({ execFileImpl: exec });
+
+    const result = await service.jumpTo({
+      agent: "claude",
+      appName: "kitty",
+      kittyWindow: "7",
+      fallbackBehavior: "activate_app",
+    });
+
+    expect(result).toEqual({ ok: true, mode: "precise" });
+    expect(calls[0]).toEqual({
+      file: "kitten",
+      args: ["@", "focus-window", "--match", "id:7"],
+    });
+    const osa = calls.find((c) => c.file === "osascript");
+    expect(osa?.args[1]).toContain(`tell application "kitty"`);
+  });
+
   it("returns activate_app when every precise strategy misses", async () => {
     const { exec } = mockExec((file) => (file === "open" ? "ok" : "fail"));
     const service = createSessionJumpService({ execFileImpl: exec });

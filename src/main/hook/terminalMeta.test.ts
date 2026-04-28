@@ -87,6 +87,17 @@ describe("readTerminalContextFromEnv", () => {
     expect(ctx?.tty).toBe("/dev/ttys003");
   });
 
+  it("captures kitty window id when KITTY_WINDOW_ID is exported", () => {
+    const ctx = readTerminalContextFromEnv({
+      CODEPAL_TERM_APP: "kitty",
+      CODEPAL_TERM_KITTY_WINDOW_ID: "7",
+      CODEPAL_TERM_TTY: "s004",
+    });
+    expect(ctx?.app).toBe("kitty");
+    expect(ctx?.kittyWindow).toBe("7");
+    expect(ctx?.tty).toBe("/dev/ttys004");
+  });
+
   it("maps common TERM_PROGRAM values to canonical app ids", () => {
     expect(
       readTerminalContextFromEnv({ CODEPAL_TERM_APP: "Apple_Terminal", CODEPAL_TERM_TTY: "s001" })?.app,

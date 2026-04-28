@@ -139,6 +139,8 @@ export interface TerminalContext {
   tmuxSocket?: string;
   /** WezTerm pane id (numeric string from $WEZTERM_PANE) — used by `wezterm cli` */
   weztermPane?: string;
+  /** kitty OS-window id (from $KITTY_WINDOW_ID) — used by `kitten @ ... --match id:<id>` */
+  kittyWindow?: string;
   /** Raw terminal title, if known */
   windowTitle?: string;
 }
@@ -146,7 +148,7 @@ export interface TerminalContext {
 export function isTerminalContext(value: unknown): value is TerminalContext {
   if (!value || typeof value !== "object") return false;
   const o = value as Record<string, unknown>;
-  for (const key of ["app", "tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "weztermPane", "windowTitle"]) {
+  for (const key of ["app", "tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "weztermPane", "kittyWindow", "windowTitle"]) {
     if (key in o && o[key] !== undefined && typeof o[key] !== "string") {
       return false;
     }
@@ -171,6 +173,8 @@ export interface SessionJumpTarget {
   tmuxSocket?: string;
   /** WezTerm pane id (numeric, from $WEZTERM_PANE) for `wezterm cli activate-pane` */
   weztermPane?: string;
+  /** kitty OS-window id (from $KITTY_WINDOW_ID) for `kitten @ focus-window --match id:<id>` */
+  kittyWindow?: string;
   fallbackBehavior: "activate_app";
 }
 
@@ -226,7 +230,7 @@ export function isSessionJumpTarget(value: unknown): value is SessionJumpTarget 
   if ("windowHint" in o && o.windowHint !== undefined && typeof o.windowHint !== "string") {
     return false;
   }
-  for (const key of ["tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "weztermPane"]) {
+  for (const key of ["tty", "terminalSessionId", "tmuxPane", "tmuxSocket", "weztermPane", "kittyWindow"]) {
     if (key in o && o[key] !== undefined && typeof o[key] !== "string") {
       return false;
     }
@@ -343,16 +347,25 @@ export interface SessionRecord {
  * context gives us a concrete channel to deliver text into the agent's stdin:
  *   - tmux: any pane target (we can `tmux send-keys -l` against it)
  *   - WezTerm: any pane id (we can `wezterm cli send-text --pane-id` against it)
- *   - Ghostty: app identified AND a terminal session id is known
- * Other terminals (Terminal.app / iTerm2 / Warp / kitty) have no reliable text
- * injection path in v1.1.x — callers should hide the input UI rather than
- * render a disabled control.
+ *   - kitty: any window id (we can `kitten @ send-text --match id:<id>` against it,
+ *     provided the user has `allow_remote_control` enabled in kitty.conf)
+ *   - iTerm2: app identified AND a terminal session id is known (per-session
+ *     `tell session id "..." to write text "..."` AppleScript surface)
+ *   - Ghostty: app identified AND a terminal session id is known (System Events
+ *     keystroke fallback — best effort)
+ * Other terminals (Terminal.app / Warp) have no reliable text injection path
+ * in v1.1.x — callers should hide the input UI rather than render a disabled
+ * control.
  */
 export function canReply(session: Pick<SessionRecord, "terminalContext">): boolean {
   const ctx = session.terminalContext;
   if (!ctx) return false;
   if (ctx.tmuxPane && ctx.tmuxPane.length > 0) return true;
   if (ctx.weztermPane && ctx.weztermPane.length > 0) return true;
+  if (ctx.kittyWindow && ctx.kittyWindow.length > 0) return true;
+  if (ctx.app === "iTerm.app" && ctx.terminalSessionId && ctx.terminalSessionId.length > 0) {
+    return true;
+  }
   if (ctx.app === "ghostty" && ctx.terminalSessionId && ctx.terminalSessionId.length > 0) {
     return true;
   }

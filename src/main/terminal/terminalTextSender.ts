@@ -63,8 +63,59 @@ export async function sendViaTmux(
   }
 }
 
+export async function sendViaKitty(
+  text: string,
+  windowId: string,
+  exec: ExecFileLike,
+): Promise<SendResult> {
+  // `kitten @ send-text` writes bytes into the matched window's input. Like
+  // tmux/wezterm we issue text first, then a carriage return as a separate
+  // call so a partial failure leaves no half-submitted prompt. Requires
+  // `allow_remote_control yes` in kitty.conf — without it, the call fails
+  // and the caller's error message points at the real cause.
+  try {
+    await exec("kitten", ["@", "send-text", "--match", `id:${windowId}`, "--", text]);
+    await exec("kitten", ["@", "send-text", "--match", `id:${windowId}`, "--", "\r"]);
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: `kitten @ send-text failed: ${message}` };
+  }
+}
+
 function escapeAppleScriptString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+/**
+ * iTerm2 exposes a per-session AppleScript surface — `tell session id "X" to
+ * write text "..."`. Unlike the Ghostty path this targets the exact session
+ * that originated the agent, no System Events keystroke needed, no risk of
+ * landing in the wrong window. The `newline` parameter on `write text` is
+ * true by default, so the prompt submits in one call.
+ */
+export async function sendViaITerm2(
+  text: string,
+  terminalSessionId: string,
+  exec: ExecFileLike,
+): Promise<SendResult> {
+  if (!terminalSessionId) {
+    return { ok: false, error: "iterm2: missing terminal session id" };
+  }
+  const script = [
+    `tell application "iTerm"`,
+    `  tell session id "${escapeAppleScriptString(terminalSessionId)}"`,
+    `    write text "${escapeAppleScriptString(text)}"`,
+    `  end tell`,
+    `end tell`,
+  ].join("\n");
+  try {
+    await exec("osascript", ["-e", script]);
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: `iterm2 osascript failed: ${message}` };
+  }
 }
 
 /**
@@ -116,6 +167,12 @@ export function createTerminalTextSender(deps: SenderDeps = {}): TerminalTextSen
       }
       if (ctx.weztermPane) {
         return sendViaWezTerm(text, ctx.weztermPane, exec);
+      }
+      if (ctx.kittyWindow) {
+        return sendViaKitty(text, ctx.kittyWindow, exec);
+      }
+      if (ctx.app === "iTerm.app" && ctx.terminalSessionId) {
+        return sendViaITerm2(text, ctx.terminalSessionId, exec);
       }
       if (ctx.app === "ghostty" && ctx.terminalSessionId) {
         return sendViaGhostty(text, ctx.terminalSessionId, exec);

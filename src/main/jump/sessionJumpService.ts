@@ -87,6 +87,18 @@ async function focusWezTermPane(target: SessionJumpTarget, exec: ExecFileLike): 
   return true;
 }
 
+async function focusKittyWindow(target: SessionJumpTarget, exec: ExecFileLike): Promise<boolean> {
+  const id = target.kittyWindow;
+  if (!id) return false;
+  // Requires `allow_remote_control yes` (or `socket-only`) in the user's
+  // kitty.conf — without it the call returns non-zero and we fall through.
+  if (!(await execQuiet(exec, "kitten", ["@", "focus-window", "--match", `id:${id}`]))) {
+    return false;
+  }
+  await execQuiet(exec, "osascript", ["-e", `tell application "kitty" to activate`]);
+  return true;
+}
+
 async function focusGhosttySession(target: SessionJumpTarget, exec: ExecFileLike): Promise<boolean> {
   // Ghostty's AppleScript surface is minimal — it exposes "activate" but no
   // per-tab / per-session selection as of v1.x. Best-effort: bring the app
@@ -122,6 +134,7 @@ function buildDefaultFindWindow(exec: ExecFileLike) {
     // focuses the outer window), then the emulator-specific strategies.
     if (await focusTmuxPane(target, exec)) return true;
     if (await focusWezTermPane(target, exec)) return true;
+    if (await focusKittyWindow(target, exec)) return true;
     if (await focusITerm2Session(target, exec)) return true;
     if (await focusTerminalAppByTty(target, exec)) return true;
     if (await focusGhosttySession(target, exec)) return true;

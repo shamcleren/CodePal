@@ -158,6 +158,64 @@ describe("terminalTextSender", () => {
     expect(calls.every((c) => c.file === "tmux")).toBe(true);
   });
 
+  it("sends via kitten @ send-text + carriage return when kittyWindow is present", async () => {
+    const { exec, calls } = mockExec((file) => (file === "kitten" ? "ok" : "fail"));
+    const sender = createTerminalTextSender({ execFileImpl: exec });
+
+    const result = await sender.send(
+      { terminalContext: { app: "kitty", kittyWindow: "9" } },
+      "go",
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(calls).toEqual([
+      { file: "kitten", args: ["@", "send-text", "--match", "id:9", "--", "go"] },
+      { file: "kitten", args: ["@", "send-text", "--match", "id:9", "--", "\r"] },
+    ]);
+  });
+
+  it("returns an error when kitten send-text fails (Enter not attempted)", async () => {
+    const { exec, calls } = mockExec(() => "fail");
+    const sender = createTerminalTextSender({ execFileImpl: exec });
+
+    const result = await sender.send(
+      { terminalContext: { app: "kitty", kittyWindow: "9" } },
+      "hi",
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/kitten @ send-text failed/);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("uses iTerm2 per-session AppleScript when app is iTerm.app and terminalSessionId is set", async () => {
+    const { exec, calls } = mockExec((file) => (file === "osascript" ? "ok" : "fail"));
+    const sender = createTerminalTextSender({ execFileImpl: exec });
+
+    const result = await sender.send(
+      { terminalContext: { app: "iTerm.app", terminalSessionId: "w0t0p0:DEADBEEF" } },
+      "ship \"this\"",
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(calls[0].file).toBe("osascript");
+    expect(calls[0].args[1]).toContain(`tell session id "w0t0p0:DEADBEEF"`);
+    expect(calls[0].args[1]).toContain(`write text "ship \\"this\\""`);
+  });
+
+  it("returns an error when iTerm2 osascript fails", async () => {
+    const { exec } = mockExec(() => "fail");
+    const sender = createTerminalTextSender({ execFileImpl: exec });
+
+    const result = await sender.send(
+      { terminalContext: { app: "iTerm.app", terminalSessionId: "abc" } },
+      "hi",
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/iterm2 osascript failed/);
+  });
+
   it("prefers tmux over ghostty when both fields are present (tmux lives inside ghostty)", async () => {
     const { exec, calls } = mockExec((file) => (file === "tmux" ? "ok" : "fail"));
     const sender = createTerminalTextSender({ execFileImpl: exec });
