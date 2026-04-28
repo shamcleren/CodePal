@@ -19,7 +19,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "dist:mac": "npm run build && electron-builder --mac zip dmg --publish never",
-    "release:mac": "npm run build && GH_TOKEN=$(gh auth token) electron-builder --mac zip dmg --publish always",
+    "release:mac": "bash scripts/release-mac.sh",
     "dist:mac:dir": "npm run build && CODEPAL_SKIP_RELEASE_FINISH=1 electron-builder --mac dir --publish never -c.mac.identity=null -c.mac.notarize=false",
     "dist:mac:unsigned:test": "node scripts/dist-mac-unsigned-test.cjs",
     "preview": "electron-vite preview",

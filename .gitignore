@@ -8,6 +8,7 @@ release
 .env
 .env.local
 .env.*.local
+.release.env
 coverage
 *.tsbuildinfo
 .claude/
