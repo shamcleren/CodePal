@@ -495,6 +495,29 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       return;
     }
 
+    // Hold the single-instance lock so the auto-updater's quit-and-relaunch
+    // (and double-clicks on the dock icon) can't spawn a second GUI process.
+    // Without this guard the second instance would race the first all the way
+    // to wireIpcHub, hit the "already_running" branch, flash a "已有 CodePal
+    // 在运行" dialog, then quit — visible as a phantom GUI process popping up.
+    if (!app.requestSingleInstanceLock()) {
+      app.quit();
+      return;
+    }
+
+    app.on("second-instance", () => {
+      if (!mainWindow) {
+        return;
+      }
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      if (!mainWindow.isVisible()) {
+        mainWindow.show();
+      }
+      mainWindow.focus();
+    });
+
     app.on("before-quit", () => {
       if (pendingExpirySweepTimer !== null) {
         clearInterval(pendingExpirySweepTimer);
