@@ -23,6 +23,26 @@ type SenderDeps = {
   execFileImpl?: ExecFileLike;
 };
 
+export async function sendViaWezTerm(
+  text: string,
+  pane: string,
+  exec: ExecFileLike,
+): Promise<SendResult> {
+  // `wezterm cli send-text --no-paste` writes the bytes verbatim into the
+  // pane's input. Like tmux we do it in two calls: text first, then a
+  // carriage return to actually submit the prompt. `--no-paste` keeps
+  // bracketed-paste sequences out of the way (some agents otherwise treat
+  // the input as a paste rather than typed input).
+  try {
+    await exec("wezterm", ["cli", "send-text", "--no-paste", "--pane-id", pane, "--", text]);
+    await exec("wezterm", ["cli", "send-text", "--no-paste", "--pane-id", pane, "--", "\r"]);
+    return { ok: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: `wezterm cli send-text failed: ${message}` };
+  }
+}
+
 export async function sendViaTmux(
   text: string,
   pane: string,
@@ -93,6 +113,9 @@ export function createTerminalTextSender(deps: SenderDeps = {}): TerminalTextSen
 
       if (ctx.tmuxPane) {
         return sendViaTmux(text, ctx.tmuxPane, exec, ctx.tmuxSocket);
+      }
+      if (ctx.weztermPane) {
+        return sendViaWezTerm(text, ctx.weztermPane, exec);
       }
       if (ctx.app === "ghostty" && ctx.terminalSessionId) {
         return sendViaGhostty(text, ctx.terminalSessionId, exec);

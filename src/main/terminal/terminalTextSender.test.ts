@@ -116,6 +116,48 @@ describe("terminalTextSender", () => {
     if (!result.ok) expect(result.error).toMatch(/ghostty osascript failed/);
   });
 
+  it("sends via wezterm cli send-text + carriage return when weztermPane is present", async () => {
+    const { exec, calls } = mockExec((file) => (file === "wezterm" ? "ok" : "fail"));
+    const sender = createTerminalTextSender({ execFileImpl: exec });
+
+    const result = await sender.send(
+      { terminalContext: { app: "wezterm", weztermPane: "12" } },
+      "ship it",
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(calls).toEqual([
+      { file: "wezterm", args: ["cli", "send-text", "--no-paste", "--pane-id", "12", "--", "ship it"] },
+      { file: "wezterm", args: ["cli", "send-text", "--no-paste", "--pane-id", "12", "--", "\r"] },
+    ]);
+  });
+
+  it("returns an error when wezterm send-text fails (Enter not attempted)", async () => {
+    const { exec, calls } = mockExec(() => "fail");
+    const sender = createTerminalTextSender({ execFileImpl: exec });
+
+    const result = await sender.send(
+      { terminalContext: { app: "wezterm", weztermPane: "12" } },
+      "hi",
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/wezterm cli send-text failed/);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("prefers tmux over wezterm when both pane ids are present (tmux can run inside wezterm)", async () => {
+    const { exec, calls } = mockExec((file) => (file === "tmux" ? "ok" : "fail"));
+    const sender = createTerminalTextSender({ execFileImpl: exec });
+
+    await sender.send(
+      { terminalContext: { app: "wezterm", tmuxPane: "%1", weztermPane: "12" } },
+      "hi",
+    );
+
+    expect(calls.every((c) => c.file === "tmux")).toBe(true);
+  });
+
   it("prefers tmux over ghostty when both fields are present (tmux lives inside ghostty)", async () => {
     const { exec, calls } = mockExec((file) => (file === "tmux" ? "ok" : "fail"));
     const sender = createTerminalTextSender({ execFileImpl: exec });

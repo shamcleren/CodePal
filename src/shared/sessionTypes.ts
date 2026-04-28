@@ -342,6 +342,7 @@ export interface SessionRecord {
  * Capability predicate for send-message. True when the session's terminal
  * context gives us a concrete channel to deliver text into the agent's stdin:
  *   - tmux: any pane target (we can `tmux send-keys -l` against it)
+ *   - WezTerm: any pane id (we can `wezterm cli send-text --pane-id` against it)
  *   - Ghostty: app identified AND a terminal session id is known
  * Other terminals (Terminal.app / iTerm2 / Warp / kitty) have no reliable text
  * injection path in v1.1.x — callers should hide the input UI rather than
@@ -351,6 +352,7 @@ export function canReply(session: Pick<SessionRecord, "terminalContext">): boole
   const ctx = session.terminalContext;
   if (!ctx) return false;
   if (ctx.tmuxPane && ctx.tmuxPane.length > 0) return true;
+  if (ctx.weztermPane && ctx.weztermPane.length > 0) return true;
   if (ctx.app === "ghostty" && ctx.terminalSessionId && ctx.terminalSessionId.length > 0) {
     return true;
   }
