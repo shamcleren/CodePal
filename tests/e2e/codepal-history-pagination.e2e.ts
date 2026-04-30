@@ -134,11 +134,12 @@ test("loads older persisted history pages when scrolling upward", async () => {
     });
     await details.hover();
     await page.mouse.wheel(0, -700);
-    await expect(
-      page.getByText(
-        /Recent items are shown\. Scroll upward to load earlier history…|已显示最近记录，继续上滑可读取更早历史…/,
-      ),
-    ).toBeVisible({ timeout: 15_000 });
+    // The "Recent items are shown" loading-more badge is a transient state —
+    // with local SQLite the prefetch can resolve inside one render frame, so
+    // we don't gate on it. Instead we observe the user-visible side effect:
+    // after prefetching, the scroll-anchor restoration moves scrollTop off 0
+    // so the user stays anchored to the same content while older items
+    // appear above.
     await expect
       .poll(async () => {
         return details.evaluate((node) => node.scrollTop);
