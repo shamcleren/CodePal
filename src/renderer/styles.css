@@ -194,6 +194,7 @@ body {
   grid-template-columns: 170px minmax(0, 1fr);
   align-items: stretch;
   gap: 14px;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   padding: 14px 4px 0 0;
@@ -1178,7 +1179,7 @@ body {
 .session-row__details-shell {
   display: flex;
   flex-direction: column;
-  max-height: min(52vh, 420px);
+  max-height: min(72vh, 640px);
   position: relative;
 }
 
