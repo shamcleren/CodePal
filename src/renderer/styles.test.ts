@@ -42,7 +42,7 @@ describe("renderer layout styles", () => {
     expect(css).toMatch(/@keyframes session-running-pulse/);
     expect(css).toMatch(/@keyframes session-running-sheen/);
     expect(css).toMatch(
-      /\.session-row__details-shell\s*\{[\s\S]*max-height:\s*min\(52vh,\s*420px\);/,
+      /\.session-row__details-shell\s*\{[\s\S]*max-height:\s*min\(72vh,\s*640px\);/,
     );
     expect(css).toMatch(/\.session-row__details\s*\{[\s\S]*overflow:\s*auto;/);
     expect(css).toMatch(/\.session-row__history-status\s*\{/);

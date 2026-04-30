@@ -906,8 +906,8 @@ export function SessionHistoryTimeline({
   return (
     <div className="session-row__details-shell">
       {showTopHistoryLoadingHint ? (
-        <div className="session-row__history-peek" aria-hidden="true">
-          <div className="session-row__history-peek-dot" />
+        <div className="session-row__history-peek" role="status">
+          <div className="session-row__history-peek-dot" aria-hidden="true" />
           <div className="session-row__history-peek-label">{i18n.t("session.history.loadingMore")}</div>
         </div>
       ) : null}

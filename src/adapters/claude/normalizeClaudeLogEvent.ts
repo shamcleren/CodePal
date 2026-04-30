@@ -60,6 +60,104 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
 }
 
+function extractToolResultText(content: unknown): string | undefined {
+  if (typeof content === "string") {
+    return fullText(content);
+  }
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+  const parts: string[] = [];
+  for (const item of content) {
+    const record = asRecord(item);
+    if (!record) continue;
+    if (record.type === "text" && typeof record.text === "string") {
+      const trimmed = record.text.trim();
+      if (trimmed) parts.push(trimmed);
+    } else if (record.type === "image") {
+      parts.push("[image]");
+    } else if (record.type === "tool_result" && record.content !== undefined) {
+      const nested = extractToolResultText(record.content);
+      if (nested) parts.push(nested);
+    }
+  }
+  return parts.length ? parts.join("\n") : undefined;
+}
+
+function summarizeToolUseInput(name: string, input: unknown): string {
+  const record = asRecord(input);
+  if (!record) return name;
+  const pickString = (key: string): string | undefined => {
+    const value = record[key];
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  };
+  const head = (text: string, max = 80): string => {
+    const oneLine = text.replace(/\s+/g, " ").trim();
+    return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
+  };
+  const fileLabel = (filePath: string): string => {
+    const basename = path.basename(filePath);
+    return basename || filePath;
+  };
+
+  switch (name) {
+    case "Bash":
+    case "BashOutput": {
+      const cmd = pickString("command");
+      return cmd ? `${name}: ${head(cmd)}` : name;
+    }
+    case "Read":
+    case "Write":
+    case "Edit":
+    case "MultiEdit":
+    case "NotebookEdit": {
+      const fp = pickString("file_path") ?? pickString("notebook_path");
+      return fp ? `${name}: ${fileLabel(fp)}` : name;
+    }
+    case "Glob": {
+      const pattern = pickString("pattern");
+      return pattern ? `${name}: ${head(pattern)}` : name;
+    }
+    case "Grep": {
+      const pattern = pickString("pattern");
+      return pattern ? `${name}: ${head(pattern)}` : name;
+    }
+    case "WebFetch": {
+      const url = pickString("url");
+      return url ? `${name}: ${head(url, 100)}` : name;
+    }
+    case "WebSearch": {
+      const query = pickString("query");
+      return query ? `${name}: ${head(query)}` : name;
+    }
+    case "Task": {
+      const description = pickString("description") ?? pickString("subagent_type");
+      return description ? `${name}: ${head(description)}` : name;
+    }
+    case "TodoWrite": {
+      const todos = Array.isArray(record.todos) ? record.todos : [];
+      const active = todos
+        .map((todo) => asRecord(todo))
+        .find((todo) => todo?.status === "in_progress");
+      const activeLabel =
+        (active && (typeof active.activeForm === "string" ? active.activeForm.trim() : "")) ||
+        (active && (typeof active.content === "string" ? active.content.trim() : ""));
+      if (activeLabel) {
+        return `${name}: ${head(activeLabel)}`;
+      }
+      return todos.length ? `${name}: ${todos.length} tasks` : name;
+    }
+    default: {
+      const fallback =
+        pickString("command") ??
+        pickString("query") ??
+        pickString("prompt") ??
+        pickString("description");
+      return fallback ? `${name}: ${head(fallback)}` : name;
+    }
+  }
+}
+
 function extractTextSegments(content: unknown): string[] {
   if (!Array.isArray(content)) {
     return [];
@@ -237,7 +335,7 @@ export function normalizeClaudeLogEvent(
     const toolResult = firstToolResultSegment(message?.content);
     if (toolResult) {
       const body =
-        stringifyValue(toolResult.content) ??
+        extractToolResultText(toolResult.content) ??
         fullText(typeof entry.toolUseResult === "string" ? entry.toolUseResult : undefined) ??
         "Tool result";
       const callId =
@@ -328,6 +426,7 @@ export function normalizeClaudeLogEvent(
     const toolName =
       fullText(typeof toolUse.name === "string" ? toolUse.name : undefined) ?? "Tool";
     const body = stringifyValue(toolUse.input) ?? toolName;
+    const taskSummary = summarizeToolUseInput(toolName, toolUse.input);
     const callId =
       typeof toolUse.id === "string" && toolUse.id.trim() ? toolUse.id.trim() : undefined;
     return {
@@ -335,7 +434,7 @@ export function normalizeClaudeLogEvent(
       sessionId,
       tool: "claude",
       status: "running",
-      task: toolName,
+      task: taskSummary,
       timestamp,
       meta: {
         ...meta,

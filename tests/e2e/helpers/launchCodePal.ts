@@ -1,4 +1,6 @@
+import { promises as fsp } from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import type { ElectronApplication } from "@playwright/test";
 import { _electron as electron } from "@playwright/test";
@@ -9,6 +11,13 @@ const repoRoot = process.cwd();
 
 export type LaunchCodePalOptions = {
   actionResponseTarget: ResponseTarget;
+  /**
+   * Optional fixed HOME for the spawned CodePal. When omitted, `launchCodePal`
+   * creates an isolated temp HOME and cleans it up in `close()` — required so
+   * tests don't inherit the developer's real `~/.codepal` (which can include
+   * tens of MB of accumulated history and push renderer bootstrap past the
+   * 15s heading-visible timeout).
+   */
   homeDir?: string;
   extraEnv?: Record<string, string>;
 };
@@ -46,6 +55,14 @@ export async function launchCodePal(
 ): Promise<LaunchedCodePal> {
   const mainJs = path.join(repoRoot, "out/main/main.js");
   const env: NodeJS.ProcessEnv = { ...process.env };
+
+  let resolvedHomeDir = options.homeDir;
+  let ownsHomeDir = false;
+  if (!resolvedHomeDir) {
+    resolvedHomeDir = await fsp.mkdtemp(path.join(os.tmpdir(), "codepal-e2e-home-"));
+    ownsHomeDir = true;
+  }
+
   const ipcTarget = {
     mode: "socket" as const,
     host: "127.0.0.1",
@@ -76,8 +93,9 @@ export async function launchCodePal(
     cwd: repoRoot,
     env: {
       ...env,
-      ...(options.homeDir ? { HOME: options.homeDir, USERPROFILE: options.homeDir } : {}),
-      ...(options.homeDir ? { CODEPAL_HOME_DIR: options.homeDir } : {}),
+      HOME: resolvedHomeDir,
+      USERPROFILE: resolvedHomeDir,
+      CODEPAL_HOME_DIR: resolvedHomeDir,
       ...options.extraEnv,
       CODEPAL_IPC_HOST: ipcTarget.host,
       CODEPAL_IPC_PORT: String(ipcTarget.port),
@@ -92,6 +110,9 @@ export async function launchCodePal(
     ipcTarget,
     close: async () => {
       await app.close().catch(() => undefined);
+      if (ownsHomeDir && resolvedHomeDir) {
+        await fsp.rm(resolvedHomeDir, { recursive: true, force: true }).catch(() => undefined);
+      }
     },
   };
 }

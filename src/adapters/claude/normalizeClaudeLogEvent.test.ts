@@ -182,7 +182,7 @@ describe("normalizeClaudeLogEvent", () => {
     expect(event).toMatchObject({
       tool: "claude",
       status: "running",
-      task: "WebFetch",
+      task: "WebFetch: https://code.claude.com/docs/en/settings",
       meta: {
         event_type: "assistant",
         role: "assistant",
@@ -204,6 +204,94 @@ describe("normalizeClaudeLogEvent", () => {
         },
       ],
     });
+  });
+
+  it("summarizes Bash tool_use with the command text instead of just the tool name", () => {
+    const event = normalizeClaudeLogEvent(
+      JSON.stringify({
+        type: "assistant",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:12:07.001Z",
+        message: {
+          role: "assistant",
+          stop_reason: "tool_use",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_bash_1",
+              name: "Bash",
+              input: { command: "ls -la /tmp", description: "list tmp" },
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event?.task).toBe("Bash: ls -la /tmp");
+  });
+
+  it("summarizes Read tool_use with the file basename", () => {
+    const event = normalizeClaudeLogEvent(
+      JSON.stringify({
+        type: "assistant",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:12:07.001Z",
+        message: {
+          role: "assistant",
+          stop_reason: "tool_use",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_read_1",
+              name: "Read",
+              input: { file_path: "/Users/demo/codepal/src/renderer/App.tsx" },
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event?.task).toBe("Read: App.tsx");
+  });
+
+  it("renders image content blocks in tool_result as [image] instead of base64 JSON", () => {
+    const event = normalizeClaudeLogEvent(
+      JSON.stringify({
+        type: "user",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:12:07.426Z",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_screenshot_1",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/png",
+                    data: "iVBORw0KGgoAAAANSUhEUgAA".repeat(50),
+                  },
+                },
+                { type: "text", text: "Screenshot saved to /tmp/foo.png" },
+              ],
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event?.task).toBe("[image]");
+    expect(event?.activityItems?.[0]?.body).toBe(
+      "[image]\nScreenshot saved to /tmp/foo.png",
+    );
+    expect(event?.activityItems?.[0]?.body).not.toContain("iVBOR");
+    expect(event?.activityItems?.[0]?.body).not.toContain("base64");
   });
 
   it("maps tool_result user entries into tool result activity", () => {

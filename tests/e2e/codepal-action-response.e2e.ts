@@ -230,6 +230,18 @@ test("same session: two pending actions with different actionIds route action_re
     );
 
     const row = firstCurrentSessionRow(page);
+    await page.waitForTimeout(2000);
+    const debugState = await page.evaluate(async (sid: string) => {
+      const sessions = await window.codepal.getSessions();
+      const s = sessions.find((x: { id: string }) => x.id === sid);
+      const articles = Array.from(document.querySelectorAll("article")).map((a) => ({
+        label: a.querySelector("[aria-label]")?.getAttribute("aria-label"),
+        pendingText: a.querySelector(".session-row__pending")?.textContent,
+        full: a.textContent?.slice(0, 200),
+      }));
+      return { session: s ? { id: s.id, status: s.status, pendingActions: s.pendingActions } : null, articles };
+    }, CONCURRENT_SESSION);
+    console.log("DEBUG STATE:", JSON.stringify(debugState, null, 2));
     await expect(pendingBadge(row, 2)).toBeVisible({ timeout: 15_000 });
 
     const lineA = collectorA.waitForLine();
@@ -453,6 +465,10 @@ test("pending card disappears when lifecycle expires without pendingClosed", asy
           title: EXPIRY_TITLE,
           options: ["Soon", "Never"],
         },
+        // Pending lifecycle TTL (drives the expiry sweep). Distinct from
+        // `responseTarget.timeoutMs`, which is the action-response transport's
+        // socket-write deadline.
+        pendingLifetimeMs: 750,
         responseTarget: {
           mode: "socket",
           ...collector.responseTarget,
