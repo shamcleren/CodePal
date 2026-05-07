@@ -5,6 +5,7 @@ export default tseslint.config(
   {
     ignores: [
       ".worktrees/**",
+      ".claude/worktrees/**",
       "**/node_modules/**",
       "**/dist/**",
       "**/dist-electron/**",

@@ -158,4 +158,83 @@ describe("appSettings", () => {
     expect(settings.cookieNames).toEqual(["ONE", "TWO"]);
     expect(settings.cookieNames).not.toBe(endpointDefaults.cookieNames);
   });
+
+  it("adds the default MiMo provider gateway profile without storing a token", () => {
+    const settings = normalizeAppSettings({});
+
+    expect(settings.providerGateway).toMatchObject({
+      enabled: true,
+      host: "127.0.0.1",
+      port: 15721,
+      activeProvider: "mimo",
+      providers: {
+        mimo: {
+          type: "anthropic-compatible",
+          displayName: "MiMo Gateway",
+          baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
+          authScheme: "bearer",
+          tokenRef: "mimo.gateway.token",
+          envFallback: "MIMO_GATEWAY_TOKEN",
+          modelMappings: {
+            "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
+            "anthropic/MiMo-V2.5": "mimo-v2.5",
+            "anthropic/MiMo-V2-Pro": "mimo-v2-pro",
+            "anthropic/MiMo-V2-Omni": "mimo-v2-omni",
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(settings.providerGateway)).not.toContain("sk-");
+    expect(JSON.stringify(settings.providerGateway)).not.toContain("token-plan-secret");
+  });
+
+  it("normalizes custom provider gateway profiles and preserves mappings", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      providerGateway: {
+        enabled: true,
+        host: "0.0.0.0",
+        port: 70000,
+        activeProvider: "custom",
+        providers: {
+          custom: {
+            type: "anthropic-compatible",
+            displayName: " Custom ",
+            baseUrl: "http://127.0.0.1:9999/root/",
+            authScheme: "bearer",
+            tokenRef: "custom.token",
+            envFallback: "CUSTOM_TOKEN",
+            headers: {
+              "anthropic-beta": "tools-2024-04-04",
+              authorization: "Bearer should-not-export",
+              "x-api-key": "should-not-export",
+              Cookie: "should-not-export",
+            },
+            modelMappings: {
+              "anthropic/Test-Sonnet": "real-model",
+              "": "ignored",
+            },
+          },
+        },
+      },
+    });
+
+    expect(settings.providerGateway.host).toBe("127.0.0.1");
+    expect(settings.providerGateway.port).toBe(15721);
+    expect(settings.providerGateway.activeProvider).toBe("custom");
+    expect(settings.providerGateway.providers.custom).toEqual({
+      type: "anthropic-compatible",
+      displayName: "Custom",
+      baseUrl: "http://127.0.0.1:9999/root",
+      authScheme: "bearer",
+      tokenRef: "custom.token",
+      envFallback: "CUSTOM_TOKEN",
+      headers: {
+        "anthropic-beta": "tools-2024-04-04",
+      },
+      modelMappings: {
+        "anthropic/Test-Sonnet": "real-model",
+      },
+    });
+  });
 });

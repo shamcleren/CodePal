@@ -38,12 +38,36 @@ export type NotificationSettings = {
   resumed: boolean;
 };
 
+export type ProviderGatewayAuthScheme = "bearer";
+
+export type ProviderGatewayType = "anthropic-compatible";
+
+export type ProviderGatewayConfig = {
+  type: ProviderGatewayType;
+  displayName: string;
+  baseUrl: string;
+  authScheme: ProviderGatewayAuthScheme;
+  tokenRef: string;
+  envFallback: string;
+  headers: Record<string, string>;
+  modelMappings: Record<string, string>;
+};
+
+export type ProviderGatewaySettings = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  activeProvider: string;
+  providers: Record<string, ProviderGatewayConfig>;
+};
+
 export type AppSettings = {
   version: 1;
   locale: AppLocale;
   display: UsageDisplaySettings;
   history: HistorySettings;
   notifications: NotificationSettings;
+  providerGateway: ProviderGatewaySettings;
   codebuddy: {
     code: CodeBuddyEndpointSettings;
     enterprise: CodeBuddyEndpointSettings;
@@ -56,6 +80,7 @@ export type AppSettingsPatch = {
   display?: Partial<UsageDisplaySettings>;
   history?: Partial<HistorySettings>;
   notifications?: Partial<NotificationSettings>;
+  providerGateway?: Partial<ProviderGatewaySettings>;
   codebuddy?: {
     code?: Partial<CodeBuddyEndpointSettings>;
     enterprise?: Partial<CodeBuddyEndpointSettings>;
@@ -95,12 +120,37 @@ export const defaultNotificationSettings: NotificationSettings = {
   resumed: true,
 };
 
+export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
+  enabled: true,
+  host: "127.0.0.1",
+  port: 15721,
+  activeProvider: "mimo",
+  providers: {
+    mimo: {
+      type: "anthropic-compatible",
+      displayName: "MiMo Gateway",
+      baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
+      authScheme: "bearer",
+      tokenRef: "mimo.gateway.token",
+      envFallback: "MIMO_GATEWAY_TOKEN",
+      headers: {},
+      modelMappings: {
+        "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
+        "anthropic/MiMo-V2.5": "mimo-v2.5",
+        "anthropic/MiMo-V2-Pro": "mimo-v2-pro",
+        "anthropic/MiMo-V2-Omni": "mimo-v2-omni",
+      },
+    },
+  },
+};
+
 export const defaultAppSettings: AppSettings = {
   version: 1,
   locale: "system",
   display: defaultUsageDisplaySettings,
   history: defaultHistorySettings,
   notifications: { ...defaultNotificationSettings },
+  providerGateway: defaultProviderGatewaySettings,
   codebuddy: {
     code: {
       enabled: true,
@@ -132,6 +182,19 @@ export function cloneAppSettings(settings: AppSettings): AppSettings {
     },
     notifications: {
       ...settings.notifications,
+    },
+    providerGateway: {
+      ...settings.providerGateway,
+      providers: Object.fromEntries(
+        Object.entries(settings.providerGateway.providers).map(([id, provider]) => [
+          id,
+          {
+            ...provider,
+            headers: { ...provider.headers },
+            modelMappings: { ...provider.modelMappings },
+          },
+        ]),
+      ),
     },
     codebuddy: {
       code: {
@@ -182,6 +245,27 @@ function normalizeHttpsUrl(value: unknown): string {
     return parsed.protocol === "https:" ? parsed.toString() : "";
   } catch {
     return "";
+  }
+}
+
+function normalizeHttpUrl(value: unknown, fallback = ""): string {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return fallback;
+    }
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return fallback;
   }
 }
 
@@ -272,6 +356,142 @@ function normalizeNotificationSettings(value: unknown): NotificationSettings {
   };
 }
 
+function normalizeGatewayHost(value: unknown): string {
+  return value === "127.0.0.1" || value === "localhost" ? value : defaultProviderGatewaySettings.host;
+}
+
+function normalizeGatewayPort(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return defaultProviderGatewaySettings.port;
+  }
+  const port = Math.trunc(value);
+  return port >= 1 && port <= 65535 ? port : defaultProviderGatewaySettings.port;
+}
+
+function normalizeProviderString(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeHeaders(value: unknown): Record<string, string> {
+  const candidate = asRecord(value);
+  if (!candidate) {
+    return {};
+  }
+  const sensitiveHeaders = new Set(["authorization", "x-api-key", "cookie"]);
+  const entries = Object.entries(candidate)
+    .filter((entry): entry is [string, string] => {
+      const [key, item] = entry;
+      const normalizedKey = key.trim().toLowerCase();
+      return (
+        Boolean(normalizedKey) &&
+        !sensitiveHeaders.has(normalizedKey) &&
+        typeof item === "string" &&
+        Boolean(item.trim())
+      );
+    })
+    .map(([key, item]) => [key.trim(), item.trim()] as const);
+  return Object.fromEntries(entries);
+}
+
+function normalizeModelMappings(
+  value: unknown,
+  defaults: Record<string, string>,
+): Record<string, string> {
+  const candidate = asRecord(value);
+  if (!candidate) {
+    return { ...defaults };
+  }
+  const entries = Object.entries(candidate)
+    .filter((entry): entry is [string, string] => {
+      const [key, item] = entry;
+      return Boolean(key.trim()) && typeof item === "string" && Boolean(item.trim());
+    })
+    .map(([key, item]) => [key.trim(), item.trim()] as const);
+  return entries.length > 0 ? Object.fromEntries(entries) : { ...defaults };
+}
+
+function normalizeProviderConfig(
+  value: unknown,
+  defaults: ProviderGatewayConfig,
+): ProviderGatewayConfig {
+  const candidate = asRecord(value);
+  if (!candidate) {
+    return {
+      ...defaults,
+      headers: { ...defaults.headers },
+      modelMappings: { ...defaults.modelMappings },
+    };
+  }
+  return {
+    type:
+      candidate.type === "anthropic-compatible"
+        ? candidate.type
+        : defaults.type,
+    displayName: normalizeProviderString(candidate.displayName, defaults.displayName),
+    baseUrl: normalizeHttpUrl(candidate.baseUrl, defaults.baseUrl),
+    authScheme: candidate.authScheme === "bearer" ? candidate.authScheme : defaults.authScheme,
+    tokenRef: normalizeProviderString(candidate.tokenRef, defaults.tokenRef),
+    envFallback: normalizeProviderString(candidate.envFallback, defaults.envFallback),
+    headers: normalizeHeaders(candidate.headers),
+    modelMappings: normalizeModelMappings(candidate.modelMappings, defaults.modelMappings),
+  };
+}
+
+function normalizeProviderGatewaySettings(value: unknown): ProviderGatewaySettings {
+  const candidate = asRecord(value);
+  if (!candidate) {
+    return {
+      ...defaultProviderGatewaySettings,
+      providers: Object.fromEntries(
+        Object.entries(defaultProviderGatewaySettings.providers).map(([id, provider]) => [
+          id,
+          {
+            ...provider,
+            headers: { ...provider.headers },
+            modelMappings: { ...provider.modelMappings },
+          },
+        ]),
+      ),
+    };
+  }
+  const defaultProvider = defaultProviderGatewaySettings.providers.mimo;
+  const rawProviders = asRecord(candidate.providers);
+  const providerEntries = rawProviders
+    ? Object.entries(rawProviders)
+        .filter(([id]) => Boolean(id.trim()))
+        .map(([id, provider]) => [
+          id.trim(),
+          normalizeProviderConfig(provider, defaultProvider),
+        ] as const)
+    : [];
+  const providers =
+    providerEntries.length > 0
+      ? Object.fromEntries(providerEntries)
+      : {
+          mimo: {
+            ...defaultProvider,
+            headers: { ...defaultProvider.headers },
+            modelMappings: { ...defaultProvider.modelMappings },
+          },
+        };
+  const requestedActiveProvider = normalizeProviderString(
+    candidate.activeProvider,
+    defaultProviderGatewaySettings.activeProvider,
+  );
+  const activeProvider =
+    requestedActiveProvider in providers ? requestedActiveProvider : Object.keys(providers)[0];
+  return {
+    enabled:
+      typeof candidate.enabled === "boolean"
+        ? candidate.enabled
+        : defaultProviderGatewaySettings.enabled,
+    host: normalizeGatewayHost(candidate.host),
+    port: normalizeGatewayPort(candidate.port),
+    activeProvider,
+    providers,
+  };
+}
+
 export function normalizeCodeBuddyEndpointSettings(
   value: unknown,
   defaults: CodeBuddyEndpointSettings,
@@ -309,6 +529,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
   const display = normalizeUsageDisplaySettings(candidate.display);
   const history = normalizeHistorySettings(candidate.history);
   const notifications = normalizeNotificationSettings(candidate.notifications);
+  const providerGateway = normalizeProviderGatewaySettings(candidate.providerGateway);
   const codebuddy = asRecord(candidate.codebuddy);
 
   return {
@@ -317,6 +538,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     display,
     history,
     notifications,
+    providerGateway,
     codebuddy: {
       code: normalizeCodeBuddyEndpointSettings(codebuddy?.code, defaultAppSettings.codebuddy.code),
       enterprise: normalizeCodeBuddyEndpointSettings(
@@ -345,6 +567,14 @@ export function mergeAppSettings(
     notifications: {
       ...current.notifications,
       ...(incoming.notifications ?? {}),
+    },
+    providerGateway: {
+      ...current.providerGateway,
+      ...(incoming.providerGateway ?? {}),
+      providers: {
+        ...current.providerGateway.providers,
+        ...(incoming.providerGateway?.providers ?? {}),
+      },
     },
     codebuddy: {
       ...current.codebuddy,

@@ -678,12 +678,6 @@ function inspectCodexConfig(
   }
 
   const labels = labelsForHealth(health);
-  const actionLabel = health === "active" && !hookInstalled ? "增强" : labels.actionLabel;
-  const actionLabelKey =
-    health === "active" && !hookInstalled
-      ? "integration.action.enhance"
-      : labels.actionLabelKey;
-
   return {
     id: "codex",
     label: AGENT_LABELS.codex,
@@ -696,8 +690,8 @@ function inspectCodexConfig(
     health,
     healthLabel: labels.healthLabel,
     healthLabelKey: labels.healthLabelKey,
-    actionLabel,
-    actionLabelKey,
+    actionLabel: labels.actionLabel,
+    actionLabelKey: labels.actionLabelKey,
     statusMessage,
     statusMessageKey,
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),

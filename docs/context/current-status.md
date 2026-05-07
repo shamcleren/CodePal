@@ -85,11 +85,18 @@
 ### Integration Settings
 
 - Main process diagnostics now expose the current CodePal listener endpoint, executable entrypoint, and per-agent integration health (`active` / `legacy_path` / `repair_needed` / `not_configured`)
+- Provider Gateway settings now expose:
+  - active provider/profile
+  - provider base URL
+  - token configured/missing state without revealing the token
+  - Claude-side model names and upstream model mappings
+  - per-model health check results
+  - Claude Desktop and Codex Desktop local client setup actions
 - UI can write or repair user-level hook config for:
   - `Codex` via `~/.codex/config.toml` `notify = [...]` (live hook entry groundwork; session-log monitoring remains in place)
   - `Cursor` via `~/.cursor/hooks.json`
   - `CodeBuddy` via `~/.codebuddy/settings.json`
-- Writes are idempotent and create a backup before overwriting an existing file
+- Writes are idempotent and create a backup before changing an existing file; Provider Gateway client setup appends/updates its own entries, and explicit switch actions save prior defaults before changing the active client provider
 - Invalid or incompatible existing config structures are reported back to the UI instead of being force-overwritten
 - Main process now also carries a dedicated usage aggregation path separate from session timeline state
 - Renderer top bar now uses a compact quota-first usage strip
@@ -99,11 +106,12 @@
   - statusLine-derived `rate_limits` snapshots, retained as last-known local quota data when Claude CLI provides them
 - CodeBuddy usage now has its own网页登录 + cookie-backed sync path for `CodeBuddy Code(app)` monthly quota, separate from the internal aggregate quota page
 - Settings layout is now grouped into:
-  - `接入与诊断`
-  - `面板显示`
-  - `用量与登录`
-  - `维护与历史`
-  - `支持与诊断`
+  - `Overview`
+  - `Provider Gateway`
+  - `Agent Integrations`
+  - `Usage Accounts`
+  - `Preferences`
+  - `Advanced`
 - Settings navigation now favors short labels and section summaries instead of long repeated explanations
 - Main panel now exposes actionable update states through a conditional update button; idle / up-to-date states do not permanently occupy header space
 - The Maintenance update panel remains the detailed update control surface
@@ -153,6 +161,7 @@ Same `sessionId` may have multiple pending actions at once; each keeps its own o
 - `README.md`: current repo-level overview and commands
 - `AGENTS.md`: session startup expectations and guardrails
 - `src/main/`: CodePal desktop main process, ingress, IPC Hub, session store
+- `src/main/gateway/`: local provider gateway, token store, health checks, Codex Responses adapter, and desktop client setup writers
 - `src/renderer/`: monitoring UI
 - `src/adapters/`: external event normalization
 - `src/shared/`: shared session and response payload types
@@ -177,6 +186,8 @@ npm run dist:mac
 
 ## Known Gaps
 
+- Provider Gateway currently supports the MiMo provider through an Anthropic-compatible upstream and a Codex Responses-to-Anthropic adapter. Broader provider types such as OpenAI-compatible, Bedrock, and Vertex remain future profile/adapter work.
+- Codex Gateway support is a protocol bridge for `/v1/responses`; advanced Codex tool-call parity depends on what upstream MiMo exposes through the Anthropic-compatible messages API and needs further real-session calibration.
 - Codex integration currently focuses on session/activity visibility; structured pending-action write-back is not part of the current primary UX
 - Cursor full hook-event calibration is still being expanded beyond the current normalized subset; unknown payloads should continue to be pushed down into adapter/normalizer work instead of renderer-side guessing
 - GoLand and PyCharm should stay on the shared CodeBuddy JetBrains plugin watcher/framework path; other JetBrains IDEs may reuse the same framework, but they are not part of the current V1 calibrated / accepted scope
@@ -205,6 +216,7 @@ npm run dist:mac
 - Claude Code token usage and statusLine `rate_limits` snapshots are already visible in the shared usage surface when available
 - CodeBuddy IDE/app monthly quota login and sync are now also in place through the settings panel, including session-expired handling
 - Header usage display, update status visibility, usage density switching, compact settings navigation, and settings regrouping are already in place
+- Provider Gateway is a first-class settings feature: CodePal can run a local gateway on `127.0.0.1:15721`, manage provider token presence separately from client configs, expose mapped MiMo models, health-check upstream mappings, and provide reversible Claude Desktop / Codex Desktop switch actions with restart guidance
 - Session ordering and expiration now follow dashboard-oriented defaults
 - Persisted session history is now available across app restarts, while the main list remains summary-first
 - Expanded session details preserve bottom visibility for lower rows while keeping the internal history timeline scroll behavior intact
@@ -238,6 +250,7 @@ The remaining agent-specific approval / delivery gaps are explicit upstream-boun
 
 For release-facing and forward-looking work, use:
 
+- `docs/context/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
 - `docs/context/2026-04-13-post-v1.0.3-handoff.md` for the post-v1.0.3 handoff and current patch-candidate context
 - `docs/release-notes-v1.0.3.md` for release-facing summary
 - `docs/release-notes-v1.0.5.md` for the prior patch-level candidate summary

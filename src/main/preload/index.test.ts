@@ -68,4 +68,33 @@ describe("preload history bridge", () => {
 
     expect(typeof api.jumpToSessionTarget).toBe("function");
   });
+
+  it("exposes provider gateway IPC methods to the renderer bridge", async () => {
+    await import("./index");
+
+    const api = exposeInMainWorld.mock.calls[0]?.[1] as Record<string, unknown>;
+
+    expect(typeof api.getProviderGatewayStatus).toBe("function");
+    expect(typeof api.updateProviderGatewayToken).toBe("function");
+    expect(typeof api.runProviderGatewayHealthCheck).toBe("function");
+    expect(typeof api.configureProviderGatewayClient).toBe("function");
+
+    (api.getProviderGatewayStatus as () => Promise<unknown>)();
+    (api.updateProviderGatewayToken as (providerId: string, token: string) => Promise<unknown>)(
+      "mimo",
+      "secret",
+    );
+    (api.runProviderGatewayHealthCheck as () => Promise<unknown>)();
+    (api.configureProviderGatewayClient as (target: string) => Promise<unknown>)("codex-desktop");
+
+    expect(invoke).toHaveBeenNthCalledWith(1, "codepal:get-provider-gateway-status");
+    expect(invoke).toHaveBeenNthCalledWith(2, "codepal:update-provider-gateway-token", {
+      providerId: "mimo",
+      token: "secret",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, "codepal:run-provider-gateway-health-check");
+    expect(invoke).toHaveBeenNthCalledWith(4, "codepal:configure-provider-gateway-client", {
+      target: "codex-desktop",
+    });
+  });
 });

@@ -22,6 +22,7 @@ CodePal reduces that fragmentation by providing:
 - one place to inspect meaningful recent activity
 - one place to keep usage and quota context visible
 - one settings surface for integration diagnostics and local repair
+- one local provider gateway that can bridge supported desktop clients to third-party model providers without leaking provider tokens into those clients
 
 ## Phase 1 Boundary
 
@@ -82,7 +83,7 @@ Main responsibilities:
 - `src/adapters/`
   Normalize upstream agent-specific payloads into shared session/activity semantics
 - `src/main/`
-  Own desktop lifecycle, ingress, watcher bootstrap, integration repair, usage aggregation, the in-memory session summary store, and the persisted SQLite history store
+  Own desktop lifecycle, ingress, watcher bootstrap, integration repair, provider gateway proxying, usage aggregation, the in-memory session summary store, and the persisted SQLite history store
 - `src/renderer/`
   Render the monitoring dashboard and settings UI
 - `src/shared/`
@@ -134,6 +135,26 @@ This is where future shared abstractions such as ACP / `acpx` belong.
 The purpose of this layer would be to unify common agent capabilities behind clearer shared semantics so CodePal does not need to keep growing one-off per-agent adaptations forever.
 
 This layer is explicitly deferred from the current product baseline, but it remains part of the architectural direction.
+
+### 5. Provider Gateway Layer
+
+This layer lets CodePal act as a local provider gateway for desktop AI clients.
+
+Current baseline:
+
+- Claude Desktop can point at CodePal's local Anthropic-compatible gateway.
+- CodePal exposes Anthropic-style model names that pass Claude Desktop local validation.
+- CodePal rewrites those names to upstream provider model IDs before forwarding.
+- Codex Desktop can point at CodePal's OpenAI Responses-compatible endpoint.
+- CodePal adapts Codex `/v1/responses` requests into Anthropic-compatible `/v1/messages` calls for the active provider.
+- Client auto-setup adds and can activate a Claude Desktop `CodePal Gateway` entry, and adds a Codex Desktop `codepal-mimo` profile. Explicit switch actions save the previous client defaults before writing CodePal as the active provider, so restore can put the previous default provider back.
+- Provider token storage, model mappings, health checks, and client setup live in CodePal settings.
+
+Design boundary:
+
+- Client configs store only the local CodePal gateway URL and dummy local auth values.
+- Real provider tokens stay in CodePal's local secret store or environment fallback.
+- Provider-specific behavior is config-driven through provider profiles and model mappings, not hard-coded into renderer UI.
 
 ## Monitoring Model
 
@@ -197,6 +218,7 @@ The intent is to make multi-agent operations more trustworthy by showing whether
 - local transcript/session-log monitoring
 - timeline normalization
 - first-pass token usage visibility
+- can use Claude Desktop / Claude Code third-party inference through the local CodePal provider gateway when the desktop client is configured for Gateway mode
 
 ### Codex
 
@@ -204,6 +226,7 @@ The intent is to make multi-agent operations more trustworthy by showing whether
 - timeline normalization
 - notify hook groundwork in settings, but not a completed live approval loop
 - usage visibility in the shared monitoring surface
+- can use the local CodePal provider gateway through a Codex `model_provider` using `wire_api = "responses"`
 
 ### CodeBuddy
 
@@ -239,6 +262,7 @@ They exist to:
 - expose integration health clearly
 - show the current listener / entrypoint status
 - repair supported user config safely
+- manage local provider gateway profiles, model mappings, health checks, and client setup
 - keep display and usage preferences visible but secondary
 
 Invalid existing config should be reported, not silently overwritten.

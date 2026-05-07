@@ -8,6 +8,25 @@ history:
   persistenceEnabled: true
   retentionDays: 2
   maxStorageMb: 100
+providerGateway:
+  enabled: true
+  host: 127.0.0.1
+  port: 15721
+  activeProvider: mimo
+  providers:
+    mimo:
+      type: anthropic-compatible
+      displayName: MiMo Gateway
+      baseUrl: https://token-plan-cn.xiaomimimo.com/anthropic
+      authScheme: bearer
+      tokenRef: mimo.gateway.token
+      envFallback: MIMO_GATEWAY_TOKEN
+      headers: {}
+      modelMappings:
+        anthropic/MiMo-V2.5-Pro: mimo-v2.5-pro
+        anthropic/MiMo-V2.5: mimo-v2.5
+        anthropic/MiMo-V2-Pro: mimo-v2-pro
+        anthropic/MiMo-V2-Omni: mimo-v2-omni
 codebuddy:
   code:
     enabled: true

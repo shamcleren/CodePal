@@ -48,6 +48,7 @@ CodePal is a dashboard, not a middleman. The agents you already use stay in char
 - **Quota and usage awareness**: token usage and available rate-limit signals stay visible, with compact and detailed density modes
 - **Session history persistence**: full activity history stored locally and restored across app restarts
 - **One-click integration repair**: fix supported local agent configurations from inside the app
+- **Local provider gateway**: connect Claude Desktop and Codex Desktop to third-party models through CodePal while keeping provider tokens out of client configs and preserving existing default models
 - **Bilingual UI**: English and Simplified Chinese, following your system language by default
 
 ## Supported Agents

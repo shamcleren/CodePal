@@ -37,21 +37,30 @@ export function installMainProcessFileLogger(logsDir: string): { logFilePath: st
     }
   }
 
+  function writeOriginal(method: ConsoleMethod, args: unknown[]) {
+    try {
+      method(...args);
+    } catch {
+      // stdout/stderr may be closed when the app is launched from another process.
+      // Logging must never interrupt the main process.
+    }
+  }
+
   console.log = (...args: unknown[]) => {
     append("INFO", args);
-    original.log(...args);
+    writeOriginal(original.log, args);
   };
   console.info = (...args: unknown[]) => {
     append("INFO", args);
-    original.info(...args);
+    writeOriginal(original.info, args);
   };
   console.warn = (...args: unknown[]) => {
     append("WARN", args);
-    original.warn(...args);
+    writeOriginal(original.warn, args);
   };
   console.error = (...args: unknown[]) => {
     append("ERROR", args);
-    original.error(...args);
+    writeOriginal(original.error, args);
   };
 
   console.log("[CodePal Logging] main process file log:", logFilePath);

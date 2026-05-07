@@ -268,6 +268,7 @@ body {
 .settings-stack {
   display: grid;
   gap: 12px;
+  align-content: start;
 }
 
 .settings-stack--maintenance {
@@ -284,6 +285,8 @@ body {
 .settings-section-shell {
   display: grid;
   gap: 14px;
+  align-content: start;
+  grid-auto-rows: max-content;
   min-height: 0;
   height: 100%;
   padding: 16px;
@@ -515,11 +518,13 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
+  align-items: start;
 }
 
 .display-panel__card {
   display: grid;
   gap: 9px;
+  align-content: start;
   min-height: 96px;
   padding: 12px;
   border-radius: 8px;
@@ -755,55 +760,6 @@ body {
   color: var(--text);
 }
 
-.integration-panel__healthy {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 10px;
-}
-
-.integration-panel__healthy-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 180px);
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  border: 1px solid color-mix(in srgb, var(--border) 88%, white 4%);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.integration-panel__healthy-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.integration-panel__healthy-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.integration-panel__healthy-main .hook-badge {
-  flex-shrink: 0;
-}
-
-.integration-panel__healthy-meta {
-  min-width: 0;
-  font-size: 10px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: right;
-}
-
-.integration-panel__healthy-check {
-  color: color-mix(in srgb, var(--muted) 88%, white 12%);
-}
-
 .support-panel__actions {
   display: flex;
   flex-wrap: wrap;
@@ -811,7 +767,8 @@ body {
 }
 
 .integration-panel__details {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
@@ -822,10 +779,86 @@ body {
   color: var(--text);
 }
 
+.provider-gateway-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.provider-gateway-panel__status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.provider-gateway-panel__token-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.provider-gateway-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.provider-gateway-panel__token-input {
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, white 3%);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.provider-gateway-panel__setup-status {
+  margin: -2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.provider-gateway-panel__mapping-list,
+.provider-gateway-panel__setup-list {
+  display: grid;
+  gap: 8px;
+}
+
+.provider-gateway-panel__mapping-row,
+.provider-gateway-panel__setup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, white 4%);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.provider-gateway-panel__setup-row {
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1fr) auto;
+}
+
+.provider-gateway-panel__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text);
+}
+
 .integration-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
+  align-items: start;
 }
 
 @media (max-width: 900px) {
@@ -855,6 +888,12 @@ body {
   }
 
   .settings-stack--maintenance {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-gateway-panel__mapping-row,
+  .provider-gateway-panel__setup-row,
+  .provider-gateway-panel__token-form {
     grid-template-columns: 1fr;
   }
 

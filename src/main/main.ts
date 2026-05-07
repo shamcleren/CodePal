@@ -5,6 +5,18 @@ import type { AppSettingsPatch } from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
 import { dispatchActionResponse } from "./actionResponse/dispatchActionResponse";
 import type { ActionResponseResult } from "./actionResponse/dispatchActionResponse";
+import {
+  createClaudeDesktopGatewayServer,
+  runProviderHealthCheck,
+} from "./gateway/claudeDesktopGateway";
+import { createGatewaySecretStore } from "./gateway/gatewaySecrets";
+import type { GatewaySecretStore } from "./gateway/gatewaySecrets";
+import {
+  configureProviderGatewayClient,
+  inspectProviderGatewayClientSetup,
+} from "./gateway/providerGatewayClientSetup";
+import { buildProviderGatewayStatus } from "./gateway/providerGatewayStatus";
+import type { ProviderGatewayListenerInput } from "./gateway/providerGatewayStatus";
 import { normalizeAppPath } from "./hook/commandBuilder";
 import { HOOK_CLI_NOT_HOOK_MODE, runHookCli } from "./hook/runHookCli";
 import { lineToSessionEvent, lineToUsageSnapshot } from "./ingress/hookIngress";
@@ -22,6 +34,11 @@ import type { SessionRecord } from "../shared/sessionTypes";
 import { isSessionJumpTarget } from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview, UsageSnapshot } from "../shared/usageTypes";
+import {
+  PROVIDER_GATEWAY_CLIENT_SETUP_TARGETS,
+  type ProviderGatewayClientSetupTarget,
+  type ProviderGatewayHealthCheckSummary,
+} from "../shared/providerGatewayTypes";
 import { createCursorDashboardService } from "./usage/cursorDashboardService";
 import { createClaudeQuotaService } from "./usage/claudeQuotaService";
 import { createCodeBuddyInternalQuotaService } from "./usage/codebuddyInternalQuotaService";
@@ -73,6 +90,14 @@ let codeBuddyInternalQuotaRefreshTimer: ReturnType<typeof setInterval> | null = 
 let sessionWatchers: ReturnType<typeof startSessionWatchers> | null = null;
 let historyStore: ReturnType<typeof createAppHistoryStore> | null = null;
 let historyWriter: ReturnType<typeof createDeferredHistoryWriter> | null = null;
+let providerGatewayServer: ReturnType<typeof createClaudeDesktopGatewayServer> | null = null;
+let providerGatewayListener: ProviderGatewayListenerInput = {
+  state: "unavailable",
+  host: "127.0.0.1",
+  port: 15721,
+  message: "Provider gateway not started",
+};
+let providerGatewayHealthCheck: ProviderGatewayHealthCheckSummary | null = null;
 const debugCodex = process.env.CODEPAL_DEBUG_CODEX === "1";
 
 // Hook 入口已并入应用可执行文件；这里只保留一个可推导 legacy 路径形态的根目录。
@@ -120,8 +145,43 @@ function sweepExpiredPendingActions() {
   }
 }
 
+function providerGatewayStatusForRenderer(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+  homeDir: string,
+) {
+  const settings = settingsService.getSettings();
+  const provider = settings.providerGateway.providers[settings.providerGateway.activeProvider];
+  const baseStatus = buildProviderGatewayStatus({
+    settings,
+    tokenConfigured: provider ? gatewaySecretStore.hasToken(provider) : false,
+    listener: providerGatewayListener,
+    lastHealthCheck: providerGatewayHealthCheck,
+  });
+  const claudeDesktopSetup = inspectProviderGatewayClientSetup({
+    target: "claude-desktop",
+    status: baseStatus,
+    homeDir,
+  });
+  const codexDesktopSetup = inspectProviderGatewayClientSetup({
+    target: "codex-desktop",
+    status: baseStatus,
+    homeDir,
+  });
+  return buildProviderGatewayStatus({
+    settings,
+    tokenConfigured: provider ? gatewaySecretStore.hasToken(provider) : false,
+    listener: providerGatewayListener,
+    lastHealthCheck: providerGatewayHealthCheck,
+    claudeDesktopSetup,
+    codexDesktopSetup,
+  });
+}
+
 function wireActionResponseIpc(
   settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+  homeDir: string,
   integrationService: ReturnType<typeof createIntegrationService>,
   claudeQuotaService: ReturnType<typeof createClaudeQuotaService>,
   cursorDashboardService: ReturnType<typeof createCursorDashboardService>,
@@ -166,6 +226,72 @@ function wireActionResponseIpc(
     codeBuddyInternalQuotaService.updateConfig(settings.codebuddy.enterprise);
     applyHistorySettingsAtRuntime(currentHistoryStore, settings);
     return settings;
+  });
+  ipcMain.handle("codepal:get-provider-gateway-status", () => {
+    return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+  });
+  ipcMain.handle("codepal:update-provider-gateway-token", (_event, payload: unknown) => {
+    const providerId =
+      payload &&
+      typeof payload === "object" &&
+      typeof (payload as Record<string, unknown>).providerId === "string"
+        ? (payload as Record<string, unknown>).providerId
+        : "";
+    const token =
+      payload &&
+      typeof payload === "object" &&
+      typeof (payload as Record<string, unknown>).token === "string"
+        ? (payload as Record<string, unknown>).token
+        : "";
+    const settings = settingsService.getSettings();
+    const provider = settings.providerGateway.providers[providerId];
+    if (!provider) {
+      throw new Error("provider not configured");
+    }
+    gatewaySecretStore.updateToken(provider, token);
+    return {
+      ok: true,
+      status: providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir),
+    };
+  });
+  ipcMain.handle("codepal:run-provider-gateway-health-check", async () => {
+    const settings = settingsService.getSettings();
+    const result = await runProviderHealthCheck({
+      settings,
+      secrets: gatewaySecretStore,
+    });
+    providerGatewayHealthCheck = {
+      checkedAt: Date.now(),
+      ok: result.ok,
+      models: result.models.map((model) => ({
+        claudeModel: model.claudeModel,
+        upstreamModel: model.upstreamModel,
+        health: model.ok ? "ok" : "error",
+        status: model.status,
+        error: model.error,
+      })),
+    };
+    return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+  });
+  ipcMain.handle("codepal:configure-provider-gateway-client", (_event, payload: unknown) => {
+    const target =
+      payload &&
+      typeof payload === "object" &&
+      typeof (payload as Record<string, unknown>).target === "string"
+        ? (payload as Record<string, unknown>).target
+        : "";
+    if (!PROVIDER_GATEWAY_CLIENT_SETUP_TARGETS.includes(
+      target as (typeof PROVIDER_GATEWAY_CLIENT_SETUP_TARGETS)[number],
+    )) {
+      throw new Error("unsupported provider gateway client target");
+    }
+    const setupTarget = target as ProviderGatewayClientSetupTarget;
+    const status = providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+    return configureProviderGatewayClient({
+      target: setupTarget,
+      status,
+      homeDir,
+    });
   });
   ipcMain.handle("codepal:get-update-state", () => updateService.getState());
   ipcMain.handle("codepal:check-for-updates", () => updateService.checkForUpdates());
@@ -488,6 +614,71 @@ async function wireIpcHub(
   return "error";
 }
 
+function resolveProviderGatewayPort(
+  settingsService: ReturnType<typeof createSettingsService>,
+): number {
+  const raw =
+    process.env.CODEPAL_GATEWAY_PORT?.trim() ||
+    process.env.PORT?.trim() ||
+    String(settingsService.getSettings().providerGateway.port);
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    console.warn("[CodePal Gateway] invalid port; falling back to settings port:", raw);
+    return settingsService.getSettings().providerGateway.port;
+  }
+  return port;
+}
+
+async function startClaudeDesktopProviderGateway(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+): Promise<void> {
+  const settings = settingsService.getSettings().providerGateway;
+  if (!settings.enabled) {
+    providerGatewayListener = {
+      state: "disabled",
+      host: settings.host,
+      port: settings.port,
+    };
+    console.log("[CodePal Gateway] disabled");
+    return;
+  }
+  const host = settings.host;
+  const port = resolveProviderGatewayPort(settingsService);
+  const server = createClaudeDesktopGatewayServer({
+    getSettings: () => settingsService.getSettings(),
+    secrets: gatewaySecretStore,
+  });
+  const result = await startTcpListener(server, host, port);
+  if (result.status === "listening") {
+    providerGatewayListener = {
+      state: "listening",
+      host,
+      port,
+    };
+    providerGatewayServer = server;
+    console.log(`[CodePal Gateway] listening on http://${host}:${port}`);
+    return;
+  }
+  if (result.status === "already_running") {
+    providerGatewayListener = {
+      state: "unavailable",
+      host,
+      port,
+      message: result.diagnostics.message ?? "Provider gateway port is already in use",
+    };
+    console.warn("[CodePal Gateway]", result.diagnostics.message);
+    return;
+  }
+  providerGatewayListener = {
+    state: "unavailable",
+    host,
+    port,
+    message: result.diagnostics.message ?? result.error.message,
+  };
+  console.error("[CodePal Gateway] server error:", result.error.message);
+}
+
 void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, process.env)
   .then((hookExitCode) => {
     if (hookExitCode !== HOOK_CLI_NOT_HOOK_MODE) {
@@ -542,6 +733,8 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       historyWriter = null;
       historyStore?.close();
       historyStore = null;
+      providerGatewayServer?.close();
+      providerGatewayServer = null;
       if (tray && !tray.isDestroyed()) {
         tray.destroy();
       }
@@ -567,7 +760,12 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         templatePath: templateSettingsPath,
       });
       const appSettings = settingsService.getSettings();
+      const gatewaySecretStore = createGatewaySecretStore({
+        filePath: path.join(app.getPath("userData"), "provider-gateway-secrets.json"),
+        env: process.env,
+      });
       installMainProcessFileLogger(path.join(app.getPath("userData"), "logs"));
+      await startClaudeDesktopProviderGateway(settingsService, gatewaySecretStore);
       historyStore = createAppHistoryStore({
         userDataPath: app.getPath("userData"),
       });
@@ -652,8 +850,10 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       notificationServiceRef = notificationService;
 
       wireActionResponseIpc(
-        settingsService,
-        integrationService,
+      settingsService,
+      gatewaySecretStore,
+      homeDir,
+      integrationService,
         claudeQuotaService,
         cursorDashboardService,
         codeBuddyQuotaService,

@@ -70,10 +70,7 @@ function checkBadgeClass(check: IntegrationAgentCheck): string {
 }
 
 function shouldShowAction(agent: IntegrationAgentDiagnostics): boolean {
-  return (
-    agent.supported &&
-    (agent.health !== "active" || (agent.id === "codex" && !agent.hookInstalled))
-  );
+  return agent.supported && agent.health !== "active";
 }
 
 export function IntegrationPanel({
@@ -90,6 +87,7 @@ export function IntegrationPanel({
   const runtime = diagnostics?.runtime;
   const attentionAgents = (diagnostics?.agents ?? []).filter(shouldShowAction);
   const healthyAgents = (diagnostics?.agents ?? []).filter((agent) => !shouldShowAction(agent));
+  const detailAgents = diagnostics?.agents ?? [];
   const allHealthy = diagnostics !== null && attentionAgents.length === 0;
 
   return (
@@ -155,40 +153,8 @@ export function IntegrationPanel({
 
       <details className="integration-panel__details" open={!allHealthy}>
         <summary>{i18n.t("integration.details")}</summary>
-        {healthyAgents.length > 0 ? (
-          <div className="integration-panel__healthy" aria-label={i18n.t("integration.healthy")}>
-            {healthyAgents.map((agent) => (
-              <div
-                key={agent.id}
-                className="integration-panel__healthy-item"
-                title={i18n.translateMessage(
-                  agent.statusMessage,
-                  agent.statusMessageKey,
-                  agent.statusMessageParams,
-                )}
-              >
-                <div className="integration-panel__healthy-main">
-                  <span className="integration-panel__healthy-name">{agent.label}</span>
-                  <span className={hookBadgeClass(agent)}>{i18n.translateMessage(agent.healthLabel, agent.healthLabelKey)}</span>
-                </div>
-                <div className="integration-panel__healthy-meta">
-                  <span>{lastEventLabel(agent, i18n)}</span>
-                  {agent.checks?.map((check) => (
-                    <span key={check.id} className="integration-panel__healthy-check">
-                      {`${i18n.translateMessage(check.label, check.labelKey)} ${i18n.translateMessage(
-                        check.statusLabel,
-                        check.statusLabelKey,
-                      )}`}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
         <div className="integration-grid">
-          {attentionAgents.map((agent) => {
+          {detailAgents.map((agent) => {
             const isInstalling = installingAgentId === agent.id;
             return (
               <article key={agent.id} className="integration-card" aria-label={agent.label}>

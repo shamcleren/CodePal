@@ -521,7 +521,7 @@ describe("createIntegrationService", () => {
     expect(parsed.statusLine.command).toContain("/Users/demo/.vibe-island/bin/vibe-island-statusline");
   });
 
-  it("reports Codex session-log monitoring as active but still offers hook enhancement", () => {
+  it("reports Codex session-log monitoring as active without offering legacy hook enhancement", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
     const codexSessionsRoot = join(homeDir, ".codex", "sessions");
     mkdirSync(codexSessionsRoot, { recursive: true });
@@ -540,8 +540,8 @@ describe("createIntegrationService", () => {
       supported: true,
       health: "active",
       healthLabel: "正常",
-      actionLabel: "增强",
-      actionLabelKey: "integration.action.enhance",
+      actionLabel: "修复",
+      actionLabelKey: "integration.action.repair",
       hookInstalled: false,
       statusMessage: "已接入 Codex 监控（基于 session 日志）",
       configPath: codexSessionsRoot,

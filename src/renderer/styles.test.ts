@@ -53,7 +53,11 @@ describe("renderer layout styles", () => {
     expect(css).toMatch(/\.settings-nav__item--active\s*\{/);
     expect(css).toMatch(/\.settings-content\s*\{[\s\S]*overflow:\s*hidden;/);
     expect(css).toMatch(/\.settings-section-shell\s*\{[\s\S]*overflow-y:\s*auto;/);
+    expect(css).toMatch(/\.settings-section-shell\s*\{[\s\S]*align-content:\s*start;/);
+    expect(css).toMatch(/\.settings-section-shell\s*\{[\s\S]*grid-auto-rows:\s*max-content;/);
     expect(css).toMatch(/\.settings-stack--maintenance\s*\{/);
+    expect(css).toMatch(/\.integration-panel__details\s*\{[\s\S]*flex-direction:\s*column;/);
+    expect(css).toMatch(/\.integration-grid\s*\{[\s\S]*align-items:\s*start;/);
     expect(css).toMatch(/\.session-stream__item--message\s*\{/);
     expect(css).toMatch(/\.session-stream__item--message\s*\{[\s\S]*width:\s*min\(100%,\s*82%\);/);
     expect(css).toMatch(/\.session-stream__item--message-user\s*\{[\s\S]*margin-left:\s*auto;/);

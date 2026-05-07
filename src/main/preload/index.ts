@@ -26,6 +26,12 @@ import type { SessionRecord } from "../../shared/sessionTypes";
 import type { SessionJumpTarget } from "../../shared/sessionTypes";
 import type { AppUpdateState } from "../../shared/updateTypes";
 import type { UsageOverview } from "../../shared/usageTypes";
+import type {
+  ProviderGatewayClientSetupResult,
+  ProviderGatewayClientSetupTarget,
+  ProviderGatewayStatus,
+  ProviderGatewayTokenUpdateResult,
+} from "../../shared/providerGatewayTypes";
 
 contextBridge.exposeInMainWorld("codepal", {
   getSessions() {
@@ -64,6 +70,27 @@ contextBridge.exposeInMainWorld("codepal", {
   },
   updateAppSettings(settings: AppSettingsPatch) {
     return ipcRenderer.invoke("codepal:update-app-settings", settings) as Promise<AppSettings>;
+  },
+  getProviderGatewayStatus() {
+    return ipcRenderer.invoke(
+      "codepal:get-provider-gateway-status",
+    ) as Promise<ProviderGatewayStatus>;
+  },
+  updateProviderGatewayToken(providerId: string, token: string) {
+    return ipcRenderer.invoke("codepal:update-provider-gateway-token", {
+      providerId,
+      token,
+    }) as Promise<ProviderGatewayTokenUpdateResult>;
+  },
+  runProviderGatewayHealthCheck() {
+    return ipcRenderer.invoke(
+      "codepal:run-provider-gateway-health-check",
+    ) as Promise<ProviderGatewayStatus>;
+  },
+  configureProviderGatewayClient(target: ProviderGatewayClientSetupTarget) {
+    return ipcRenderer.invoke("codepal:configure-provider-gateway-client", {
+      target,
+    }) as Promise<ProviderGatewayClientSetupResult>;
   },
   getUpdateState() {
     return ipcRenderer.invoke("codepal:get-update-state") as Promise<AppUpdateState>;

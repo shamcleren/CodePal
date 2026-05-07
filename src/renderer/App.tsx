@@ -7,6 +7,8 @@ import type { HistoryDiagnostics } from "../shared/historyTypes";
 import type { IntegrationAgentId, IntegrationDiagnostics } from "../shared/integrationTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview } from "../shared/usageTypes";
+import type { ProviderGatewayStatus } from "../shared/providerGatewayTypes";
+import type { ProviderGatewayClientSetupTarget } from "../shared/providerGatewayTypes";
 import { DisplayPreferencesPanel } from "./components/DisplayPreferencesPanel";
 import { CursorDashboardPanel } from "./components/CursorDashboardPanel";
 import { CodeBuddyQuotaPanel } from "./components/CodeBuddyQuotaPanel";
@@ -15,6 +17,7 @@ import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
 import { MainUpdateButton } from "./components/MainUpdateButton";
 import { NotificationPreferencesPanel } from "./components/NotificationPreferencesPanel";
+import { ProviderGatewayPanel } from "./components/ProviderGatewayPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SessionList } from "./components/SessionList";
 import { UpdatePanel } from "./components/UpdatePanel";
@@ -33,12 +36,12 @@ import {
 const CURSOR_DASHBOARD_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const CODEBUDDY_QUOTA_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 type SettingsSectionId =
+  | "overview"
+  | "providerGateway"
   | "integrations"
-  | "display"
-  | "notifications"
   | "usage"
-  | "maintenance"
-  | "support";
+  | "preferences"
+  | "advanced";
 type SettingsSection = {
   id: SettingsSectionId;
   label: string;
@@ -67,7 +70,7 @@ export function App() {
   const [integrationError, setIntegrationError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] =
-    useState<SettingsSectionId>("integrations");
+    useState<SettingsSectionId>("overview");
   const [usageOverview, setUsageOverview] = useState<UsageOverview | null>(null);
   const [claudeQuotaDiagnostics, setClaudeQuotaDiagnostics] =
     useState<ClaudeQuotaDiagnostics | null>(null);
@@ -81,6 +84,15 @@ export function App() {
   const [codeBuddyInternalQuotaDiagnostics, setCodeBuddyInternalQuotaDiagnostics] =
     useState<CodeBuddyQuotaDiagnostics | null>(null);
   const [codeBuddyInternalQuotaLoading, setCodeBuddyInternalQuotaLoading] = useState(false);
+  const [providerGatewayStatus, setProviderGatewayStatus] =
+    useState<ProviderGatewayStatus | null>(null);
+  const [providerGatewayLoading, setProviderGatewayLoading] = useState(false);
+  const [providerGatewayTokenSaving, setProviderGatewayTokenSaving] = useState(false);
+  const [providerGatewayHealthChecking, setProviderGatewayHealthChecking] = useState(false);
+  const [providerGatewayClientSetupTarget, setProviderGatewayClientSetupTarget] =
+    useState<ProviderGatewayClientSetupTarget | null>(null);
+  const [providerGatewayFeedback, setProviderGatewayFeedback] = useState<string | null>(null);
+  const [providerGatewayError, setProviderGatewayError] = useState<string | null>(null);
   const [historyDiagnostics, setHistoryDiagnostics] = useState<HistoryDiagnostics | null>(null);
   const [historyStoreClearing, setHistoryStoreClearing] = useState(false);
   const [historyStoreVersion, setHistoryStoreVersion] = useState(0);
@@ -111,40 +123,40 @@ export function App() {
   });
   const settingsSections: SettingsSection[] = [
     {
+      id: "overview",
+      label: i18n.t("settings.overview.title"),
+      eyebrow: i18n.t("settings.overview.eyebrow"),
+      summary: i18n.t("settings.overview.summary"),
+    },
+    {
+      id: "providerGateway",
+      label: i18n.t("providerGateway.title"),
+      eyebrow: i18n.t("settings.providerGateway.eyebrow"),
+      summary: i18n.t("settings.providerGateway.summary"),
+    },
+    {
       id: "integrations",
-      label: i18n.t("integration.title"),
-      eyebrow: i18n.t("settings.nav.integrations.eyebrow"),
-      summary: i18n.t("settings.summary.integrations"),
-    },
-    {
-      id: "display",
-      label: i18n.t("display.title"),
-      eyebrow: i18n.t("settings.nav.display.eyebrow"),
-      summary: i18n.t("settings.summary.display"),
-    },
-    {
-      id: "notifications",
-      label: i18n.t("notifications.title"),
-      eyebrow: i18n.t("settings.nav.notifications.eyebrow"),
-      summary: i18n.t("settings.summary.notifications"),
+      label: i18n.t("settings.integrations.title"),
+      eyebrow: i18n.t("settings.integrations.eyebrow"),
+      summary: i18n.t("settings.integrations.summary"),
     },
     {
       id: "usage",
-      label: i18n.t("usage.section"),
-      eyebrow: i18n.t("settings.nav.usage.eyebrow"),
-      summary: i18n.t("settings.summary.usage"),
+      label: i18n.t("settings.usage.title"),
+      eyebrow: i18n.t("settings.usage.eyebrow"),
+      summary: i18n.t("settings.usage.summary"),
     },
     {
-      id: "maintenance",
-      label: i18n.t("maintenance.section"),
-      eyebrow: i18n.t("settings.nav.maintenance.eyebrow"),
-      summary: i18n.t("settings.summary.maintenance"),
+      id: "preferences",
+      label: i18n.t("settings.preferences.title"),
+      eyebrow: i18n.t("settings.preferences.eyebrow"),
+      summary: i18n.t("settings.preferences.summary"),
     },
     {
-      id: "support",
-      label: i18n.t("support.title"),
-      eyebrow: i18n.t("settings.nav.support.eyebrow"),
-      summary: i18n.t("settings.summary.support"),
+      id: "advanced",
+      label: i18n.t("settings.advanced.title"),
+      eyebrow: i18n.t("settings.advanced.eyebrow"),
+      summary: i18n.t("settings.advanced.summary"),
     },
   ];
   const activeSettingsSectionConfig =
@@ -232,6 +244,24 @@ export function App() {
         };
         setCodeBuddyInternalQuotaDiagnostics(diagnostics);
         return diagnostics;
+      });
+  }
+
+  function loadProviderGatewayStatus() {
+    setProviderGatewayLoading(true);
+    setProviderGatewayError(null);
+    return window.codepal
+      .getProviderGatewayStatus()
+      .then((status) => {
+        setProviderGatewayStatus(status);
+        return status;
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+        return null;
+      })
+      .finally(() => {
+        setProviderGatewayLoading(false);
       });
   }
 
@@ -425,6 +455,63 @@ export function App() {
       });
   }
 
+  function saveProviderGatewayToken(providerId: string, token: string) {
+    setProviderGatewayTokenSaving(true);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
+    return window.codepal
+      .updateProviderGatewayToken(providerId, token)
+      .then((result) => {
+        setProviderGatewayStatus(result.status);
+        setProviderGatewayFeedback(i18n.t("providerGateway.token.saved"));
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+      })
+      .finally(() => {
+        setProviderGatewayTokenSaving(false);
+      });
+  }
+
+  function runProviderGatewayHealthCheck() {
+    setProviderGatewayHealthChecking(true);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
+    return window.codepal
+      .runProviderGatewayHealthCheck()
+      .then((status) => {
+        setProviderGatewayStatus(status);
+        setProviderGatewayFeedback(i18n.t("providerGateway.health.finished"));
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+      })
+      .finally(() => {
+        setProviderGatewayHealthChecking(false);
+      });
+  }
+
+  function configureProviderGatewayClient(target: ProviderGatewayClientSetupTarget) {
+    setProviderGatewayClientSetupTarget(target);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
+    return window.codepal
+      .configureProviderGatewayClient(target)
+      .then((result) => {
+        setProviderGatewayFeedback(result.message);
+        return window.codepal.getProviderGatewayStatus();
+      })
+      .then((status) => {
+        setProviderGatewayStatus(status);
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+      })
+      .finally(() => {
+        setProviderGatewayClientSetupTarget(null);
+      });
+  }
+
   function refreshIntegrations() {
     setIntegrationLoading(true);
     setIntegrationError(null);
@@ -442,6 +529,7 @@ export function App() {
       });
 
     void loadClaudeQuotaDiagnostics();
+    void loadProviderGatewayStatus();
     void loadCursorDashboardDiagnostics();
     void loadCodeBuddyQuotaDiagnostics();
     void loadCodeBuddyInternalQuotaDiagnostics();
@@ -455,11 +543,11 @@ export function App() {
   }
 
   function openSettingsDrawer() {
-    openSettingsSection("integrations");
+    openSettingsSection("overview");
   }
 
   function openMaintenanceSettings() {
-    openSettingsSection("maintenance");
+    openSettingsSection("advanced");
   }
 
   function closeSettingsDrawer() {
@@ -481,6 +569,7 @@ export function App() {
         setHomeDir(nextHomeDir);
         return Promise.all([
           loadClaudeQuotaDiagnostics(),
+          loadProviderGatewayStatus(),
           loadCodeBuddyQuotaDiagnostics(),
           loadCodeBuddyInternalQuotaDiagnostics(),
           loadHistoryDiagnostics(settings.history.persistenceEnabled),
@@ -526,6 +615,10 @@ export function App() {
 
   useEffect(() => {
     void loadCodeBuddyInternalQuotaDiagnostics();
+  }, []);
+
+  useEffect(() => {
+    void loadProviderGatewayStatus();
   }, []);
 
   useEffect(() => {
@@ -718,6 +811,23 @@ export function App() {
   const handleRespond = useCallback((sessionId: string, actionId: string, option: string) => {
     window.codepal.respondToPendingAction(sessionId, actionId, option);
   }, []);
+  const integrationAttentionCount = (integrationDiagnostics?.agents ?? []).filter((agent) => {
+    return (
+      agent.supported &&
+      (agent.health !== "active" || (agent.id === "codex" && !agent.hookInstalled))
+    );
+  }).length;
+  const listenerSummary = integrationDiagnostics?.listener.mode === "tcp"
+    ? `127.0.0.1:${integrationDiagnostics.listener.port}`
+    : integrationDiagnostics?.listener.mode === "socket"
+      ? integrationDiagnostics.listener.socketPath
+      : integrationDiagnostics?.listener.message ?? i18n.t("settings.overview.unknown");
+  const gatewaySummary =
+    providerGatewayStatus?.listener.state === "listening"
+      ? providerGatewayStatus.listener.localUrl
+      : providerGatewayStatus?.listener.state === "disabled"
+        ? i18n.t("settings.overview.disabled")
+        : providerGatewayStatus?.listener.message ?? i18n.t("settings.overview.unknown");
 
   return (
     <I18nProvider locale={resolvedLocale}>
@@ -811,6 +921,52 @@ export function App() {
                   {activeSettingsSectionConfig.summary}
                 </p>
               </header>
+              {activeSettingsSection === "overview" ? (
+                <div className="settings-stack">
+                  <div className="integration-panel__status-grid">
+                    <div className="display-panel__card">
+                      <div className="display-panel__title">{i18n.t("settings.overview.listener")}</div>
+                      <div className="integration-panel__summary">{listenerSummary}</div>
+                    </div>
+                    <div className="display-panel__card">
+                      <div className="display-panel__title">{i18n.t("providerGateway.title")}</div>
+                      <div className="integration-panel__summary">{gatewaySummary}</div>
+                    </div>
+                    <div className="display-panel__card">
+                      <div className="display-panel__title">{i18n.t("settings.overview.providerToken")}</div>
+                      <div className="integration-panel__summary">
+                        {providerGatewayStatus?.provider?.tokenConfigured
+                          ? i18n.t("providerGateway.status.tokenConfigured")
+                          : i18n.t("providerGateway.status.tokenMissing")}
+                      </div>
+                    </div>
+                    <div className="display-panel__card">
+                      <div className="display-panel__title">{i18n.t("settings.overview.attention")}</div>
+                      <div className="integration-panel__summary">{integrationAttentionCount}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              {activeSettingsSection === "providerGateway" ? (
+                <ProviderGatewayPanel
+                  status={providerGatewayStatus}
+                  loading={providerGatewayLoading}
+                  tokenSaving={providerGatewayTokenSaving}
+                  healthChecking={providerGatewayHealthChecking}
+                  clientSetupTarget={providerGatewayClientSetupTarget}
+                  feedback={providerGatewayFeedback}
+                  error={providerGatewayError}
+                  onRefresh={() => {
+                    void loadProviderGatewayStatus();
+                  }}
+                  onSaveToken={(providerId, token) => saveProviderGatewayToken(providerId, token)}
+                  onRunHealthCheck={() => runProviderGatewayHealthCheck()}
+                  onConfigureClient={(target) => configureProviderGatewayClient(target)}
+                  onCopy={(text) => {
+                    void window.codepal.writeClipboardText(text);
+                  }}
+                />
+              ) : null}
               {activeSettingsSection === "integrations" ? (
                 <IntegrationPanel
                   showHeader={false}
@@ -846,49 +1002,6 @@ export function App() {
                         setInstallingAgentId(null);
                       });
                   }}
-                />
-              ) : null}
-              {activeSettingsSection === "display" ? (
-                <DisplayPreferencesPanel
-                  showHeader={false}
-                  settings={appSettings.display}
-                  onToggleStrip={(nextValue) =>
-                    void updateAppSettings({
-                      display: {
-                        ...appSettings.display,
-                        showInStatusBar: nextValue,
-                      },
-                    })
-                  }
-                  onToggleAgent={toggleUsageAgent}
-                  onDensityChange={(nextValue) =>
-                    void updateAppSettings({
-                      display: {
-                        ...appSettings.display,
-                        density: nextValue,
-                      },
-                    })
-                  }
-                  localeSetting={appSettings.locale}
-                  onLocaleChange={(nextValue) =>
-                    void updateAppSettings({
-                      locale: nextValue,
-                    })
-                  }
-                />
-              ) : null}
-              {activeSettingsSection === "notifications" ? (
-                <NotificationPreferencesPanel
-                  showHeader={false}
-                  settings={appSettings.notifications}
-                  onUpdate={(patch) =>
-                    void updateAppSettings({
-                      notifications: {
-                        ...appSettings.notifications,
-                        ...patch,
-                      },
-                    })
-                  }
                 />
               ) : null}
               {activeSettingsSection === "usage" ? (
@@ -944,7 +1057,50 @@ export function App() {
                   />
                 </div>
               ) : null}
-              {activeSettingsSection === "maintenance" ? (
+              {activeSettingsSection === "preferences" ? (
+                <div className="settings-stack">
+                  <DisplayPreferencesPanel
+                    showHeader={false}
+                    settings={appSettings.display}
+                    onToggleStrip={(nextValue) =>
+                      void updateAppSettings({
+                        display: {
+                          ...appSettings.display,
+                          showInStatusBar: nextValue,
+                        },
+                      })
+                    }
+                    onToggleAgent={toggleUsageAgent}
+                    onDensityChange={(nextValue) =>
+                      void updateAppSettings({
+                        display: {
+                          ...appSettings.display,
+                          density: nextValue,
+                        },
+                      })
+                    }
+                    localeSetting={appSettings.locale}
+                    onLocaleChange={(nextValue) =>
+                      void updateAppSettings({
+                        locale: nextValue,
+                      })
+                    }
+                  />
+                  <NotificationPreferencesPanel
+                    showHeader={false}
+                    settings={appSettings.notifications}
+                    onUpdate={(patch) =>
+                      void updateAppSettings({
+                        notifications: {
+                          ...appSettings.notifications,
+                          ...patch,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              ) : null}
+              {activeSettingsSection === "advanced" ? (
                 <div className="settings-stack settings-stack--maintenance">
                   <div className="settings-stack__column">
                     <UpdatePanel
@@ -1025,29 +1181,27 @@ export function App() {
                         void clearSessionHistory();
                       }}
                     />
+                    <SupportPanel
+                      diagnosticsReport={supportDiagnosticsReport}
+                      showHeader={false}
+                      onCopyDiagnostics={() => {
+                        void window.codepal.writeClipboardText(supportDiagnosticsReport);
+                      }}
+                      onOpenPrivacy={() => {
+                        void window.codepal.openExternalTarget(SUPPORT_LINKS.privacy);
+                      }}
+                      onOpenSupportScope={() => {
+                        void window.codepal.openExternalTarget(SUPPORT_LINKS.supportScope);
+                      }}
+                      onOpenTroubleshooting={() => {
+                        void window.codepal.openExternalTarget(SUPPORT_LINKS.troubleshooting);
+                      }}
+                      onOpenIssues={() => {
+                        void window.codepal.openExternalTarget(SUPPORT_LINKS.issues);
+                      }}
+                    />
                   </div>
                 </div>
-              ) : null}
-              {activeSettingsSection === "support" ? (
-                <SupportPanel
-                  diagnosticsReport={supportDiagnosticsReport}
-                  showHeader={false}
-                  onCopyDiagnostics={() => {
-                    void window.codepal.writeClipboardText(supportDiagnosticsReport);
-                  }}
-                  onOpenPrivacy={() => {
-                    void window.codepal.openExternalTarget(SUPPORT_LINKS.privacy);
-                  }}
-                  onOpenSupportScope={() => {
-                    void window.codepal.openExternalTarget(SUPPORT_LINKS.supportScope);
-                  }}
-                  onOpenTroubleshooting={() => {
-                    void window.codepal.openExternalTarget(SUPPORT_LINKS.troubleshooting);
-                  }}
-                  onOpenIssues={() => {
-                    void window.codepal.openExternalTarget(SUPPORT_LINKS.issues);
-                  }}
-                />
               ) : null}
             </section>
           </div>

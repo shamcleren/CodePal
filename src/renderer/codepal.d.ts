@@ -24,6 +24,12 @@ import type {
 import type { SessionJumpTarget, SessionRecord } from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview } from "../shared/usageTypes";
+import type {
+  ProviderGatewayClientSetupResult,
+  ProviderGatewayClientSetupTarget,
+  ProviderGatewayStatus,
+  ProviderGatewayTokenUpdateResult,
+} from "../shared/providerGatewayTypes";
 
 export type CodePalApi = {
   getSessions: () => Promise<SessionRecord[]>;
@@ -35,6 +41,15 @@ export type CodePalApi = {
   reloadAppSettings: () => Promise<AppSettings>;
   getAppSettingsPath: () => Promise<string>;
   updateAppSettings: (settings: AppSettingsPatch) => Promise<AppSettings>;
+  getProviderGatewayStatus: () => Promise<ProviderGatewayStatus>;
+  updateProviderGatewayToken: (
+    providerId: string,
+    token: string,
+  ) => Promise<ProviderGatewayTokenUpdateResult>;
+  runProviderGatewayHealthCheck: () => Promise<ProviderGatewayStatus>;
+  configureProviderGatewayClient: (
+    target: ProviderGatewayClientSetupTarget,
+  ) => Promise<ProviderGatewayClientSetupResult>;
   getUpdateState: () => Promise<AppUpdateState>;
   checkForUpdates: () => Promise<AppUpdateState>;
   downloadUpdate: () => Promise<AppUpdateState>;
