@@ -342,6 +342,28 @@ describe("claude desktop gateway", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("answers count_tokens locally when the upstream provider does not expose that endpoint", async () => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    const server = createTestGateway({ token: "secret", fetchImpl });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/v1/messages/count_tokens`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "anthropic/MiMo-V2.5-Pro",
+        system: "Keep replies short.",
+        messages: [{ role: "user", content: "Say ok only" }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      input_tokens: expect.any(Number),
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("streams upstream SSE responses without buffering", async () => {
     const encoder = new TextEncoder();
     const fetchImpl = vi.fn(async () => {

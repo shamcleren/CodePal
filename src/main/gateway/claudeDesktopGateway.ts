@@ -188,6 +188,59 @@ function asStringArrayText(value: unknown): string {
   return "";
 }
 
+function estimateTokensFromText(text: string): number {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return 0;
+  }
+  const characterEstimate = Math.ceil(Array.from(normalized).length / 3);
+  const wordEstimate = normalized.split(" ").filter(Boolean).length;
+  return Math.max(characterEstimate, wordEstimate);
+}
+
+function estimateCountTokens(body: Record<string, unknown>): { input_tokens: number } {
+  const parts: string[] = [];
+  const system = asStringArrayText(body.system);
+  if (system) {
+    parts.push(system);
+  }
+
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  for (const message of messages) {
+    const object = asObject(message);
+    if (!object) {
+      continue;
+    }
+    if (typeof object.role === "string") {
+      parts.push(object.role);
+    }
+    const content = asStringArrayText(object.content);
+    if (content) {
+      parts.push(content);
+    }
+  }
+
+  const tools = Array.isArray(body.tools) ? body.tools : [];
+  for (const tool of tools) {
+    const object = asObject(tool);
+    if (!object) {
+      continue;
+    }
+    for (const key of ["name", "description"] as const) {
+      if (typeof object[key] === "string") {
+        parts.push(object[key]);
+      }
+    }
+    if (object.input_schema) {
+      parts.push(JSON.stringify(object.input_schema));
+    }
+  }
+
+  const textTokens = estimateTokensFromText(parts.join("\n"));
+  const messageOverhead = Math.max(1, messages.length) * 6;
+  return { input_tokens: Math.max(1, textTokens + messageOverhead + 8) };
+}
+
 function positiveInteger(value: unknown, fallback: number): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -618,6 +671,14 @@ async function handleMessages(
         `Unsupported model: ${claudeModel || "<missing>"}`,
       );
       jsonResponse(response, error.status, error.payload);
+      return;
+    }
+    if (path === "/v1/messages/count_tokens") {
+      const durationMs = Date.now() - startedAt;
+      logger.info(
+        `[CodePal Gateway] ${request.method ?? "GET"} ${path} provider=${providerId} model=${claudeModel} -> ${upstreamModel} status=200 durationMs=${durationMs} stream=false local=count_tokens`,
+      );
+      jsonResponse(response, 200, estimateCountTokens(body));
       return;
     }
     const token = secrets.resolveToken(provider);
