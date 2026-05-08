@@ -130,6 +130,15 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   }
   run("xcrun", ["stapler", "validate", "-v", appPath]);
 
+  console.log("[release] macOS release validation finished.");
+
+  if (process.env.CODEPAL_PUBLISH_RELEASE !== "1") {
+    console.log(
+      "[release] Skipping GitHub release publishing because CODEPAL_PUBLISH_RELEASE is not 1."
+    );
+    return [];
+  }
+
   // electron-builder uploads artifacts to the draft release BEFORE this hook
   // runs, so those uploaded copies are pre-staple. Re-upload the stapled dmg
   // (the user-facing download) so the GitHub release matches what we just
@@ -141,8 +150,6 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   for (const dmgPath of dmgPaths) {
     run("gh", ["release", "upload", tagForUpload, dmgPath, "--clobber"]);
   }
-
-  console.log("[release] macOS release validation finished.");
 
   // electron-builder creates a draft release by default.
   // Publish it so the auto-updater can detect the new version.

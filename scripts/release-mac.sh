@@ -60,6 +60,7 @@ if [[ -z "${GH_TOKEN:-}" ]]; then
   GH_TOKEN="$(gh auth token)"
   export GH_TOKEN
 fi
+export CODEPAL_PUBLISH_RELEASE=1
 
 cd "$PROJECT_ROOT"
 npm run build
