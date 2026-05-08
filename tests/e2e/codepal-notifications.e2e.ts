@@ -25,7 +25,7 @@ test("renders notification settings and persists notification toggles", async ()
     });
 
     await page.locator(".app-settings-trigger").click();
-    await page.getByRole("button", { name: /Notifications|通知/ }).click();
+    await page.getByRole("button", { name: /Preferences|偏好设置/ }).click();
 
     const enabledToggle = page.getByLabel(/Enable notifications|启用通知/);
     const soundToggle = page.getByLabel(/Play sounds|播放声音/);
