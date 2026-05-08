@@ -116,6 +116,13 @@ export function createUpdateService(options: UpdateServiceOptions) {
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
+  if (options.isPackaged) {
+    autoUpdater.setFeedURL({
+      provider: "github",
+      owner: "shamcleren",
+      repo: "CodePal",
+    });
+  }
 
   function emitState(nextState: AppUpdateState) {
     state = nextState;

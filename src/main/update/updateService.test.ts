@@ -8,6 +8,7 @@ const updaterMocks = vi.hoisted(() => ({
   checkForUpdates: vi.fn(async () => undefined),
   downloadUpdate: vi.fn(async () => undefined),
   quitAndInstall: vi.fn(() => undefined),
+  setFeedURL: vi.fn(),
 }));
 
 vi.mock("electron-updater", () => ({
@@ -21,6 +22,7 @@ vi.mock("electron-updater", () => ({
       checkForUpdates: updaterMocks.checkForUpdates,
       downloadUpdate: updaterMocks.downloadUpdate,
       quitAndInstall: updaterMocks.quitAndInstall,
+      setFeedURL: updaterMocks.setFeedURL,
     },
   },
 }));
@@ -42,6 +44,7 @@ describe("createUpdateService", () => {
     updaterMocks.checkForUpdates.mockClear();
     updaterMocks.downloadUpdate.mockClear();
     updaterMocks.quitAndInstall.mockClear();
+    updaterMocks.setFeedURL.mockClear();
   });
 
   afterEach(() => {
@@ -58,6 +61,20 @@ describe("createUpdateService", () => {
     service.initialize();
 
     expect(updaterMocks.checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it("configures the GitHub updater feed for packaged builds", () => {
+    createUpdateService({
+      isPackaged: true,
+      currentVersion: "1.0.0",
+      stateFilePath,
+    });
+
+    expect(updaterMocks.setFeedURL).toHaveBeenCalledWith({
+      provider: "github",
+      owner: "shamcleren",
+      repo: "CodePal",
+    });
   });
 
   it("marks an available update as skipped when the version was previously skipped", () => {
