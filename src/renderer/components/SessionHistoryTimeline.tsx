@@ -287,8 +287,6 @@ export function pendingEyebrow(
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
   switch (type) {
-    case "approval":
-      return t("session.pending.approval");
     case "single_choice":
       return t("session.pending.single_choice");
     case "multi_choice":
@@ -312,14 +310,8 @@ export type PendingActionDisplayChoice = {
 
 export function actionDisplayChoices(
   action: PendingAction,
-  t: (key: string, params?: Record<string, string | number>) => string,
+  _t: (key: string, params?: Record<string, string | number>) => string,
 ): PendingActionDisplayChoice[] {
-  if (action.type === "approval") {
-    return [
-      { label: t("session.action.allow"), value: "Allow" },
-      { label: t("session.action.deny"), value: "Deny" },
-    ];
-  }
   return action.options.map((option) => ({ label: option, value: option }));
 }
 
@@ -484,6 +476,7 @@ export function SessionHistoryTimeline({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [summaryCopied, setSummaryCopied] = useState(false);
+  const [jumpError, setJumpError] = useState<string | null>(null);
   const [localUserMessages, setLocalUserMessages] = useState<ActivityItem[]>([]);
 
   const mergedItemsBase = useMemo(
@@ -659,9 +652,12 @@ export function SessionHistoryTimeline({
   }
 
   async function handleJumpToOriginalTool() {
+    setJumpError(null);
     const result = await window.codepal.jumpToSessionTarget(session.externalApproval?.jumpTarget);
     if (!result.ok) {
-      console.warn("[CodePal] failed to jump to original tool:", result.error);
+      const msg = i18n.t("session.externalApproval.jumpError");
+      setJumpError(msg);
+      window.setTimeout(() => setJumpError(null), 3000);
     }
   }
 
@@ -967,42 +963,6 @@ export function SessionHistoryTimeline({
       ) : null}
       {(session.pendingActions?.length ?? 0) > 0 ? (
         <div className="session-row__interaction">
-          {(session.pendingActions?.length ?? 0) > 1 ? (
-            <div className="pending-action-bulk">
-              <span className="pending-action-bulk__count">
-                {session.pendingActions?.length} {i18n.t("session.pending", { count: session.pendingActions?.length ?? 0 })}
-              </span>
-              <button
-                type="button"
-                className="pending-action-bulk__btn pending-action-bulk__btn--allow"
-                onClick={() => {
-                  for (const action of session.pendingActions ?? []) {
-                    const state = cardStates[action.id];
-                    if (!state || state === "pending" || state === "error") {
-                      handleRespond(session.id, action.id, actionDisplayChoices(action, i18n.t)[0].value);
-                    }
-                  }
-                }}
-              >
-                {i18n.t("pendingAction.allowAll")}
-              </button>
-              <button
-                type="button"
-                className="pending-action-bulk__btn pending-action-bulk__btn--deny"
-                onClick={() => {
-                  for (const action of session.pendingActions ?? []) {
-                    const state = cardStates[action.id];
-                    if (!state || state === "pending" || state === "error") {
-                      const opts = actionDisplayChoices(action, i18n.t);
-                      handleRespond(session.id, action.id, opts[opts.length - 1].value);
-                    }
-                  }
-                }}
-              >
-                {i18n.t("pendingAction.denyAll")}
-              </button>
-            </div>
-          ) : null}
           {(session.pendingActions ?? []).map((action) => {
             const cardState = cardStates[action.id] ?? "pending";
             const cardError = cardErrors[action.id];
@@ -1095,6 +1055,7 @@ export function SessionHistoryTimeline({
             >
               {i18n.t("session.externalApproval.goToTool")}
             </button>
+            {jumpError ? <div className="external-approval-card__error">{jumpError}</div> : null}
             <div className="external-approval-card__hint">
               {i18n.t("session.externalApproval.readonlyHint")}
             </div>

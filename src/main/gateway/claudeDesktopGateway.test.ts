@@ -59,7 +59,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-describe("claude desktop gateway", () => {
+describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gateway", () => {
   it("returns Anthropic-style model ids from the active provider mapping", async () => {
     const server = createTestGateway({ token: "secret" });
     const baseUrl = await listen(server);

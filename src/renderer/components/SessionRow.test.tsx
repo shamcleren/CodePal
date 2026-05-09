@@ -54,9 +54,9 @@ describe("SessionRow pending action", () => {
       { expanded: true },
     );
     expect(html).toContain("Proceed?");
-    expect(html).toContain("Awaiting decision");
-    expect(html).toContain(">Allow<");
-    expect(html).toContain(">Deny<");
+    expect(html).toContain("Awaiting input");
+    expect(html).toContain(">Approve<");
+    expect(html).toContain(">Reject<");
   });
 
   it("renders two pending action cards with buttons when pendingActions has two items", () => {
@@ -81,8 +81,8 @@ describe("SessionRow pending action", () => {
     );
     expect(html).toContain("First decision");
     expect(html).toContain("Second decision");
-    expect(html).toContain(">Allow<");
-    expect(html).toContain(">Deny<");
+    expect(html).toContain(">OK<");
+    expect(html).toContain(">Cancel<");
     expect(html).toContain(">A<");
     expect(html).toContain(">B<");
     const cards = html.match(/class="pending-action pending-action--[a-z]+"/g);
@@ -281,8 +281,8 @@ describe("SessionRow pending action", () => {
       { expanded: true },
     );
 
-    expect(html).toContain("Awaiting decision");
-    expect(html).toContain(">Allow<");
+    expect(html).toContain("Awaiting input");
+    expect(html).toContain(">Approve<");
     expect(html).toContain("session-row__interaction");
   });
 

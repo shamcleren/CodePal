@@ -42,19 +42,11 @@ Design decisions:
 - which states should stay silent and only update the main panel
 - how to avoid repeated notifications when one state flickers
 
-### 2. Allow (Approval Expansion)
+### 2. ~~Allow (Approval Expansion)~~ — Out of Scope
 
-**Priority: high — Cursor already works, Codex blocked on upstream.**
+**Dropped as of v1.1.3.** CodePal dropped the Claude PreToolUse blocking hook and embraced dashboard-only monitoring. Approval flows remain the responsibility of each agent and its CLI; CodePal will not act as an approval intermediary.
 
-Cursor `approval` / `Allow / Deny` already round-trips through the hook path. Codex approval is blocked because the current public Codex `notify` hook is completion-only, not a real approval source.
-
-Next steps:
-
-- resume Codex approval work only when upstream exposes a real approval / permission hook
-- required: stable `sessionId` in the approval payload, explicit approval semantics
-- keep the existing canonical pending-action model and response-target routing
-
-Relevant code: `src/main/hook/`, `src/main/ingress/hookIngress.ts`, `src/main/actionResponse/dispatchActionResponse.ts`
+Residual `actionResponse/` code is retained for Cursor passive observation only and should not be extended.
 
 ### 3. Send Message (CodePal → Agent)
 
@@ -163,7 +155,6 @@ The current recommendation is to postpone payment implementation and first valid
 - deeper observability and reliability views
 - broader agent / IDE coverage
 - team-shared operational views
-- stronger approval and control-loop workflows
 - more advanced diagnostics and automation
 
 These are direction candidates, not committed SKUs.
@@ -180,7 +171,7 @@ Potential uses:
 
 - glanceable running / waiting state
 - quota pressure cues
-- pending approval nudges
+- pending-decision awareness (notification-level, not control)
 - lightweight ambient presence while the full panel stays hidden
 
 This should be treated as a product-surface expansion, not just a visual tweak.
@@ -219,7 +210,7 @@ The recommended posture is:
 
 The following are attractive, but should not jump ahead of the current baseline work:
 
-- forcing full cross-agent control before monitoring reliability is mature
+- adding agent control or approval interception — CodePal is monitoring-only by design; control belongs to each agent's CLI
 - expanding updater complexity before release trust and validation stay reliable
 - implementing billing before user-value retention is validated
 - overloading README or release messaging with speculative roadmap promises

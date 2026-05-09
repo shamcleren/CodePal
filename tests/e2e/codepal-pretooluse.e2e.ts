@@ -2,7 +2,12 @@ import { test, expect } from "@playwright/test";
 import { spawn } from "node:child_process";
 import { launchCodePal } from "./helpers/launchCodePal";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
+import { canListen } from "./helpers/probeNetwork";
 import { codePalMainJs, resolveElectronExecutable } from "./helpers/startHookCliProcess";
+
+test.beforeEach(async () => {
+  if (!(await canListen())) test.skip();
+});
 
 const repoRoot = process.cwd();
 

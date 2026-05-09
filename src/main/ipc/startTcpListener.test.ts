@@ -36,7 +36,7 @@ afterEach(async () => {
   );
 });
 
-describe("startTcpListener", () => {
+describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("startTcpListener", () => {
   it("starts listening on a free port", async () => {
     const server = createServer();
     const freePort = await listenEphemeral(createServer());

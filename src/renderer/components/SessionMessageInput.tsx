@@ -29,6 +29,7 @@ export function SessionMessageInput({
   const i18n = useI18n();
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const errorTimerRef = useRef(0);
 
@@ -38,6 +39,7 @@ export function SessionMessageInput({
   useEffect(() => {
     return window.codepal.onSendMessageResult((result) => {
       if (result.sessionId !== sessionId) return;
+      setSending(false);
       if (result.result === "error") {
         setError(result.error ?? i18n.t("sendMessage.error.default"));
         window.clearTimeout(errorTimerRef.current);
@@ -54,10 +56,11 @@ export function SessionMessageInput({
 
   function handleSubmit() {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed || sending) return;
     onSend(sessionId, trimmed);
     setText("");
     setError(null);
+    setSending(true);
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
@@ -83,6 +86,7 @@ export function SessionMessageInput({
           className="session-message-input__field"
           placeholder={placeholder}
           value={text}
+          disabled={sending}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
         />
@@ -90,9 +94,9 @@ export function SessionMessageInput({
           type="button"
           className="session-message-input__btn"
           onClick={handleSubmit}
-          disabled={text.trim().length === 0}
+          disabled={text.trim().length === 0 || sending}
         >
-          {i18n.t("sendMessage.send")} ↵
+          {sending ? i18n.t("sendMessage.sending") : `${i18n.t("sendMessage.send")} ↵`}
         </button>
       </div>
       {error ? <div className="session-message-input__error">{error}</div> : null}

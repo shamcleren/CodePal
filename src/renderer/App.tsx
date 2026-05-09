@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultAppSettings, type AppSettings, type AppSettingsPatch } from "../shared/appSettings";
 import type { ClaudeQuotaDiagnostics } from "../shared/claudeQuotaTypes";
 import type { CodeBuddyQuotaDiagnostics } from "../shared/codebuddyQuotaTypes";
@@ -102,6 +102,8 @@ export function App() {
   const [homeDir, setHomeDir] = useState("");
   const [updateState, setUpdateState] = useState<AppUpdateState | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
   const resolvedLocale = resolveLocale(
     appSettings.locale,
     typeof navigator !== "undefined" ? navigator.language : undefined,
@@ -552,7 +554,47 @@ export function App() {
 
   function closeSettingsDrawer() {
     setSettingsOpen(false);
+    triggerRef.current?.focus();
+    setIntegrationFeedback(null);
+    setIntegrationError(null);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
   }
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const drawer = drawerRef.current;
+    if (!drawer) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeSettingsDrawer();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = drawer!.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    drawer.addEventListener("keydown", handleKeyDown);
+    const firstFocusable = drawer.querySelector<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    firstFocusable?.focus();
+    return () => drawer.removeEventListener("keydown", handleKeyDown);
+  }, [settingsOpen]);
 
   useEffect(() => {
     void reloadAppSettings();
@@ -846,6 +888,7 @@ export function App() {
             }}
           />
           <button
+            ref={triggerRef}
             type="button"
             className="app-settings-trigger"
             aria-label={i18n.t("app.openSettings")}
@@ -877,6 +920,10 @@ export function App() {
         />
       ) : null}
       <aside
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={i18n.t("app.settings.title")}
         className={`app-settings-drawer ${settingsOpen ? "app-settings-drawer--open" : ""}`}
         aria-hidden={!settingsOpen}
       >
@@ -924,26 +971,42 @@ export function App() {
               {activeSettingsSection === "overview" ? (
                 <div className="settings-stack">
                   <div className="integration-panel__status-grid">
-                    <div className="display-panel__card">
+                    <button
+                      type="button"
+                      className="display-panel__card display-panel__card--clickable"
+                      onClick={() => setActiveSettingsSection("integrations")}
+                    >
                       <div className="display-panel__title">{i18n.t("settings.overview.listener")}</div>
                       <div className="integration-panel__summary">{listenerSummary}</div>
-                    </div>
-                    <div className="display-panel__card">
+                    </button>
+                    <button
+                      type="button"
+                      className="display-panel__card display-panel__card--clickable"
+                      onClick={() => setActiveSettingsSection("providerGateway")}
+                    >
                       <div className="display-panel__title">{i18n.t("providerGateway.title")}</div>
                       <div className="integration-panel__summary">{gatewaySummary}</div>
-                    </div>
-                    <div className="display-panel__card">
+                    </button>
+                    <button
+                      type="button"
+                      className="display-panel__card display-panel__card--clickable"
+                      onClick={() => setActiveSettingsSection("providerGateway")}
+                    >
                       <div className="display-panel__title">{i18n.t("settings.overview.providerToken")}</div>
                       <div className="integration-panel__summary">
                         {providerGatewayStatus?.provider?.tokenConfigured
                           ? i18n.t("providerGateway.status.tokenConfigured")
                           : i18n.t("providerGateway.status.tokenMissing")}
                       </div>
-                    </div>
-                    <div className="display-panel__card">
+                    </button>
+                    <button
+                      type="button"
+                      className="display-panel__card display-panel__card--clickable"
+                      onClick={() => setActiveSettingsSection("integrations")}
+                    >
                       <div className="display-panel__title">{i18n.t("settings.overview.attention")}</div>
                       <div className="integration-panel__summary">{integrationAttentionCount}</div>
-                    </div>
+                    </button>
                   </div>
                 </div>
               ) : null}
