@@ -357,14 +357,6 @@ describe("mergeHistoryStatusState", () => {
 });
 
 describe("actionDisplayOptions", () => {
-  const t = (key: string) => {
-    const map: Record<string, string> = {
-      "session.action.allow": "Allow",
-      "session.action.deny": "Deny",
-    };
-    return map[key] ?? key;
-  };
-
   it("returns the action options for non-approval actions", () => {
     const action: PendingAction = {
       id: "a2",
@@ -372,7 +364,7 @@ describe("actionDisplayOptions", () => {
       title: "Pick one",
       options: ["Option A", "Option B", "Option C"],
     };
-    expect(actionDisplayOptions(action, t)).toEqual(["Option A", "Option B", "Option C"]);
+    expect(actionDisplayOptions(action)).toEqual(["Option A", "Option B", "Option C"]);
   });
 
   it("calls onRespond with correct option — uses the last option for deny", () => {
@@ -382,7 +374,7 @@ describe("actionDisplayOptions", () => {
       title: "Pick",
       options: ["Yes", "Maybe", "No"],
     };
-    const opts = actionDisplayOptions(action, t);
+    const opts = actionDisplayOptions(action);
     // Deny All uses opts[opts.length - 1]
     expect(opts[opts.length - 1]).toBe("No");
   });

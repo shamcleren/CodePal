@@ -298,9 +298,8 @@ export function pendingEyebrow(
 
 export function actionDisplayOptions(
   action: PendingAction,
-  t: (key: string, params?: Record<string, string | number>) => string,
 ): string[] {
-  return actionDisplayChoices(action, t).map((choice) => choice.label);
+  return actionDisplayChoices(action).map((choice) => choice.label);
 }
 
 export type PendingActionDisplayChoice = {
@@ -310,7 +309,6 @@ export type PendingActionDisplayChoice = {
 
 export function actionDisplayChoices(
   action: PendingAction,
-  _t: (key: string, params?: Record<string, string | number>) => string,
 ): PendingActionDisplayChoice[] {
   return action.options.map((option) => ({ label: option, value: option }));
 }
@@ -996,7 +994,7 @@ export function SessionHistoryTimeline({
                       <button
                         type="button"
                         className="pending-action__btn pending-action__btn--retry"
-                        onClick={() => handleRespond(session.id, action.id, cardLastOptions[action.id] ?? actionDisplayChoices(action, i18n.t)[0].value)}
+                        onClick={() => handleRespond(session.id, action.id, cardLastOptions[action.id] ?? actionDisplayChoices(action)[0].value)}
                       >
                         {i18n.t("pendingAction.retry")}
                       </button>
@@ -1024,7 +1022,7 @@ export function SessionHistoryTimeline({
                     </div>
                     <div className="pending-action__title">{action.title}</div>
                     <div className="pending-action__actions">
-                      {actionDisplayChoices(action, i18n.t).map((option) => (
+                      {actionDisplayChoices(action).map((option) => (
                         <button
                           key={`${action.id}:${option.value}`}
                           type="button"
