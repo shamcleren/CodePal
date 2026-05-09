@@ -14,7 +14,7 @@ describe("buildActionResponseLine (sendEventBridge)", () => {
   });
 });
 
-describe("sendEventLine (TCP)", () => {
+describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (TCP)", () => {
   it("writes one newline-terminated JSON line to the hub", async () => {
     const onMessage = vi.fn();
     const { server } = createIpcHub(onMessage);
@@ -48,7 +48,7 @@ describe("sendEventLine (TCP)", () => {
   });
 });
 
-describe("sendEventLine (unix socket)", () => {
+describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (unix socket)", () => {
   it.skipIf(process.platform === "win32")(
     "writes one line when CODEPAL_SOCKET_PATH is set",
     async () => {

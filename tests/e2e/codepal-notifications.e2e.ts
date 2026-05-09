@@ -4,7 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
 import { launchCodePal } from "./helpers/launchCodePal";
+import { canListen } from "./helpers/probeNetwork";
 import { sendStatusChange } from "./helpers/sendStatusChange";
+
+test.beforeEach(async () => {
+  if (!(await canListen())) test.skip();
+});
 
 const TARGET_SESSION_ID = "notification-focus-target-session";
 

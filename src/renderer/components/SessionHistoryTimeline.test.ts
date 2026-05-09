@@ -11,7 +11,6 @@ import {
   shouldStartInitialHistoryLoad,
   shouldLoadNextHistoryPage,
   actionDisplayOptions,
-  actionDisplayChoices,
   pendingActionButtonLabel,
   pendingEyebrow,
 } from "./SessionHistoryTimeline";
@@ -358,24 +357,6 @@ describe("mergeHistoryStatusState", () => {
 });
 
 describe("actionDisplayOptions", () => {
-  const t = (key: string) => {
-    const map: Record<string, string> = {
-      "session.action.allow": "Allow",
-      "session.action.deny": "Deny",
-    };
-    return map[key] ?? key;
-  };
-
-  it("returns Allow/Deny for approval actions", () => {
-    const action: PendingAction = {
-      id: "a1",
-      type: "approval",
-      title: "Approve the fix?",
-      options: [],
-    };
-    expect(actionDisplayOptions(action, t)).toEqual(["Allow", "Deny"]);
-  });
-
   it("returns the action options for non-approval actions", () => {
     const action: PendingAction = {
       id: "a2",
@@ -383,93 +364,31 @@ describe("actionDisplayOptions", () => {
       title: "Pick one",
       options: ["Option A", "Option B", "Option C"],
     };
-    expect(actionDisplayOptions(action, t)).toEqual(["Option A", "Option B", "Option C"]);
+    expect(actionDisplayOptions(action)).toEqual(["Option A", "Option B", "Option C"]);
   });
 
-  it("shows pending action buttons — first option is the allow/primary option", () => {
-    const approvalAction: PendingAction = {
-      id: "action-1",
-      type: "approval",
-      title: "Allow tool execution?",
-      options: [],
-    };
-    const options = actionDisplayOptions(approvalAction, t);
-    // Tests that buttons would be rendered (non-empty options list)
-    expect(options.length).toBeGreaterThan(0);
-    expect(options[0]).toBe("Allow");
-  });
-
-  it("shows Allow All / Deny All bar when more than one pending action — first option used for Allow All", () => {
-    const actions: PendingAction[] = [
-      { id: "a1", type: "approval", title: "Action 1", options: [] },
-      { id: "a2", type: "approval", title: "Action 2", options: [] },
-    ];
-    // Allow All clicks the first option for each action
-    const allowAllOptions = actions.map((action) => actionDisplayOptions(action, t)[0]);
-    expect(allowAllOptions).toEqual(["Allow", "Allow"]);
-  });
-
-  it("does not show Allow All bar for single pending action — single action uses direct button", () => {
-    const actions: PendingAction[] = [
-      { id: "a1", type: "approval", title: "Only action", options: [] },
-    ];
-    // With a single action, bulk bar should not render (length <= 1)
-    expect(actions.length > 1).toBe(false);
-    // The action still has valid options for direct buttons
-    expect(actionDisplayOptions(actions[0], t)).toEqual(["Allow", "Deny"]);
-  });
-
-  it("calls onRespond with correct option — Deny All uses the last option", () => {
+  it("calls onRespond with correct option — uses the last option for deny", () => {
     const action: PendingAction = {
       id: "a1",
       type: "single_choice",
       title: "Pick",
       options: ["Yes", "Maybe", "No"],
     };
-    const opts = actionDisplayOptions(action, t);
+    const opts = actionDisplayOptions(action);
     // Deny All uses opts[opts.length - 1]
     expect(opts[opts.length - 1]).toBe("No");
-  });
-});
-
-describe("actionDisplayChoices", () => {
-  const t = (key: string) => {
-    const map: Record<string, string> = {
-      "session.action.allow": "允许",
-      "session.action.deny": "拒绝",
-    };
-    return map[key] ?? key;
-  };
-
-  it("keeps localized approval labels separate from stable response values", () => {
-    const action: PendingAction = {
-      id: "a1",
-      type: "approval",
-      title: "Approve?",
-      options: [],
-    };
-
-    expect(actionDisplayChoices(action, t)).toEqual([
-      { label: "允许", value: "Allow" },
-      { label: "拒绝", value: "Deny" },
-    ]);
   });
 });
 
 describe("pendingEyebrow", () => {
   const t = (key: string) => {
     const map: Record<string, string> = {
-      "session.pending.approval": "Awaiting decision",
       "session.pending.single_choice": "Awaiting selection",
       "session.pending.multi_choice": "Awaiting selections",
       "session.pending.default": "Awaiting input",
     };
     return map[key] ?? key;
   };
-
-  it("returns the correct eyebrow label for approval actions", () => {
-    expect(pendingEyebrow("approval", t)).toBe("Awaiting decision");
-  });
 
   it("returns the correct eyebrow label for single_choice actions", () => {
     expect(pendingEyebrow("single_choice", t)).toBe("Awaiting selection");

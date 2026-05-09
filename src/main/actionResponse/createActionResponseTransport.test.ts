@@ -18,7 +18,7 @@ describe("createActionResponseTransport", () => {
     logSpy.mockRestore();
   });
 
-  it("socket mode with TCP host/port sends line terminated with newline", async () => {
+  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("socket mode with TCP host/port sends line terminated with newline", async () => {
     const server = net.createServer();
     const listenReady = new Promise<number>((resolve, reject) => {
       server.listen(0, "127.0.0.1", () => {
@@ -60,7 +60,7 @@ describe("createActionResponseTransport", () => {
     });
   });
 
-  it("socket mode with unix socket path sends line terminated with newline", async () => {
+  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("socket mode with unix socket path sends line terminated with newline", async () => {
     const sockPath = path.join(os.tmpdir(), `codepal-ar-test-${Date.now()}.sock`);
     try {
       fs.unlinkSync(sockPath);
@@ -182,7 +182,7 @@ describe("createActionResponseTransport", () => {
     vi.useRealTimers();
   });
 
-  it("createActionResponseTransportFromResponseTarget sends via unix socket path", async () => {
+  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("createActionResponseTransportFromResponseTarget sends via unix socket path", async () => {
     const sockPath = path.join(os.tmpdir(), `codepal-ar-rt-${Date.now()}.sock`);
     try {
       fs.unlinkSync(sockPath);
@@ -226,7 +226,7 @@ describe("createActionResponseTransport", () => {
     }
   });
 
-  it("createActionResponseTransportFromResponseTarget sends via TCP host/port", async () => {
+  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("createActionResponseTransportFromResponseTarget sends via TCP host/port", async () => {
     const server = net.createServer();
     const port = await new Promise<number>((resolve, reject) => {
       server.listen(0, "127.0.0.1", () => {

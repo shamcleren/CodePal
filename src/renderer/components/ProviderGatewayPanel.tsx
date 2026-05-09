@@ -65,6 +65,7 @@ export function ProviderGatewayPanel({
 }: ProviderGatewayPanelProps) {
   const i18n = useI18n();
   const [tokenDraft, setTokenDraft] = useState("");
+  const [tokenVisible, setTokenVisible] = useState(false);
   const providerId = status?.activeProviderId ?? "";
   const canSaveToken = Boolean(providerId && tokenDraft.trim() && !tokenSaving);
 
@@ -160,11 +161,19 @@ export function ProviderGatewayPanel({
         <form className="provider-gateway-panel__token-form" onSubmit={handleTokenSubmit}>
           <input
             className="provider-gateway-panel__token-input"
-            type="password"
+            type={tokenVisible ? "text" : "password"}
             value={tokenDraft}
             placeholder={i18n.t("providerGateway.token.placeholder")}
             onChange={(event) => setTokenDraft(event.currentTarget.value)}
           />
+          <button
+            type="button"
+            className="provider-gateway-panel__token-toggle"
+            onClick={() => setTokenVisible((v) => !v)}
+            aria-label={tokenVisible ? i18n.t("providerGateway.token.hide") : i18n.t("providerGateway.token.show")}
+          >
+            {tokenVisible ? i18n.t("providerGateway.token.hide") : i18n.t("providerGateway.token.show")}
+          </button>
           <button
             type="submit"
             className="integration-panel__refresh"

@@ -62,6 +62,16 @@ export function UpdatePanel({
             <div className="update-panel__notes-body">{releaseNotes}</div>
           </div>
         ) : null}
+        {phase === "available" ? (
+          <button
+            type="button"
+            className="update-panel__skip-link"
+            disabled={busy}
+            onClick={onSkip}
+          >
+            {t("update.skip")}
+          </button>
+        ) : null}
       </div>
       <div className="display-panel__actions">
         <button
@@ -90,16 +100,6 @@ export function UpdatePanel({
             onClick={onInstall}
           >
             {t("update.install")}
-          </button>
-        ) : null}
-        {phase === "available" ? (
-          <button
-            type="button"
-            className="integration-panel__refresh integration-panel__refresh--secondary"
-            disabled={busy}
-            onClick={onSkip}
-          >
-            {t("update.skip")}
           </button>
         ) : null}
         {phase === "skipped" ? (

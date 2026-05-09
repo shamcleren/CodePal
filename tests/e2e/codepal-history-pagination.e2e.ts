@@ -6,7 +6,12 @@ import { createHistoryStore } from "../../src/main/history/historyStore";
 import type { ActivityItem } from "../../src/shared/sessionTypes";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
 import { launchCodePal } from "./helpers/launchCodePal";
+import { canListen } from "./helpers/probeNetwork";
 import { sendStatusChange } from "./helpers/sendStatusChange";
+
+test.beforeEach(async () => {
+  if (!(await canListen())) test.skip();
+});
 
 const SESSION_ID = "history-pagination-session";
 

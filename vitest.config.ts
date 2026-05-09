@@ -4,5 +4,6 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    globalSetup: ["./vitest.globalSetup.ts"],
   },
 });

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { inflateSync } from "node:zlib";
@@ -86,7 +87,7 @@ describe("icon assets", () => {
   });
 
   it.skipIf(process.platform !== "darwin")("ships a valid macOS iconset inside build/icon.icns", () => {
-    const tempDir = fs.mkdtempSync(path.join("/tmp", "codepal-icon-assets-"));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-icon-assets-"));
     const outputDir = path.join(tempDir, "icon.iconset");
 
     execFileSync("iconutil", [

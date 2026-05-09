@@ -18,7 +18,7 @@ function waitMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-describe("createIpcHub", () => {
+describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("createIpcHub", () => {
   let hub: ReturnType<typeof createIpcHub>;
   let port: number;
 

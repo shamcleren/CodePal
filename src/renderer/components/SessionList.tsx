@@ -70,6 +70,19 @@ export function SessionList({
     });
   }, []);
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && expandedSessionId) {
+        const target = e.target as HTMLElement;
+        if (target.closest('[role="dialog"]')) return;
+        e.preventDefault();
+        setExpandedSessionId(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [expandedSessionId]);
+
   const prevPendingCounts = useRef<Record<string, number>>({});
   useEffect(() => {
     for (const session of sessions) {
