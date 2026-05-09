@@ -714,23 +714,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!settingsOpen) {
-      return;
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeSettingsDrawer();
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [settingsOpen]);
-
-  useEffect(() => {
     if (cursorDashboardLoading || cursorDashboardDiagnostics?.state !== "connected") {
       return;
     }

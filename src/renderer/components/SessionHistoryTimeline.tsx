@@ -477,6 +477,7 @@ export function SessionHistoryTimeline({
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [summaryCopied, setSummaryCopied] = useState(false);
   const [jumpError, setJumpError] = useState<string | null>(null);
+  const jumpErrorTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [localUserMessages, setLocalUserMessages] = useState<ActivityItem[]>([]);
 
   const mergedItemsBase = useMemo(
@@ -652,12 +653,19 @@ export function SessionHistoryTimeline({
   }
 
   async function handleJumpToOriginalTool() {
+    if (jumpErrorTimerRef.current != null) {
+      window.clearTimeout(jumpErrorTimerRef.current);
+      jumpErrorTimerRef.current = null;
+    }
     setJumpError(null);
     const result = await window.codepal.jumpToSessionTarget(session.externalApproval?.jumpTarget);
     if (!result.ok) {
       const msg = i18n.t("session.externalApproval.jumpError");
       setJumpError(msg);
-      window.setTimeout(() => setJumpError(null), 3000);
+      jumpErrorTimerRef.current = window.setTimeout(() => {
+        setJumpError(null);
+        jumpErrorTimerRef.current = null;
+      }, 3000);
     }
   }
 
