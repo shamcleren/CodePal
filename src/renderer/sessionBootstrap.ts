@@ -4,8 +4,8 @@ import type { MonitorSessionRow } from "./monitorSession";
 import { sessionRecordToRow } from "./sessionRows";
 
 export function compareMonitorSessionRows(a: MonitorSessionRow, b: MonitorSessionRow): number {
-  const aUserTs = a.lastUserMessageAt ?? Number.NEGATIVE_INFINITY;
-  const bUserTs = b.lastUserMessageAt ?? Number.NEGATIVE_INFINITY;
+  const aUserTs = a.lastUserMessageAt ?? a.updatedAt;
+  const bUserTs = b.lastUserMessageAt ?? b.updatedAt;
   if (aUserTs !== bUserTs) {
     return bUserTs - aUserTs;
   }

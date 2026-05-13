@@ -1151,8 +1151,8 @@ export function createSessionStore(options?: SessionStoreOptions) {
         .filter((session) => !shouldHideNoiseSession(session))
         .filter((session) => !shouldHideCodeBuddyDuplicateShell(session, allSessions))
         .sort((a, b) => {
-          const aUserTs = a.lastUserMessageAt ?? Number.NEGATIVE_INFINITY;
-          const bUserTs = b.lastUserMessageAt ?? Number.NEGATIVE_INFINITY;
+          const aUserTs = a.lastUserMessageAt ?? a.updatedAt;
+          const bUserTs = b.lastUserMessageAt ?? b.updatedAt;
           if (aUserTs !== bUserTs) {
             return bUserTs - aUserTs;
           }

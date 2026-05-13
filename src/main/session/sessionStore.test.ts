@@ -60,7 +60,7 @@ describe("createSessionStore", () => {
     });
   });
 
-  it("returns sessions ordered by most recent user message time before updatedAt", () => {
+  it("returns sessions ordered by lastUserMessageAt then updatedAt, falling back to updatedAt when no user message", () => {
     const store = createSessionStore();
 
     store.applyEvent({
@@ -103,9 +103,9 @@ describe("createSessionStore", () => {
     });
 
     expect(store.getSessions().map((session) => session.id)).toEqual([
+      "fallback-newer",
       "user-newest",
       "user-older",
-      "fallback-newer",
     ]);
   });
 
