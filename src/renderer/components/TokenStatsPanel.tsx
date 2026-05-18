@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DailyTokenStats, ModelTokenStats, ModelPricing, TokenStatsResult } from "../../shared/usageTypes";
 import { useI18n } from "../i18n";
+import { buildTokenReport } from "../tokenReport";
 
 type RangePreset = "today" | "7d" | "30d";
 
@@ -48,6 +49,7 @@ export function TokenStatsPanel() {
   const [range, setRange] = useState<RangePreset>("7d");
   const [data, setData] = useState<TokenStatsResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [reportCopied, setReportCopied] = useState(false);
 
   const fetchData = useCallback(async (preset: RangePreset) => {
     setLoading(true);
@@ -63,6 +65,28 @@ export function TokenStatsPanel() {
   useEffect(() => {
     void fetchData(range);
   }, [range, fetchData]);
+
+  const handleGenerateReport = useCallback(async () => {
+    const { start, end } = resolveRange(range);
+    const startDate = new Date(start).toISOString().slice(0, 10);
+    const endDate = new Date(end).toISOString().slice(0, 10);
+    const [tokenResult, sessionStats] = await Promise.all([
+      window.codepal.getTokenStats(start, end),
+      window.codepal.getSessionStats(start, end),
+    ]);
+    const report = buildTokenReport({
+      rangeLabel: range,
+      startDate,
+      endDate,
+      sessionStats,
+      daily: tokenResult.daily,
+      byModel: tokenResult.byModel,
+      pricing: tokenResult.pricing,
+    });
+    await window.codepal.writeClipboardText(report);
+    setReportCopied(true);
+    window.setTimeout(() => setReportCopied(false), 1500);
+  }, [range]);
 
   const pricingMap = new Map<string, ModelPricing>();
   for (const p of data?.pricing ?? []) {
@@ -134,7 +158,6 @@ export function TokenStatsPanel() {
           onClick={() => void fetchData(range)}
           disabled={loading}
           style={{
-            marginLeft: "auto",
             padding: "4px 8px",
             borderRadius: "6px",
             border: "none",
@@ -146,6 +169,21 @@ export function TokenStatsPanel() {
           }}
         >
           {loading ? "..." : "↻"}
+        </button>
+        <button
+          onClick={() => void handleGenerateReport()}
+          style={{
+            padding: "4px 10px",
+            borderRadius: "6px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "12px",
+            fontWeight: 500,
+            background: "var(--color-surface-secondary, #f3f4f6)",
+            color: reportCopied ? "var(--color-success, #10b981)" : "var(--color-text-secondary, #6b7280)",
+          }}
+        >
+          {reportCopied ? i18n.t("tokenStats.reportCopied") : i18n.t("tokenStats.generateReport")}
         </button>
       </div>
 

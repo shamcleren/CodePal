@@ -416,6 +416,8 @@ const ZH_CN_MESSAGES: MessageDictionary = {
   "tokenStats.model": "模型",
   "tokenStats.cost": "费用",
   "tokenStats.empty": "当前时间范围内无 token 使用数据。运行 Claude Code 或 Codex session 后数据将自动采集。",
+  "tokenStats.generateReport": "生成报告",
+  "tokenStats.reportCopied": "已复制！",
 };
 
 const EN_MESSAGES: MessageDictionary = {
@@ -830,6 +832,8 @@ const EN_MESSAGES: MessageDictionary = {
   "tokenStats.model": "Model",
   "tokenStats.cost": "Cost",
   "tokenStats.empty": "No token usage data in the selected range. Data is collected automatically when you run Claude Code or Codex sessions.",
+  "tokenStats.generateReport": "Generate Report",
+  "tokenStats.reportCopied": "Copied!",
 };
 
 const MESSAGES: Record<ResolvedLocale, MessageDictionary> = {

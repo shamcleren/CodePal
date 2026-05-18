@@ -139,6 +139,12 @@ export interface TokenStatsRange {
   end: number;
 }
 
+export interface SessionStatsEntry {
+  agent: string;
+  status: string;
+  count: number;
+}
+
 export interface TokenStatsResult {
   daily: DailyTokenStats[];
   byModel: ModelTokenStats[];

@@ -23,7 +23,7 @@ import type {
 } from "../shared/historyTypes";
 import type { SessionJumpTarget, SessionRecord } from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
-import type { UsageOverview, TokenStatsResult, ModelPricing } from "../shared/usageTypes";
+import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry } from "../shared/usageTypes";
 import type {
   ProviderGatewayClientSetupResult,
   ProviderGatewayClientSetupTarget,
@@ -37,6 +37,7 @@ export type CodePalApi = {
   onSessions: (handler: (sessions: SessionRecord[]) => void) => () => void;
   getUsageOverview: () => Promise<UsageOverview>;
   getTokenStats: (startMs: number, endMs: number, agent?: string) => Promise<TokenStatsResult>;
+  getSessionStats: (startMs: number, endMs: number) => Promise<SessionStatsEntry[]>;
   getModelPricing: () => Promise<ModelPricing[]>;
   upsertModelPricing: (pricing: ModelPricing) => Promise<void>;
   getAppSettings: () => Promise<AppSettings>;

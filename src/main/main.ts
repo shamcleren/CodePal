@@ -226,6 +226,10 @@ function wireActionResponseIpc(
     if (!currentHistoryStore) return;
     currentHistoryStore.upsertModelPricing(pricing);
   });
+  ipcMain.handle("codepal:get-session-stats", (_event, startMs: number, endMs: number) => {
+    if (!currentHistoryStore) return [];
+    return currentHistoryStore.getSessionStats(startMs, endMs);
+  });
   ipcMain.handle("codepal:get-app-settings", () => settingsService.getSettings());
   ipcMain.handle("codepal:get-home-dir", () => app.getPath("home"));
   ipcMain.handle("codepal:reload-app-settings", () => {

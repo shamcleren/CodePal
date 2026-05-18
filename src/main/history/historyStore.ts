@@ -379,6 +379,17 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     ORDER BY totalTokens DESC
   `);
 
+  const sessionStatsStmt = db.prepare(`
+    SELECT
+      tool AS agent,
+      status,
+      COUNT(*) AS count
+    FROM sessions
+    WHERE updated_at >= ? AND updated_at < ?
+    GROUP BY tool, status
+    ORDER BY count DESC
+  `);
+
   const modelPricingStmt = db.prepare(`SELECT * FROM model_pricing ORDER BY model_id ASC`);
   const upsertModelPricingStmt = db.prepare(`
     INSERT INTO model_pricing (model_id, display_name, input_per_million, output_per_million, cache_read_per_million, cache_creation_per_million)
@@ -612,6 +623,18 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }));
   }
 
+  function getSessionStats(
+    startMs: number,
+    endMs: number,
+  ): Array<{ agent: string; status: string; count: number }> {
+    assertOpen();
+    return sessionStatsStmt.all(startMs, endMs) as Array<{
+      agent: string;
+      status: string;
+      count: number;
+    }>;
+  }
+
   function getModelPricing(): ModelPricing[] {
     assertOpen();
     const rows = modelPricingStmt.all() as Array<{
@@ -768,6 +791,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     writeTokenUsage,
     getTokenUsageDailyStats,
     getTokenUsageByModel,
+    getSessionStats,
     getModelPricing,
     upsertModelPricing,
   };
