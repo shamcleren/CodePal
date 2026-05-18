@@ -4,13 +4,14 @@ import type { SessionEvent } from "../session/sessionStore";
 import { ACTIVE_SESSION_STALENESS_MS } from "../session/sessionStore";
 import { normalizeCodexLogEvent } from "../../adapters/codex/normalizeCodexLogEvent";
 import { isSessionStatus } from "../../shared/sessionTypes";
-import type { UsageSnapshot } from "../../shared/usageTypes";
+import type { UsageSnapshot, TokenUsageWrite } from "../../shared/usageTypes";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
 
 type CodexSessionWatcherOptions = {
   sessionsRoot: string;
   onEvent: (event: SessionEvent) => void;
   onUsageSnapshot?: (snapshot: UsageSnapshot) => void;
+  onTokenUsage?: (entry: TokenUsageWrite) => void;
   pollIntervalMs?: number;
   initialBootstrapLookbackMs?: number;
 };
@@ -107,7 +108,7 @@ function pickRateLimit(snapshot: Record<string, unknown>): UsageSnapshot["rateLi
   };
 }
 
-function usageSnapshotFromLine(line: string, sourcePath: string): UsageSnapshot | null {
+function usageSnapshotFromLine(line: string, sourcePath: string): { snapshot: UsageSnapshot; tokenWrite: TokenUsageWrite } | null {
   const entry = parseLine(line);
   if (!entry || entry.type !== "event_msg") {
     return null;
@@ -139,35 +140,52 @@ function usageSnapshotFromLine(line: string, sourcePath: string): UsageSnapshot 
     payload.rate_limits && typeof payload.rate_limits === "object"
       ? (payload.rate_limits as Record<string, unknown>)
       : {};
+  const timestamp = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : Date.now();
+  const inputTokens = numberValue(preferredUsage.input_tokens);
+  const outputTokens = numberValue(preferredUsage.output_tokens);
+  const cachedInput = numberValue(preferredUsage.cached_input_tokens);
+  const reasoningOutput = numberValue(preferredUsage.reasoning_output_tokens);
+
   return {
-    agent: "codex",
-    sessionId,
-    source: "session-derived",
-    updatedAt: typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : Date.now(),
-    tokens: {
-      input: numberValue(preferredUsage.input_tokens),
-      output: numberValue(preferredUsage.output_tokens),
-      total: totalTokens,
-      cachedInput: numberValue(preferredUsage.cached_input_tokens),
-      reasoningOutput: numberValue(preferredUsage.reasoning_output_tokens),
-    },
-    context:
-      totalTokens !== undefined && modelContextWindow !== undefined
-        ? {
-            used: totalTokens,
-            max: modelContextWindow,
-            percent: (totalTokens / modelContextWindow) * 100,
-          }
-        : modelContextWindow !== undefined
-          ? { max: modelContextWindow }
+    snapshot: {
+      agent: "codex",
+      sessionId,
+      source: "session-derived",
+      updatedAt: timestamp,
+      tokens: {
+        input: inputTokens,
+        output: outputTokens,
+        total: totalTokens,
+        cachedInput,
+        reasoningOutput,
+      },
+      context:
+        totalTokens !== undefined && modelContextWindow !== undefined
+          ? {
+              used: totalTokens,
+              max: modelContextWindow,
+              percent: (totalTokens / modelContextWindow) * 100,
+            }
+          : modelContextWindow !== undefined
+            ? { max: modelContextWindow }
+            : undefined,
+      rateLimit: pickRateLimit(rateLimits),
+      meta:
+        Object.keys(totalUsage).length > 0
+          ? {
+              totalTokenUsage: totalUsage,
+            }
           : undefined,
-    rateLimit: pickRateLimit(rateLimits),
-    meta:
-      Object.keys(totalUsage).length > 0
-        ? {
-            totalTokenUsage: totalUsage,
-          }
-        : undefined,
+    },
+    tokenWrite: {
+      sessionId,
+      agent: "codex",
+      timestamp,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens: cachedInput,
+      reasoningTokens: reasoningOutput,
+    },
   };
 }
 
@@ -215,9 +233,10 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
           continue;
         }
       }
-      const usageSnapshot = usageSnapshotFromLine(trimmed, filePath);
-      if (usageSnapshot) {
-        options.onUsageSnapshot?.(usageSnapshot);
+      const usageResult = usageSnapshotFromLine(trimmed, filePath);
+      if (usageResult) {
+        options.onUsageSnapshot?.(usageResult.snapshot);
+        options.onTokenUsage?.(usageResult.tokenWrite);
       }
       const normalized = normalizeCodexLogEvent(trimmed, filePath);
       if (!normalized || !isSessionStatus(normalized.status)) continue;

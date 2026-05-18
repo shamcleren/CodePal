@@ -57,6 +57,7 @@ describe("sessionWatchersBootstrap", () => {
         sessionsRoot: string;
         onEvent: (event: SessionEvent) => void;
         onUsageSnapshot: (snapshot: unknown) => void;
+        onTokenUsage?: (entry: unknown) => void;
       }) => {
         options.onEvent(codexEvent);
         options.onUsageSnapshot({ kind: "codex" });
@@ -68,6 +69,7 @@ describe("sessionWatchersBootstrap", () => {
         projectsRoot: string;
         onEvent: (event: SessionEvent) => void;
         onUsageSnapshot: (snapshot: unknown) => void;
+        onTokenUsage?: (entry: unknown) => void;
       }) => {
         options.onEvent(claudeEvent);
         options.onUsageSnapshot({ kind: "claude" });

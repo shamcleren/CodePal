@@ -5,7 +5,7 @@ import { createJetBrainsSessionWatcher } from "./jetbrains/jetbrainsSessionWatch
 import type { createIntegrationService } from "./integrations/integrationService";
 import type { SessionEvent } from "./session/sessionStore";
 import type { createSessionStore } from "./session/sessionStore";
-import type { UsageSnapshot } from "../shared/usageTypes";
+import type { UsageSnapshot, TokenUsageWrite } from "../shared/usageTypes";
 import type { createUsageStore } from "./usage/usageStore";
 
 type SessionStoreLike = Pick<ReturnType<typeof createSessionStore>, "applyEvent">;
@@ -29,6 +29,7 @@ type StartSessionWatchersOptions = {
   broadcastSessions: () => void;
   broadcastUsageOverview: () => void;
   onSessionEventAccepted?: (event: SessionEvent) => void;
+  writeTokenUsage?: (entry: TokenUsageWrite) => void;
   createCodexSessionWatcher?: typeof createCodexSessionWatcher;
   createClaudeSessionWatcher?: typeof createClaudeSessionWatcher;
   createCodeBuddySessionWatcher?: typeof createCodeBuddySessionWatcher;
@@ -106,6 +107,7 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
         ),
       onUsageSnapshot: (snapshot) =>
         routeUsageSnapshot(options.usageStore, options.broadcastUsageOverview, snapshot),
+      onTokenUsage: options.writeTokenUsage,
     }),
     claude: makeClaudeWatcher({
       projectsRoot:
@@ -120,6 +122,7 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
         ),
       onUsageSnapshot: (snapshot) =>
         routeUsageSnapshot(options.usageStore, options.broadcastUsageOverview, snapshot),
+      onTokenUsage: options.writeTokenUsage,
     }),
     codeBuddy: makeCodeBuddyWatcher({
       projectsRoot:

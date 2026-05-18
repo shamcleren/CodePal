@@ -25,7 +25,7 @@ import type {
 import type { SessionRecord } from "../../shared/sessionTypes";
 import type { SessionJumpTarget } from "../../shared/sessionTypes";
 import type { AppUpdateState } from "../../shared/updateTypes";
-import type { UsageOverview } from "../../shared/usageTypes";
+import type { UsageOverview, TokenStatsResult, ModelPricing } from "../../shared/usageTypes";
 import type {
   ProviderGatewayClientSetupResult,
   ProviderGatewayClientSetupTarget,
@@ -55,6 +55,15 @@ contextBridge.exposeInMainWorld("codepal", {
   },
   getUsageOverview() {
     return ipcRenderer.invoke("codepal:get-usage-overview") as Promise<UsageOverview>;
+  },
+  getTokenStats(startMs: number, endMs: number, agent?: string) {
+    return ipcRenderer.invoke("codepal:get-token-stats", startMs, endMs, agent) as Promise<TokenStatsResult>;
+  },
+  getModelPricing() {
+    return ipcRenderer.invoke("codepal:get-model-pricing") as Promise<ModelPricing[]>;
+  },
+  upsertModelPricing(pricing: ModelPricing) {
+    return ipcRenderer.invoke("codepal:upsert-model-pricing", pricing) as Promise<void>;
   },
   getAppSettings() {
     return ipcRenderer.invoke("codepal:get-app-settings") as Promise<AppSettings>;

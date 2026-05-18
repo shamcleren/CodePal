@@ -4,13 +4,14 @@ import { normalizeClaudeLogEvent } from "../../adapters/claude/normalizeClaudeLo
 import type { SessionEvent } from "../session/sessionStore";
 import { ACTIVE_SESSION_STALENESS_MS } from "../session/sessionStore";
 import { isSessionStatus, type ActivityItem } from "../../shared/sessionTypes";
-import type { UsageSnapshot } from "../../shared/usageTypes";
+import type { UsageSnapshot, TokenUsageWrite } from "../../shared/usageTypes";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
 
 type ClaudeSessionWatcherOptions = {
   projectsRoot: string;
   onEvent: (event: SessionEvent) => void;
   onUsageSnapshot?: (snapshot: UsageSnapshot) => void;
+  onTokenUsage?: (entry: TokenUsageWrite) => void;
   pollIntervalMs?: number;
   initialBootstrapLookbackMs?: number;
 };
@@ -69,7 +70,7 @@ function numberValue(value: unknown): number | undefined {
 function extractUsageSnapshot(
   line: string,
   sourcePath: string,
-): UsageSnapshot | null {
+): { snapshot: UsageSnapshot; tokenWrite: TokenUsageWrite } | null {
   const entry = parseLine(line);
   if (!entry || entry.type !== "assistant") {
     return null;
@@ -90,26 +91,40 @@ function extractUsageSnapshot(
   const input = numberValue(usage.input_tokens);
   const output = numberValue(usage.output_tokens);
   const cachedInput = numberValue(usage.cache_read_input_tokens);
+  const cacheCreation = numberValue(usage.cache_creation_input_tokens);
   const total =
     input !== undefined || output !== undefined || cachedInput !== undefined
       ? (input ?? 0) + (output ?? 0) + (cachedInput ?? 0)
       : undefined;
+  const model = typeof message?.model === "string" ? message.model : undefined;
+  const timestamp = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : Date.now();
 
   return {
-    agent: "claude",
-    sessionId,
-    source: "session-derived",
-    updatedAt:
-      typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : Date.now(),
-    ...(typeof message?.model === "string" ? { title: message.model } : {}),
-    tokens: {
-      input,
-      output,
-      total,
-      cachedInput,
+    snapshot: {
+      agent: "claude",
+      sessionId,
+      source: "session-derived",
+      updatedAt: timestamp,
+      ...(model ? { title: model } : {}),
+      tokens: {
+        input,
+        output,
+        total,
+        cachedInput,
+      },
+      meta: {
+        ...(model ? { model } : {}),
+      },
     },
-    meta: {
-      ...(typeof message?.model === "string" ? { model: message.model } : {}),
+    tokenWrite: {
+      sessionId,
+      agent: "claude",
+      model,
+      timestamp,
+      inputTokens: input,
+      outputTokens: output,
+      cacheReadTokens: cachedInput,
+      cacheCreationTokens: cacheCreation,
     },
   };
 }
@@ -201,9 +216,10 @@ export function createClaudeSessionWatcher(options: ClaudeSessionWatcherOptions)
         }
       }
 
-      const usageSnapshot = extractUsageSnapshot(trimmed, filePath);
-      if (usageSnapshot) {
-        options.onUsageSnapshot?.(usageSnapshot);
+      const usageResult = extractUsageSnapshot(trimmed, filePath);
+      if (usageResult) {
+        options.onUsageSnapshot?.(usageResult.snapshot);
+        options.onTokenUsage?.(usageResult.tokenWrite);
       }
 
       const normalized = normalizeClaudeLogEvent(trimmed, filePath);

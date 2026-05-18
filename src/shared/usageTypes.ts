@@ -89,3 +89,58 @@ export interface UsageOverview {
   summary: UsageOverviewSummary;
   sessions: SessionUsage[];
 }
+
+export interface TokenUsageWrite {
+  sessionId: string;
+  agent: string;
+  model?: string;
+  timestamp: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  reasoningTokens?: number;
+}
+
+export interface DailyTokenStats {
+  date: string;
+  agent: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  reasoningTokens: number;
+  totalTokens: number;
+  requestCount: number;
+}
+
+export interface ModelTokenStats {
+  model: string;
+  agent: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  totalTokens: number;
+  requestCount: number;
+}
+
+export interface ModelPricing {
+  modelId: string;
+  displayName: string;
+  inputPerMillion: string;
+  outputPerMillion: string;
+  cacheReadPerMillion: string;
+  cacheCreationPerMillion: string;
+}
+
+export interface TokenStatsRange {
+  start: number;
+  end: number;
+}
+
+export interface TokenStatsResult {
+  daily: DailyTokenStats[];
+  byModel: ModelTokenStats[];
+  pricing: ModelPricing[];
+}

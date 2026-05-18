@@ -3,6 +3,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { HistoryDiagnostics, SessionHistoryPage, SessionHistoryPageRequest } from "../../shared/historyTypes";
 import type { ActivityItem } from "../../shared/sessionTypes";
+import type { DailyTokenStats, ModelPricing, ModelTokenStats, TokenUsageWrite } from "../../shared/usageTypes";
 
 const DEFAULT_PAGE_LIMIT = 100;
 const MAX_PAGE_LIMIT = 200;
@@ -101,6 +102,7 @@ function deleteOrphanSessions(db: DatabaseSync) {
     DELETE FROM sessions
     WHERE id NOT IN (SELECT DISTINCT session_id FROM session_activity_items)
       AND id NOT IN (SELECT DISTINCT session_id FROM session_event_debug)
+      AND id NOT IN (SELECT DISTINCT session_id FROM token_usage)
   `);
 }
 
@@ -163,7 +165,58 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       ON session_activity_items (session_id, item_id);
     CREATE INDEX IF NOT EXISTS idx_session_event_debug_session_timestamp
       ON session_event_debug (session_id, timestamp DESC, id DESC);
+
+    CREATE TABLE IF NOT EXISTS token_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      agent TEXT NOT NULL,
+      model TEXT,
+      timestamp INTEGER NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+      cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+      reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_token_usage_ts
+      ON token_usage (timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_token_usage_agent_ts
+      ON token_usage (agent, timestamp DESC);
+
+    CREATE TABLE IF NOT EXISTS model_pricing (
+      model_id TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL,
+      input_per_million TEXT NOT NULL,
+      output_per_million TEXT NOT NULL,
+      cache_read_per_million TEXT NOT NULL DEFAULT '0',
+      cache_creation_per_million TEXT NOT NULL DEFAULT '0'
+    );
   `);
+
+  // Seed default model pricing (upsert so user edits survive)
+  const seedPricing = db.prepare(`
+    INSERT INTO model_pricing (model_id, display_name, input_per_million, output_per_million, cache_read_per_million, cache_creation_per_million)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(model_id) DO NOTHING
+  `);
+  const DEFAULT_PRICING: Array<[string, string, string, string, string, string]> = [
+    ["claude-opus-4-7", "Claude Opus 4.7", "5", "25", "0.50", "6.25"],
+    ["claude-opus-4-6-20260206", "Claude Opus 4.6", "5", "25", "0.50", "6.25"],
+    ["claude-sonnet-4-6-20260217", "Claude Sonnet 4.6", "3", "15", "0.30", "3.75"],
+    ["claude-opus-4-5-20251101", "Claude Opus 4.5", "5", "25", "0.50", "6.25"],
+    ["claude-sonnet-4-5-20250929", "Claude Sonnet 4.5", "3", "15", "0.30", "3.75"],
+    ["claude-haiku-4-5-20251001", "Claude Haiku 4.5", "1", "5", "0.10", "1.25"],
+    ["claude-opus-4-20250514", "Claude Opus 4", "15", "75", "1.50", "18.75"],
+    ["claude-sonnet-4-20250514", "Claude Sonnet 4", "3", "15", "0.30", "3.75"],
+    ["claude-3-5-haiku-20241022", "Claude 3.5 Haiku", "0.80", "4", "0.08", "1"],
+    ["claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet", "3", "15", "0.30", "3.75"],
+    ["codex-default", "Codex (default)", "3", "15", "0.30", "0"],
+  ];
+  for (const row of DEFAULT_PRICING) {
+    seedPricing.run(...row);
+  }
 
   function assertOpen() {
     if (isClosed) {
@@ -279,6 +332,64 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   `);
   const deleteActivityBySeqStmt = db.prepare(`DELETE FROM session_activity_items WHERE insert_seq = ?`);
   const deleteDebugByIdStmt = db.prepare(`DELETE FROM session_event_debug WHERE id = ?`);
+
+  // Token usage statements
+  const insertTokenUsageStmt = db.prepare(`
+    INSERT INTO token_usage (session_id, agent, model, timestamp, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, reasoning_tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const deleteTokenUsageBeforeStmt = db.prepare(`DELETE FROM token_usage WHERE timestamp < ?`);
+  const oldestTokenUsageRowsStmt = db.prepare(`
+    SELECT id FROM token_usage ORDER BY timestamp ASC, id ASC LIMIT ?
+  `);
+  const deleteTokenUsageByIdStmt = db.prepare(`DELETE FROM token_usage WHERE id = ?`);
+
+  const dailyStatsStmt = db.prepare(`
+    SELECT
+      date(timestamp / 1000, 'unixepoch', 'localtime') AS date,
+      agent,
+      SUM(input_tokens) AS inputTokens,
+      SUM(output_tokens) AS outputTokens,
+      SUM(cache_read_tokens) AS cacheReadTokens,
+      SUM(cache_creation_tokens) AS cacheCreationTokens,
+      SUM(reasoning_tokens) AS reasoningTokens,
+      SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) AS totalTokens,
+      COUNT(*) AS requestCount
+    FROM token_usage
+    WHERE timestamp >= ? AND timestamp < ?
+      AND (? IS NULL OR agent = ?)
+    GROUP BY date, agent
+    ORDER BY date ASC, agent ASC
+  `);
+
+  const modelStatsStmt = db.prepare(`
+    SELECT
+      COALESCE(model, 'unknown') AS model,
+      agent,
+      SUM(input_tokens) AS inputTokens,
+      SUM(output_tokens) AS outputTokens,
+      SUM(cache_read_tokens) AS cacheReadTokens,
+      SUM(cache_creation_tokens) AS cacheCreationTokens,
+      SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) AS totalTokens,
+      COUNT(*) AS requestCount
+    FROM token_usage
+    WHERE timestamp >= ? AND timestamp < ?
+      AND (? IS NULL OR agent = ?)
+    GROUP BY model, agent
+    ORDER BY totalTokens DESC
+  `);
+
+  const modelPricingStmt = db.prepare(`SELECT * FROM model_pricing ORDER BY model_id ASC`);
+  const upsertModelPricingStmt = db.prepare(`
+    INSERT INTO model_pricing (model_id, display_name, input_per_million, output_per_million, cache_read_per_million, cache_creation_per_million)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(model_id) DO UPDATE SET
+      display_name = excluded.display_name,
+      input_per_million = excluded.input_per_million,
+      output_per_million = excluded.output_per_million,
+      cache_read_per_million = excluded.cache_read_per_million,
+      cache_creation_per_million = excluded.cache_creation_per_million
+  `);
 
   function getDiagnostics(): HistoryDiagnostics {
     assertOpen();
@@ -418,9 +529,125 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }));
   }
 
+  function writeTokenUsage(entry: TokenUsageWrite) {
+    assertOpen();
+    insertTokenUsageStmt.run(
+      entry.sessionId,
+      entry.agent,
+      entry.model ?? null,
+      entry.timestamp,
+      entry.inputTokens ?? 0,
+      entry.outputTokens ?? 0,
+      entry.cacheReadTokens ?? 0,
+      entry.cacheCreationTokens ?? 0,
+      entry.reasoningTokens ?? 0,
+    );
+  }
+
+  function getTokenUsageDailyStats(
+    startMs: number,
+    endMs: number,
+    agent?: string,
+  ): DailyTokenStats[] {
+    assertOpen();
+    const rows = dailyStatsStmt.all(
+      startMs,
+      endMs,
+      agent ?? null,
+      agent ?? null,
+    ) as Array<{
+      date: string;
+      agent: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      reasoningTokens: number;
+      totalTokens: number;
+      requestCount: number;
+    }>;
+    return rows.map((row) => ({
+      date: row.date,
+      agent: row.agent,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      cacheReadTokens: row.cacheReadTokens,
+      cacheCreationTokens: row.cacheCreationTokens,
+      reasoningTokens: row.reasoningTokens,
+      totalTokens: row.totalTokens,
+      requestCount: row.requestCount,
+    }));
+  }
+
+  function getTokenUsageByModel(
+    startMs: number,
+    endMs: number,
+    agent?: string,
+  ): ModelTokenStats[] {
+    assertOpen();
+    const rows = modelStatsStmt.all(
+      startMs,
+      endMs,
+      agent ?? null,
+      agent ?? null,
+    ) as Array<{
+      model: string;
+      agent: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      totalTokens: number;
+      requestCount: number;
+    }>;
+    return rows.map((row) => ({
+      model: row.model,
+      agent: row.agent,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      cacheReadTokens: row.cacheReadTokens,
+      cacheCreationTokens: row.cacheCreationTokens,
+      totalTokens: row.totalTokens,
+      requestCount: row.requestCount,
+    }));
+  }
+
+  function getModelPricing(): ModelPricing[] {
+    assertOpen();
+    const rows = modelPricingStmt.all() as Array<{
+      model_id: string;
+      display_name: string;
+      input_per_million: string;
+      output_per_million: string;
+      cache_read_per_million: string;
+      cache_creation_per_million: string;
+    }>;
+    return rows.map((row) => ({
+      modelId: row.model_id,
+      displayName: row.display_name,
+      inputPerMillion: row.input_per_million,
+      outputPerMillion: row.output_per_million,
+      cacheReadPerMillion: row.cache_read_per_million,
+      cacheCreationPerMillion: row.cache_creation_per_million,
+    }));
+  }
+
+  function upsertModelPricing(pricing: ModelPricing) {
+    assertOpen();
+    upsertModelPricingStmt.run(
+      pricing.modelId,
+      pricing.displayName,
+      pricing.inputPerMillion,
+      pricing.outputPerMillion,
+      pricing.cacheReadPerMillion,
+      pricing.cacheCreationPerMillion,
+    );
+  }
+
   function clearAll(): HistoryDiagnostics {
     assertOpen();
     db.exec(`
+      DELETE FROM token_usage;
       DELETE FROM session_event_debug;
       DELETE FROM session_activity_items;
       DELETE FROM sessions;
@@ -440,6 +667,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     try {
       deleteActivityBeforeStmt.run(retentionCutoff);
       deleteDebugBeforeStmt.run(retentionCutoff);
+      deleteTokenUsageBeforeStmt.run(retentionCutoff);
       deleteOrphanSessions(db);
       upsertMetaStmt.run(LAST_CLEANUP_AT_KEY, String(now()));
       db.exec("COMMIT");
@@ -472,21 +700,37 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         trimmed = true;
       } else {
         const oldestDebugRows = oldestDebugRowsStmt.all(200) as Array<{ id: number }>;
-        if (oldestDebugRows.length === 0) {
-          break;
-        }
-        db.exec("BEGIN");
-        try {
-          for (const row of oldestDebugRows) {
-            deleteDebugByIdStmt.run(row.id);
+        if (oldestDebugRows.length > 0) {
+          db.exec("BEGIN");
+          try {
+            for (const row of oldestDebugRows) {
+              deleteDebugByIdStmt.run(row.id);
+            }
+            deleteOrphanSessions(db);
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
           }
-          deleteOrphanSessions(db);
-          db.exec("COMMIT");
-        } catch (error) {
-          db.exec("ROLLBACK");
-          throw error;
+          trimmed = true;
+        } else {
+          const oldestTokenRows = oldestTokenUsageRowsStmt.all(200) as Array<{ id: number }>;
+          if (oldestTokenRows.length === 0) {
+            break;
+          }
+          db.exec("BEGIN");
+          try {
+            for (const row of oldestTokenRows) {
+              deleteTokenUsageByIdStmt.run(row.id);
+            }
+            deleteOrphanSessions(db);
+            db.exec("COMMIT");
+          } catch (error) {
+            db.exec("ROLLBACK");
+            throw error;
+          }
+          trimmed = true;
         }
-        trimmed = true;
       }
 
       checkpointWal("TRUNCATE");
@@ -521,5 +765,10 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     clearAll,
     runCleanup,
     close,
+    writeTokenUsage,
+    getTokenUsageDailyStats,
+    getTokenUsageByModel,
+    getModelPricing,
+    upsertModelPricing,
   };
 }

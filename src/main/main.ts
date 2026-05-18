@@ -210,6 +210,22 @@ function wireActionResponseIpc(
   ipcMain.handle("codepal:get-usage-overview", () => {
     return usageStore.getOverview();
   });
+  ipcMain.handle("codepal:get-token-stats", (_event, startMs: number, endMs: number, agent?: string) => {
+    if (!currentHistoryStore) return { daily: [], byModel: [], pricing: [] };
+    return {
+      daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs, agent),
+      byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs, agent),
+      pricing: currentHistoryStore.getModelPricing(),
+    };
+  });
+  ipcMain.handle("codepal:get-model-pricing", () => {
+    if (!currentHistoryStore) return [];
+    return currentHistoryStore.getModelPricing();
+  });
+  ipcMain.handle("codepal:upsert-model-pricing", (_event, pricing) => {
+    if (!currentHistoryStore) return;
+    currentHistoryStore.upsertModelPricing(pricing);
+  });
   ipcMain.handle("codepal:get-app-settings", () => settingsService.getSettings());
   ipcMain.handle("codepal:get-home-dir", () => app.getPath("home"));
   ipcMain.handle("codepal:reload-app-settings", () => {
@@ -908,6 +924,15 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
             persistenceEnabled: settingsService.getSettings().history.persistenceEnabled,
           });
         },
+        writeTokenUsage: historyStore
+          ? (entry) => {
+              try {
+                historyStore!.writeTokenUsage(entry);
+              } catch (error) {
+                console.error("[CodePal] Failed to persist token usage:", (error as Error).message);
+              }
+            }
+          : undefined,
       });
       const cachedClaudeRateLimitSnapshot = usageSnapshotCache.loadClaudeRateLimitSnapshot();
       if (cachedClaudeRateLimitSnapshot) {

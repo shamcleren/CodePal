@@ -15,6 +15,7 @@ import { CodeBuddyQuotaPanel } from "./components/CodeBuddyQuotaPanel";
 import { ClaudeQuotaPanel } from "./components/ClaudeQuotaPanel";
 import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
+import { TokenStatsPanel } from "./components/TokenStatsPanel";
 import { MainUpdateButton } from "./components/MainUpdateButton";
 import { NotificationPreferencesPanel } from "./components/NotificationPreferencesPanel";
 import { ProviderGatewayPanel } from "./components/ProviderGatewayPanel";
@@ -1052,6 +1053,7 @@ export function App() {
               ) : null}
               {activeSettingsSection === "usage" ? (
                 <div className="settings-stack settings-stack--usage">
+                  <TokenStatsPanel />
                   <ClaudeQuotaPanel
                     overview={usageOverview}
                     diagnostics={claudeQuotaDiagnostics}
