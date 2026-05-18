@@ -484,6 +484,69 @@ describe("createHistoryStore", () => {
     });
   });
 
+  describe("getSessionStats", () => {
+    it("returns session counts grouped by tool and status", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      store = createHistoryStore({ dbPath });
+
+      store.writeSessionEvent({
+        session: { id: "s1", tool: "claude", status: "completed", updatedAt: 100, hasPendingActions: false },
+        activityItems: [],
+      });
+      store.writeSessionEvent({
+        session: { id: "s2", tool: "claude", status: "completed", updatedAt: 200, hasPendingActions: false },
+        activityItems: [],
+      });
+      store.writeSessionEvent({
+        session: { id: "s3", tool: "claude", status: "running", updatedAt: 300, hasPendingActions: false },
+        activityItems: [],
+      });
+      store.writeSessionEvent({
+        session: { id: "s4", tool: "codex", status: "completed", updatedAt: 400, hasPendingActions: false },
+        activityItems: [],
+      });
+
+      const stats = store.getSessionStats(0, 1000);
+
+      expect(stats).toEqual(
+        expect.arrayContaining([
+          { agent: "claude", status: "completed", count: 2 },
+          { agent: "claude", status: "running", count: 1 },
+          { agent: "codex", status: "completed", count: 1 },
+        ]),
+      );
+      expect(stats).toHaveLength(3);
+    });
+
+    it("filters by time range", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      store = createHistoryStore({ dbPath });
+
+      store.writeSessionEvent({
+        session: { id: "old", tool: "claude", status: "completed", updatedAt: 50, hasPendingActions: false },
+        activityItems: [],
+      });
+      store.writeSessionEvent({
+        session: { id: "new", tool: "claude", status: "running", updatedAt: 300, hasPendingActions: false },
+        activityItems: [],
+      });
+
+      const stats = store.getSessionStats(100, 1000);
+
+      expect(stats).toEqual([{ agent: "claude", status: "running", count: 1 }]);
+    });
+
+    it("returns empty array when no sessions exist", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      store = createHistoryStore({ dbPath });
+
+      expect(store.getSessionStats(0, 1000)).toEqual([]);
+    });
+  });
+
   it("exposes close so callers can tear down and reopen cleanly", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
     const dbPath = path.join(tmpDir, "history.sqlite");
