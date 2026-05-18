@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import net from "node:net";
 import { createIpcHub } from "./ipcHub";
 
+const describeIfTcpListen = describe.skipIf(process.env.CODEPAL_TEST_CAN_LISTEN_TCP === "0");
+
 function connectAndWrite(port: number, lines: string[]): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ port, host: "127.0.0.1" }, () => {
@@ -18,7 +20,7 @@ function waitMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("createIpcHub", () => {
+describeIfTcpListen("createIpcHub", () => {
   let hub: ReturnType<typeof createIpcHub>;
   let port: number;
 

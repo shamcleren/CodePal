@@ -2,6 +2,7 @@ import net from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { startTcpListener } from "./startTcpListener";
 
+const itIfTcpListen = it.skipIf(process.env.CODEPAL_TEST_CAN_LISTEN_TCP === "0");
 const servers: net.Server[] = [];
 
 function createServer() {
@@ -36,8 +37,8 @@ afterEach(async () => {
   );
 });
 
-describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("startTcpListener", () => {
-  it("starts listening on a free port", async () => {
+describe("startTcpListener", () => {
+  itIfTcpListen("starts listening on a free port", async () => {
     const server = createServer();
     const freePort = await listenEphemeral(createServer());
     // Release the port so startTcpListener can bind it; this avoids
@@ -57,7 +58,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("startTcpListener", ()
     });
   });
 
-  it("reports an existing CodePal instance when the port is occupied", async () => {
+  itIfTcpListen("reports an existing CodePal instance when the port is occupied", async () => {
     const occupied = createServer();
     const port = await listenEphemeral(occupied);
     const server = createServer();

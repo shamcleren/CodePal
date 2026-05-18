@@ -9,6 +9,11 @@ import {
   createActionResponseTransportFromResponseTarget,
 } from "./createActionResponseTransport";
 
+const itIfTcpListen = it.skipIf(process.env.CODEPAL_TEST_CAN_LISTEN_TCP === "0");
+const itIfUnixListen = it.skipIf(
+  process.platform === "win32" || process.env.CODEPAL_TEST_CAN_LISTEN_UNIX === "0",
+);
+
 describe("createActionResponseTransport", () => {
   it("default mode logs action_response line via console.log", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -18,7 +23,7 @@ describe("createActionResponseTransport", () => {
     logSpy.mockRestore();
   });
 
-  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("socket mode with TCP host/port sends line terminated with newline", async () => {
+  itIfTcpListen("socket mode with TCP host/port sends line terminated with newline", async () => {
     const server = net.createServer();
     const listenReady = new Promise<number>((resolve, reject) => {
       server.listen(0, "127.0.0.1", () => {
@@ -60,7 +65,7 @@ describe("createActionResponseTransport", () => {
     });
   });
 
-  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("socket mode with unix socket path sends line terminated with newline", async () => {
+  itIfUnixListen("socket mode with unix socket path sends line terminated with newline", async () => {
     const sockPath = path.join(os.tmpdir(), `codepal-ar-test-${Date.now()}.sock`);
     try {
       fs.unlinkSync(sockPath);
@@ -182,7 +187,7 @@ describe("createActionResponseTransport", () => {
     vi.useRealTimers();
   });
 
-  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("createActionResponseTransportFromResponseTarget sends via unix socket path", async () => {
+  itIfUnixListen("createActionResponseTransportFromResponseTarget sends via unix socket path", async () => {
     const sockPath = path.join(os.tmpdir(), `codepal-ar-rt-${Date.now()}.sock`);
     try {
       fs.unlinkSync(sockPath);
@@ -226,7 +231,7 @@ describe("createActionResponseTransport", () => {
     }
   });
 
-  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("createActionResponseTransportFromResponseTarget sends via TCP host/port", async () => {
+  itIfTcpListen("createActionResponseTransportFromResponseTarget sends via TCP host/port", async () => {
     const server = net.createServer();
     const port = await new Promise<number>((resolve, reject) => {
       server.listen(0, "127.0.0.1", () => {

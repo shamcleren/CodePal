@@ -8,6 +8,14 @@ import { stringifyActionResponsePayload } from "../../shared/actionResponsePaylo
 import { createBlockingHookCollector, runBlockingHookFromRaw } from "./blockingHookBridge";
 import { buildActionResponseLine, sendEventLine } from "./sendEventBridge";
 
+const canTcpListen = process.env.CODEPAL_TEST_CAN_LISTEN_TCP !== "0";
+const canUnixListen = process.env.CODEPAL_TEST_CAN_LISTEN_UNIX !== "0";
+const canAnyLocalListen = canTcpListen || canUnixListen;
+const describeIfTcpListen = describe.skipIf(!canTcpListen);
+const itIfTcpListen = it.skipIf(!canTcpListen);
+const itIfAnyLocalListen = it.skipIf(process.platform === "win32" || !canAnyLocalListen);
+const itIfUnixListen = it.skipIf(process.platform === "win32" || !canUnixListen);
+
 describe("buildActionResponseLine", () => {
   it("matches main-process stringifyActionResponsePayload", () => {
     expect(buildActionResponseLine("s1", "a1", "OK")).toBe(
@@ -16,7 +24,7 @@ describe("buildActionResponseLine", () => {
   });
 });
 
-describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (TCP)", () => {
+describeIfTcpListen("sendEventLine (TCP)", () => {
   it("writes one newline-terminated JSON line to the hub", async () => {
     const onMessage = vi.fn();
     const { server } = createIpcHub(onMessage);
@@ -54,8 +62,8 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (TCP)",
   });
 });
 
-describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (unix socket)", () => {
-  it.skipIf(process.platform === "win32")(
+describe("sendEventLine (unix socket)", () => {
+  itIfUnixListen(
     "writes one line when CODEPAL_SOCKET_PATH is set",
     async () => {
       const socketPath = join(os.tmpdir(), `codepal-bridge-ts-${Date.now()}.sock`);
@@ -96,7 +104,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (unix s
 });
 
 describe("runBlockingHookFromRaw", () => {
-  it.skipIf(process.platform === "win32" || process.env.VITEST_CAN_LISTEN === "false")(
+  itIfAnyLocalListen(
     "dispose rejects a pending collector linePromise",
     async () => {
       const collector = await createBlockingHookCollector(5_000);
@@ -122,7 +130,7 @@ describe("runBlockingHookFromRaw", () => {
     await expect(runBlockingHookFromRaw("   ")).rejects.toThrow("missing payload");
   });
 
-  it.runIf(process.env.VITEST_CAN_LISTEN !== "false")("without valid pendingAction sends like sendEventLine and returns undefined", async () => {
+  itIfTcpListen("without valid pendingAction sends like sendEventLine and returns undefined", async () => {
     const onMessage = vi.fn();
     const { server } = createIpcHub(onMessage);
     await new Promise<void>((resolve, reject) => {
@@ -155,7 +163,7 @@ describe("runBlockingHookFromRaw", () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
-  it.skipIf(process.platform === "win32" || process.env.VITEST_CAN_LISTEN === "false")(
+  itIfTcpListen(
     "with valid pendingAction injects responseTarget and resolves first action_response line",
     async () => {
       const onMessage = vi.fn((line: string) => {
@@ -230,7 +238,7 @@ describe("runBlockingHookFromRaw", () => {
     },
   );
 
-  it.skipIf(process.platform === "win32" || process.env.VITEST_CAN_LISTEN === "false")(
+  itIfAnyLocalListen(
     "cleans up the collector when sendEventLine fails in blocking mode",
     async () => {
       let responseSocketPath = "";
@@ -280,7 +288,7 @@ describe("runBlockingHookFromRaw", () => {
     },
   );
 
-  it.skipIf(process.platform === "win32" || process.env.VITEST_CAN_LISTEN === "false")(
+  itIfTcpListen(
     "handshake times out when the hub accepts but never parses the event (half-alive CodePal)",
     async () => {
       // Stand up a raw TCP server that accepts the connection but never reads

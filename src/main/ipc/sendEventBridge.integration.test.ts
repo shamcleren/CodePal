@@ -6,6 +6,11 @@ import { stringifyActionResponsePayload } from "../../shared/actionResponsePaylo
 import { buildActionResponseLine, sendEventLine } from "../hook/sendEventBridge";
 import { createIpcHub } from "./ipcHub";
 
+const describeIfTcpListen = describe.skipIf(process.env.CODEPAL_TEST_CAN_LISTEN_TCP === "0");
+const itIfUnixListen = it.skipIf(
+  process.platform === "win32" || process.env.CODEPAL_TEST_CAN_LISTEN_UNIX === "0",
+);
+
 describe("buildActionResponseLine (sendEventBridge)", () => {
   it("matches main-process stringifyActionResponsePayload", () => {
     expect(buildActionResponseLine("s1", "a1", "OK")).toBe(
@@ -14,7 +19,7 @@ describe("buildActionResponseLine (sendEventBridge)", () => {
   });
 });
 
-describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (TCP)", () => {
+describeIfTcpListen("sendEventLine (TCP)", () => {
   it("writes one newline-terminated JSON line to the hub", async () => {
     const onMessage = vi.fn();
     const { server } = createIpcHub(onMessage);
@@ -48,8 +53,8 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (TCP)",
   });
 });
 
-describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("sendEventLine (unix socket)", () => {
-  it.skipIf(process.platform === "win32")(
+describe("sendEventLine (unix socket)", () => {
+  itIfUnixListen(
     "writes one line when CODEPAL_SOCKET_PATH is set",
     async () => {
       const socketPath = join(os.tmpdir(), `codepal-bridge-${Date.now()}.sock`);

@@ -1,4 +1,6 @@
 import http from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { normalizeAppSettings } from "../../shared/appSettings";
 import { createClaudeDesktopGatewayServer, runProviderHealthCheck } from "./claudeDesktopGateway";
@@ -9,28 +11,78 @@ type FetchCall = {
   init: RequestInit;
 };
 
-const servers: http.Server[] = [];
+class TestServerResponse {
+  statusCode = 200;
+  private readonly headers = new Headers();
+  private readonly chunks: Buffer[] = [];
+  private ended = false;
+  private resolve!: (response: Response) => void;
+  private reject!: (error: Error) => void;
+  readonly done: Promise<Response>;
 
-function closeServer(server: http.Server): Promise<void> {
-  return new Promise((resolve) => {
-    if (!server.listening) {
-      resolve();
+  constructor() {
+    this.done = new Promise((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+  }
+
+  setHeader(name: string, value: number | string | string[]) {
+    this.headers.set(name, Array.isArray(value) ? value.join(", ") : String(value));
+  }
+
+  getHeader(name: string) {
+    return this.headers.get(name) ?? undefined;
+  }
+
+  writeHead(statusCode: number, headers?: Record<string, number | string | string[]>) {
+    this.statusCode = statusCode;
+    for (const [name, value] of Object.entries(headers ?? {})) {
+      this.setHeader(name, value);
+    }
+  }
+
+  write(chunk: string | Uint8Array) {
+    this.chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    return true;
+  }
+
+  end(chunk?: string | Uint8Array) {
+    if (this.ended) {
       return;
     }
-    server.close(() => resolve());
-  });
+    if (chunk) {
+      this.write(chunk);
+    }
+    this.ended = true;
+    this.resolve(new Response(Buffer.concat(this.chunks), {
+      status: this.statusCode,
+      headers: this.headers,
+    }));
+  }
+
+  destroy(error?: Error) {
+    this.reject(error ?? new Error("Gateway response destroyed"));
+  }
 }
 
-async function listen(server: http.Server): Promise<string> {
-  servers.push(server);
-  await new Promise<void>((resolve) => {
-    server.listen(0, "127.0.0.1", () => resolve());
-  });
-  const address = server.address();
-  if (!address || typeof address === "string") {
-    throw new Error("expected tcp address");
-  }
-  return `http://127.0.0.1:${address.port}`;
+function createRequest(path: string, init: RequestInit = {}): IncomingMessage {
+  const body = typeof init.body === "string" ? [Buffer.from(init.body)] : [];
+  const request = Readable.from(body) as IncomingMessage;
+  request.method = init.method ?? "GET";
+  request.url = path;
+  request.headers = Object.fromEntries(new Headers(init.headers).entries());
+  return request;
+}
+
+async function requestGateway(
+  server: http.Server,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const response = new TestServerResponse();
+  server.emit("request", createRequest(path, init), response as unknown as ServerResponse);
+  return response.done;
 }
 
 function createTestGateway(options: {
@@ -54,17 +106,14 @@ function createTestGateway(options: {
   });
 }
 
-afterEach(async () => {
-  await Promise.all(servers.splice(0).map(closeServer));
+afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gateway", () => {
   it("returns Anthropic-style model ids from the active provider mapping", async () => {
     const server = createTestGateway({ token: "secret" });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/models`);
+    const response = await requestGateway(server, "/v1/models");
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -140,9 +189,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     }) as typeof fetch;
     const log = vi.fn();
     const server = createTestGateway({ token: "top-secret-token", fetchImpl, log });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+    const response = await requestGateway(server, "/v1/messages", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -189,9 +236,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       });
     }) as typeof fetch;
     const server = createTestGateway({ token: "top-secret-token", fetchImpl });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+    const response = await requestGateway(server, "/v1/messages", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -226,9 +271,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       });
     }) as typeof fetch;
     const server = createTestGateway({ token: "top-secret-token", fetchImpl });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+    const response = await requestGateway(server, "/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -247,9 +290,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
   it("rejects unknown models before calling upstream", async () => {
     const fetchImpl = vi.fn() as unknown as typeof fetch;
     const server = createTestGateway({ token: "secret", fetchImpl });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+    const response = await requestGateway(server, "/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -273,9 +314,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
   it("returns a sanitized configuration error when the provider token is missing", async () => {
     const fetchImpl = vi.fn() as unknown as typeof fetch;
     const server = createTestGateway({ token: "", fetchImpl });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+    const response = await requestGateway(server, "/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -311,9 +350,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     }) as typeof fetch;
     const log = vi.fn();
     const server = createTestGateway({ token: "top-secret-token", fetchImpl, log });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/responses`, {
+    const response = await requestGateway(server, "/v1/responses", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -391,9 +428,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       });
     }) as typeof fetch;
     const server = createTestGateway({ token: "secret", fetchImpl });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/responses`, {
+    const response = await requestGateway(server, "/v1/responses", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -417,9 +452,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
   it("returns OpenAI-style errors for unsupported Codex Responses models", async () => {
     const fetchImpl = vi.fn() as unknown as typeof fetch;
     const server = createTestGateway({ token: "secret", fetchImpl });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/responses`, {
+    const response = await requestGateway(server, "/v1/responses", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -443,9 +476,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
   it("answers count_tokens locally when the upstream provider does not expose that endpoint", async () => {
     const fetchImpl = vi.fn() as unknown as typeof fetch;
     const server = createTestGateway({ token: "secret", fetchImpl });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/messages/count_tokens`, {
+    const response = await requestGateway(server, "/v1/messages/count_tokens", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -478,9 +509,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       });
     }) as typeof fetch;
     const server = createTestGateway({ token: "secret", fetchImpl });
-    const baseUrl = await listen(server);
-
-    const response = await fetch(`${baseUrl}/v1/messages`, {
+    const response = await requestGateway(server, "/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
