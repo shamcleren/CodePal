@@ -85,6 +85,8 @@ describe("ProviderGatewayPanel", () => {
     expect(html).toContain("http://127.0.0.1:15721/v1");
     expect(html).toContain("Codex Desktop setup");
     expect(html).toContain("Copy config");
+    expect(html).toContain("Claude model");
+    expect(html).toContain("Upstream model");
     expect(html).toContain("anthropic/MiMo-V2.5-Pro");
     expect(html).toContain("mimo-v2.5-pro");
     expect(html).toContain("local-proxy");

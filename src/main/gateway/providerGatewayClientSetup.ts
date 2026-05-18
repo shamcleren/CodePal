@@ -142,6 +142,21 @@ function findClaudeConfigPath(homeDir: string, status: ProviderGatewayStatus): s
   return existingCodepalConfig ?? path.join(configDir, `${randomUUID()}.json`);
 }
 
+function claudeCoworkEgressAllowedHosts(status: ProviderGatewayStatus): string[] {
+  const hosts = new Set<string>();
+  try {
+    const gatewayUrl = new URL(status.claudeDesktop.baseUrl);
+    if (gatewayUrl.hostname) {
+      hosts.add(gatewayUrl.hostname);
+    }
+  } catch {
+    // Keep the local defaults below when the configured URL is not parseable.
+  }
+  hosts.add("127.0.0.1");
+  hosts.add("localhost");
+  return [...hosts];
+}
+
 function claudeConfigPayload(status: ProviderGatewayStatus) {
   return {
     inferenceProvider: "gateway",
@@ -150,6 +165,7 @@ function claudeConfigPayload(status: ProviderGatewayStatus) {
     inferenceGatewayAuthScheme: status.claudeDesktop.authScheme,
     disableDeploymentModeChooser: false,
     inferenceModels: status.claudeDesktop.inferenceModels,
+    coworkEgressAllowedHosts: claudeCoworkEgressAllowedHosts(status),
   };
 }
 
@@ -166,7 +182,8 @@ function isClaudeConfigCurrent(candidate: unknown, status: ProviderGatewayStatus
     object.inferenceGatewayBaseUrl === expected.inferenceGatewayBaseUrl &&
     object.inferenceGatewayApiKey === expected.inferenceGatewayApiKey &&
     object.inferenceGatewayAuthScheme === expected.inferenceGatewayAuthScheme &&
-    JSON.stringify(object.inferenceModels) === JSON.stringify(expected.inferenceModels)
+    JSON.stringify(object.inferenceModels) === JSON.stringify(expected.inferenceModels) &&
+    JSON.stringify(object.coworkEgressAllowedHosts) === JSON.stringify(expected.coworkEgressAllowedHosts)
   );
 }
 

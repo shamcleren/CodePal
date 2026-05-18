@@ -22,10 +22,11 @@ describe("providerGatewayStatus", () => {
       apiKey: "local-proxy",
       authScheme: "bearer",
       inferenceModels: [
-        "anthropic/MiMo-V2.5-Pro",
-        "anthropic/MiMo-V2.5",
-        "anthropic/MiMo-V2-Pro",
-        "anthropic/MiMo-V2-Omni",
+        "sonnet",
+        "opus",
+        "claude-sonnet-4-6",
+        "claude-opus-4-7",
+        "claude-haiku-4-5",
       ],
       setup: {
         configured: false,

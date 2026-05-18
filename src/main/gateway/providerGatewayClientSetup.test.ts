@@ -113,6 +113,7 @@ describe("provider gateway client setup", () => {
       inferenceGatewayAuthScheme: "bearer",
       disableDeploymentModeChooser: false,
       inferenceModels: ["anthropic/MiMo-V2.5-Pro"],
+      coworkEgressAllowedHosts: ["127.0.0.1", "localhost"],
     });
     const meta = JSON.parse(fs.readFileSync(path.join(configDir, "_meta.json"), "utf8"));
     expect(meta.entries).toContainEqual({ id: "existing", name: "Original Claude" });

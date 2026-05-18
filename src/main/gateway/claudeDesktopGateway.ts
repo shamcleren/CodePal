@@ -44,6 +44,7 @@ export type ProviderHealthCheckResult = {
 
 const DEFAULT_ANTHROPIC_VERSION = "2023-06-01";
 const MAX_JSON_BODY_BYTES = 64 * 1024 * 1024;
+const CLAUDE_ONE_M_MARKER = "[1m]";
 
 const defaultLogger: Logger = {
   info: (...args: unknown[]) => console.log(...args),
@@ -119,6 +120,68 @@ function listModels(provider: ProviderGatewayConfig) {
 
 function upstreamUrl(provider: ProviderGatewayConfig, path: string): string {
   return `${provider.baseUrl.replace(/\/$/, "")}${path}`;
+}
+
+function stripClaudeLocalModelMarkers(model: string): string {
+  const trimmed = model.trim();
+  if (trimmed.toLowerCase().endsWith(CLAUDE_ONE_M_MARKER)) {
+    return trimmed.slice(0, trimmed.length - CLAUDE_ONE_M_MARKER.length).trimEnd();
+  }
+  return trimmed;
+}
+
+function mappingValueForKey(
+  mappings: Record<string, string>,
+  key: string | undefined,
+): string | undefined {
+  if (!key) {
+    return undefined;
+  }
+  const exact = mappings[key];
+  if (exact) {
+    return exact;
+  }
+  const normalized = key.toLowerCase();
+  const matchedKey = Object.keys(mappings).find(
+    (candidate) => candidate.toLowerCase() === normalized,
+  );
+  return matchedKey ? mappings[matchedKey] : undefined;
+}
+
+function roleMappingKeys(model: string): string[] {
+  const normalized = model.toLowerCase();
+  if (normalized.includes("haiku")) {
+    return ["haiku", "claude-haiku-4-5"];
+  }
+  if (normalized.includes("opus")) {
+    return ["opus", "claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5"];
+  }
+  if (normalized.includes("sonnet")) {
+    return ["sonnet", "claude-sonnet-4-6", "claude-sonnet-4-5", "claude-sonnet-4"];
+  }
+  if (normalized === "default") {
+    return ["default", "sonnet", "claude-sonnet-4-6"];
+  }
+  return [];
+}
+
+function resolveUpstreamModel(
+  provider: ProviderGatewayConfig,
+  claudeModel: string,
+): string | undefined {
+  const strippedModel = stripClaudeLocalModelMarkers(claudeModel);
+  const direct = mappingValueForKey(provider.modelMappings, claudeModel) ??
+    mappingValueForKey(provider.modelMappings, strippedModel);
+  if (direct) {
+    return direct;
+  }
+  for (const key of roleMappingKeys(strippedModel)) {
+    const mapped = mappingValueForKey(provider.modelMappings, key);
+    if (mapped) {
+      return mapped;
+    }
+  }
+  return undefined;
 }
 
 function getHeader(request: IncomingMessage, name: string): string | undefined {
@@ -663,7 +726,7 @@ async function handleMessages(
       return;
     }
     claudeModel = typeof body.model === "string" ? body.model : "";
-    upstreamModel = provider.modelMappings[claudeModel] ?? "";
+    upstreamModel = resolveUpstreamModel(provider, claudeModel) ?? "";
     if (!upstreamModel) {
       const error = anthropicError(
         400,
@@ -744,7 +807,7 @@ async function handleCodexResponses(
       return;
     }
     claudeModel = typeof body.model === "string" ? body.model : "";
-    upstreamModel = provider.modelMappings[claudeModel] ?? "";
+    upstreamModel = resolveUpstreamModel(provider, claudeModel) ?? "";
     if (!upstreamModel) {
       const error = openAiError(
         400,
@@ -886,36 +949,45 @@ export async function runProviderHealthCheck(
   }
   const fetchImpl = options.fetchImpl ?? fetch;
   const models: ProviderHealthCheckResult["models"] = [];
+  const upstreamHealth = new Map<
+    string,
+    Omit<ProviderHealthCheckResult["models"][number], "claudeModel" | "upstreamModel">
+  >();
   for (const [claudeModel, upstreamModel] of Object.entries(provider.modelMappings)) {
-    try {
-      const response = await fetchImpl(upstreamUrl(provider, "/v1/messages"), {
-        method: "POST",
-        headers: {
-          ...provider.headers,
-          authorization: `Bearer ${token}`,
-          "anthropic-version": DEFAULT_ANTHROPIC_VERSION,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: upstreamModel,
-          max_tokens: 1,
-          messages: [{ role: "user", content: "." }],
-        }),
-      });
-      models.push({
-        claudeModel,
-        upstreamModel,
-        ok: response.ok,
-        status: response.status,
-      });
-    } catch (error) {
-      models.push({
-        claudeModel,
-        upstreamModel,
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    let health = upstreamHealth.get(upstreamModel);
+    if (!health) {
+      try {
+        const response = await fetchImpl(upstreamUrl(provider, "/v1/messages"), {
+          method: "POST",
+          headers: {
+            ...provider.headers,
+            authorization: `Bearer ${token}`,
+            "anthropic-version": DEFAULT_ANTHROPIC_VERSION,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: upstreamModel,
+            max_tokens: 1,
+            messages: [{ role: "user", content: "." }],
+          }),
+        });
+        health = {
+          ok: response.ok,
+          status: response.status,
+        };
+      } catch (error) {
+        health = {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+      upstreamHealth.set(upstreamModel, health);
     }
+    models.push({
+      claudeModel,
+      upstreamModel,
+      ...health,
+    });
   }
   return {
     ok: models.every((model) => model.ok),

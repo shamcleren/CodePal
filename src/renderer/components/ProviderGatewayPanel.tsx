@@ -202,6 +202,11 @@ export function ProviderGatewayPanel({
           </button>
         </div>
         <div className="provider-gateway-panel__mapping-list">
+          <div className="provider-gateway-panel__mapping-row provider-gateway-panel__mapping-row--header">
+            <span>{i18n.t("providerGateway.models.clientModel")}</span>
+            <span>{i18n.t("providerGateway.models.upstreamModel")}</span>
+            <span>{i18n.t("providerGateway.models.health")}</span>
+          </div>
           {status.modelMappings.map((mapping) => (
             <div key={mapping.claudeModel} className="provider-gateway-panel__mapping-row">
               <span className="provider-gateway-panel__value" title={mapping.claudeModel}>

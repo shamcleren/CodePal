@@ -180,6 +180,12 @@ describe("appSettings", () => {
             "anthropic/MiMo-V2.5": "mimo-v2.5",
             "anthropic/MiMo-V2-Pro": "mimo-v2-pro",
             "anthropic/MiMo-V2-Omni": "mimo-v2-omni",
+            default: "mimo-v2.5",
+            sonnet: "mimo-v2.5",
+            opus: "mimo-v2.5-pro",
+            "claude-sonnet-4-6": "mimo-v2.5",
+            "claude-opus-4-7": "mimo-v2.5-pro",
+            "claude-haiku-4-5": "mimo-v2",
           },
         },
       },
@@ -235,6 +241,36 @@ describe("appSettings", () => {
       modelMappings: {
         "anthropic/Test-Sonnet": "real-model",
       },
+    });
+  });
+
+  it("adds new Claude-safe MiMo aliases to older default provider configs", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      providerGateway: {
+        activeProvider: "mimo",
+        providers: {
+          mimo: {
+            type: "anthropic-compatible",
+            displayName: "MiMo Gateway",
+            baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
+            authScheme: "bearer",
+            tokenRef: "mimo.gateway.token",
+            envFallback: "MIMO_GATEWAY_TOKEN",
+            headers: {},
+            modelMappings: {
+              "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
+            },
+          },
+        },
+      },
+    });
+
+    expect(settings.providerGateway.providers.mimo.modelMappings).toMatchObject({
+      "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
+      "claude-sonnet-4-6": "mimo-v2.5",
+      "claude-opus-4-7": "mimo-v2.5-pro",
+      "claude-haiku-4-5": "mimo-v2",
     });
   });
 });

@@ -139,6 +139,12 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         "anthropic/MiMo-V2.5": "mimo-v2.5",
         "anthropic/MiMo-V2-Pro": "mimo-v2-pro",
         "anthropic/MiMo-V2-Omni": "mimo-v2-omni",
+        default: "mimo-v2.5",
+        sonnet: "mimo-v2.5",
+        opus: "mimo-v2.5-pro",
+        "claude-sonnet-4-6": "mimo-v2.5",
+        "claude-opus-4-7": "mimo-v2.5-pro",
+        "claude-haiku-4-5": "mimo-v2",
       },
     },
   },
@@ -437,6 +443,23 @@ function normalizeProviderConfig(
   };
 }
 
+function mergeDefaultMimoModelMappings(
+  providerId: string,
+  provider: ProviderGatewayConfig,
+): ProviderGatewayConfig {
+  if (providerId !== "mimo") {
+    return provider;
+  }
+  const defaultMappings = defaultProviderGatewaySettings.providers.mimo.modelMappings;
+  return {
+    ...provider,
+    modelMappings: {
+      ...defaultMappings,
+      ...provider.modelMappings,
+    },
+  };
+}
+
 function normalizeProviderGatewaySettings(value: unknown): ProviderGatewaySettings {
   const candidate = asRecord(value);
   if (!candidate) {
@@ -459,10 +482,16 @@ function normalizeProviderGatewaySettings(value: unknown): ProviderGatewaySettin
   const providerEntries = rawProviders
     ? Object.entries(rawProviders)
         .filter(([id]) => Boolean(id.trim()))
-        .map(([id, provider]) => [
-          id.trim(),
-          normalizeProviderConfig(provider, defaultProvider),
-        ] as const)
+        .map(([id, provider]) => {
+          const providerId = id.trim();
+          return [
+            providerId,
+            mergeDefaultMimoModelMappings(
+              providerId,
+              normalizeProviderConfig(provider, defaultProvider),
+            ),
+          ] as const;
+        })
     : [];
   const providers =
     providerEntries.length > 0

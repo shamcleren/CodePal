@@ -89,10 +89,40 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
           type: "model",
           display_name: "MiMo V2 Omni",
         },
+        {
+          id: "default",
+          type: "model",
+          display_name: "default",
+        },
+        {
+          id: "sonnet",
+          type: "model",
+          display_name: "sonnet",
+        },
+        {
+          id: "opus",
+          type: "model",
+          display_name: "opus",
+        },
+        {
+          id: "claude-sonnet-4-6",
+          type: "model",
+          display_name: "claude sonnet 4 6",
+        },
+        {
+          id: "claude-opus-4-7",
+          type: "model",
+          display_name: "claude opus 4 7",
+        },
+        {
+          id: "claude-haiku-4-5",
+          type: "model",
+          display_name: "claude haiku 4 5",
+        },
       ],
       has_more: false,
       first_id: "anthropic/MiMo-V2.5-Pro",
-      last_id: "anthropic/MiMo-V2-Omni",
+      last_id: "claude-haiku-4-5",
     });
   });
 
@@ -104,7 +134,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
         id: "msg_1",
         type: "message",
         role: "assistant",
-        model: "mimo-v2.5-pro",
+        model: "mimo-v2.5",
         content: [],
       });
     }) as typeof fetch;
@@ -144,6 +174,74 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     expect(JSON.stringify(log.mock.calls)).toContain("anthropic/MiMo-V2.5-Pro -> mimo-v2.5-pro");
     expect(JSON.stringify(log.mock.calls)).not.toContain("top-secret-token");
     expect(JSON.stringify(log.mock.calls)).not.toContain("dummy-from-claude");
+  });
+
+  it("maps Claude-safe Desktop route ids to the MiMo upstream model", async () => {
+    const calls: FetchCall[] = [];
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return Response.json({
+        id: "msg_1",
+        type: "message",
+        role: "assistant",
+        model: "mimo-v2.5-pro",
+        content: [],
+      });
+    }) as typeof fetch;
+    const server = createTestGateway({ token: "top-secret-token", fetchImpl });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer dummy-from-claude",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "." }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(String(calls[0].init.body))).toMatchObject({
+      model: "mimo-v2.5",
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      model: "claude-sonnet-4-6",
+    });
+  });
+
+  it("strips Claude local 1M markers before resolving route mappings", async () => {
+    const calls: FetchCall[] = [];
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: "", init: init ?? {} });
+      return Response.json({
+        id: "msg_1",
+        type: "message",
+        role: "assistant",
+        model: "mimo-v2.5-pro",
+        content: [],
+      });
+    }) as typeof fetch;
+    const server = createTestGateway({ token: "top-secret-token", fetchImpl });
+    const baseUrl = await listen(server);
+
+    const response = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-opus-4-7[1M]",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "." }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(String(calls[0].init.body))).toMatchObject({
+      model: "mimo-v2.5-pro",
+    });
   });
 
   it("rejects unknown models before calling upstream", async () => {
@@ -420,6 +518,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       "mimo-v2.5",
       "mimo-v2-pro",
       "mimo-v2-omni",
+      "mimo-v2",
     ]);
   });
 });

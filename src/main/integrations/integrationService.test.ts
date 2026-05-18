@@ -260,6 +260,15 @@ describe("createIntegrationService", () => {
       type: "command",
       command: `"${wrapperStatusLinePath}"`,
     });
+    expect(parsed.env).toMatchObject({
+      CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:15721",
+      ANTHROPIC_AUTH_TOKEN: "local-proxy",
+      ANTHROPIC_MODEL: "claude-sonnet-4-6",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-7",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5",
+    });
   });
 
   it("records the latest event status per agent", () => {
@@ -314,6 +323,15 @@ describe("createIntegrationService", () => {
       configPath,
       JSON.stringify(
         {
+          env: {
+            CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+            ANTHROPIC_BASE_URL: "http://127.0.0.1:15721",
+            ANTHROPIC_AUTH_TOKEN: "local-proxy",
+            ANTHROPIC_MODEL: "claude-sonnet-4-6",
+            ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
+            ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-7",
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5",
+          },
           hooks: {
             SessionStart: [
               {
@@ -408,7 +426,89 @@ describe("createIntegrationService", () => {
       checks: [
         expect.objectContaining({ id: "hooks", ok: true }),
         expect.objectContaining({ id: "statusLine", ok: true }),
+        expect.objectContaining({ id: "gatewayModelDiscovery", ok: true }),
       ],
+    });
+  });
+
+  it("reports Claude configs missing gateway model discovery env as repair needed", () => {
+    const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const wrapperHookPath = join(homeDir, ".codepal", "bin", "claude-hook");
+    const wrapperStatusLinePath = join(homeDir, ".codepal", "bin", "claude-statusline");
+    mkdirSync(dirname(wrapperHookPath), { recursive: true });
+    writeExecutable(wrapperHookPath);
+    writeExecutable(wrapperStatusLinePath);
+    mkdirSync(dirname(join(homeDir, ".codepal", "runtime", "active-codepal.env")), { recursive: true });
+    writeFileSync(
+      join(homeDir, ".codepal", "runtime", "active-codepal.env"),
+      `CODEPAL_PACKAGED=0\nCODEPAL_EXEC_PATH='${execPath}'\nCODEPAL_APP_PATH='${appPath}'\n`,
+    );
+    const configPath = join(homeDir, ".claude", "settings.json");
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          env: {
+            EXISTING_VALUE: "preserved",
+          },
+          hooks: {
+            SessionStart: [
+              {
+                matcher: "*",
+                hooks: [{ type: "command", command: `"${wrapperHookPath}"` }],
+              },
+            ],
+            UserPromptSubmit: [{ hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] }],
+            Notification: [{ hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] }],
+            Stop: [{ hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] }],
+            SessionEnd: [{ hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] }],
+          },
+          statusLine: {
+            type: "command",
+            command: `"${wrapperStatusLinePath}"`,
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: false,
+      execPath,
+      appPath,
+    });
+
+    const before = service.getDiagnostics().agents.find((agent) => agent.id === "claude");
+    expect(before).toMatchObject({
+      health: "repair_needed",
+      statusMessageKey: "integration.message.claude.missingGatewayEnv",
+      checks: expect.arrayContaining([
+        expect.objectContaining({ id: "gatewayModelDiscovery", ok: false }),
+      ]),
+    });
+
+    const result = service.installHooks("claude");
+    const after = service.getDiagnostics().agents.find((agent) => agent.id === "claude");
+    const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+
+    expect(result.changed).toBe(true);
+    expect(parsed.env).toMatchObject({
+      EXISTING_VALUE: "preserved",
+      CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:15721",
+      ANTHROPIC_AUTH_TOKEN: "local-proxy",
+      ANTHROPIC_MODEL: "claude-sonnet-4-6",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-7",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5",
+    });
+    expect(after).toMatchObject({
+      health: "active",
+      hookInstalled: true,
     });
   });
 

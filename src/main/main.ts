@@ -806,6 +806,10 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         packaged: app.isPackaged,
         execPath: process.execPath,
         appPath: resolvedAppPath,
+        getProviderGatewayBaseUrl: () => {
+          const gateway = settingsService.getSettings().providerGateway;
+          return `http://${gateway.host}:${gateway.port}`;
+        },
       });
       ensureAgentWrapperFiles(homeDir, {
         packaged: app.isPackaged,

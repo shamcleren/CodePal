@@ -31,6 +31,26 @@ function listenerStatus(input: ProviderGatewayListenerInput): ProviderGatewayLis
   };
 }
 
+function isClaudeDesktopSafeModelId(model: string): boolean {
+  const normalized = model.trim().toLowerCase();
+  return (
+    normalized === "sonnet" ||
+    normalized === "opus" ||
+    normalized === "haiku" ||
+    normalized.startsWith("claude-") ||
+    normalized.startsWith("anthropic/claude-") ||
+    normalized.startsWith("sonnet-") ||
+    normalized.startsWith("opus-") ||
+    normalized.startsWith("haiku-")
+  );
+}
+
+function claudeDesktopInferenceModels(modelMappings: Array<{ claudeModel: string }>): string[] {
+  const allModels = modelMappings.map((mapping) => mapping.claudeModel);
+  const safeModels = allModels.filter(isClaudeDesktopSafeModelId);
+  return safeModels.length > 0 ? safeModels : allModels;
+}
+
 export function buildProviderGatewayStatus(
   input: BuildProviderGatewayStatusInput,
 ): ProviderGatewayStatus {
@@ -73,7 +93,7 @@ export function buildProviderGatewayStatus(
       baseUrl: listener.localUrl,
       apiKey: "local-proxy",
       authScheme: "bearer",
-      inferenceModels: modelMappings.map((mapping) => mapping.claudeModel),
+      inferenceModels: claudeDesktopInferenceModels(modelMappings),
       setup: input.claudeDesktopSetup ?? {
         configured: false,
         restartRequired: false,
