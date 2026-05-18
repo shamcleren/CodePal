@@ -18,87 +18,47 @@ That means:
 - improve release ergonomics before scaling distribution
 - validate sustained user value before implementing paid features
 
-## v1.1.0 Planned Features
+## v1.1.0 Features — Shipped
 
-These five features define the v1.1.0 release scope. They move CodePal from monitoring-only toward lightweight interaction and awareness.
+All five original v1.1.0 features are now shipped. See individual sections for delivery details.
 
-### 1. macOS Notifications And Sounds
+### 1. macOS Notifications And Sounds — Shipped (v1.1.0)
 
-**Priority: highest — no external blockers, can start immediately.**
+Native macOS notifications and optional sounds for session state transitions. Covers: completed, waiting for decision, errored, resumed after long idle. Per-state toggle in settings, 30 s debounce to avoid duplicate storms. Notification service wired as a `sessionStore` callback so every event path gains notification support automatically.
 
-Add native macOS notifications and optional sounds for important session state transitions.
+### 2. ~~Allow (Approval Expansion)~~ — Dropped (v1.1.3)
 
-Initial candidate states:
-
-- session completed
-- session waiting for a decision
-- session errored
-- long-running session became active again
-
-Design decisions:
-
-- whether notifications are enabled by default
-- whether sounds can be disabled independently
-- which states should stay silent and only update the main panel
-- how to avoid repeated notifications when one state flickers
-
-### 2. ~~Allow (Approval Expansion)~~ — Out of Scope
-
-**Dropped as of v1.1.3.** CodePal dropped the Claude PreToolUse blocking hook and embraced dashboard-only monitoring. Approval flows remain the responsibility of each agent and its CLI; CodePal will not act as an approval intermediary.
+CodePal dropped the Claude PreToolUse blocking hook and embraced dashboard-only monitoring. Approval flows remain the responsibility of each agent and its CLI; CodePal will not act as an approval intermediary.
 
 Residual `actionResponse/` code is retained for Cursor passive observation only and should not be extended.
 
-### 3. Send Message (CodePal → Agent)
+### 3. Send Message (CodePal → Agent) — Shipped (v1.1.1, expanded v1.1.5)
 
-**Priority: medium — depends on session ownership and delivery semantics.**
+Capability-gated terminal delivery. `canReply(session)` returns true for tmux, WezTerm, kitty, iTerm2, and Ghostty; the composer is hidden for all other environments. Sender precedence: tmux > WezTerm > kitty > iTerm2 > Ghostty. This is not freeform `text_input`; scope is limited to structured message delivery into a known terminal pane.
 
-Enable outbound message delivery from CodePal to a running agent session.
+### 4. Click-To-Navigate (IDE / Terminal Jump) — Shipped (v1.1.1, expanded v1.1.5)
 
-Preconditions:
+Per-terminal precise focus dispatch. tmux: `switch-client` + `select-window`. iTerm2: AppleScript by session id. Terminal.app: AppleScript by tty. Ghostty: AppleScript activate. WezTerm: `wezterm cli activate-pane`. kitty: `kitten @ focus-window`. `open -a` remains the final fallback. JetBrains IDE workspace activation is explicitly out of scope — JetBrains sessions are monitored through the shared CodeBuddy plugin watcher, but CodePal does not attempt to focus JetBrains windows.
 
-- session ownership must be unambiguous (one CodePal panel → one agent session)
-- delivery mechanism must be reliable per agent (stdin pipe, hook response, local protocol)
-- must not interfere with the existing monitoring-first data flow
+### 5. Session Restore on App Update — Shipped (v1.1.0)
 
-This is not freeform `text_input`; scope is limited to structured message delivery to an identified running session.
+On startup, recent user-initiated sessions (last 24 hours, up to 150) are restored from SQLite history. Stale `running` / `waiting` statuses are normalized to `idle`. Live hook events always take precedence over restored state.
 
-### 4. Click-To-Navigate (IDE / Terminal Jump)
+## What's Next
 
-**Priority: lower — depends on per-agent navigation APIs.**
+With v1.1.0–v1.1.5 shipped, the near-term focus shifts to:
 
-Allow clicking a session or activity row to jump to the corresponding IDE window or terminal pane.
+### Tier 2 Agent / Terminal Expansion
 
-Preconditions:
-
-- each agent adapter must expose a way to activate its window or pane
-- Cursor and JetBrains IDEs may support window activation via CLI or AppleScript
-- terminal-based agents (Claude Code, Codex) need a reliable pane-focus mechanism
-- must degrade gracefully when navigation is unavailable
-
-### 5. Session Restore on App Update
-
-**Priority: high — directly improves update experience, no external blockers.**
-
-Restore recent sessions from SQLite history on app startup so the dashboard is not empty after an update or restart.
-
-Design decisions (resolved):
-
-- restore scope: user-initiated sessions updated within the last 24 hours, capped at 150
-- restore depth: session metadata only (activity items lazy-loaded on expand as before)
-- stale status normalization: `running` / `waiting` demoted to `idle` on restore
-- pre-install flush: history writer explicitly flushed before `quitAndInstall()` to prevent data loss
-- merge safety: live hook events always take precedence over restored state
-
-## Ongoing Priorities
-
-These continue alongside v1.1.0 feature work:
+- **Gemini CLI**: hook event shape differs (`SessionStart` / `BeforeAgent` / `AfterAgent` / `Notification`), needs a dedicated `geminiHook.ts`
+- **Kimi CLI**: payload is nearly identical to Claude but config lives in `~/.kimi/config.toml` `[[hooks]]`, needs a TOML installer
+- **Warp**: env var (`$WARP_IS_LOCAL_SHELL_SESSION`) is captured at hook time, but jump and send-message are not implemented; the Open Island approach (SQLite pane table + AX menu cycling) is complex and needs separate evaluation
 
 ### Monitoring Depth
 
 - broader Claude quota calibration beyond the current token usage and statusLine-derived `rate_limits` snapshots
 - broader Cursor real-world payload calibration
 - broader CodeBuddy payload and transcript-shape calibration
-- deeper JetBrains coverage on the shared monitoring path
 - continued signal-to-noise improvements in the activity timeline
 
 ### Distribution And Release Ergonomics
@@ -161,7 +121,7 @@ These are direction candidates, not committed SKUs.
 
 ## Longer-Term Expansion
 
-These directions are worth recording now, but they should remain explicitly behind v1.1.0 and the current monitoring-baseline work.
+These directions are worth recording now, but they should remain explicitly behind the current Tier 2 expansion and monitoring-baseline work.
 
 ### Dynamic Island / Ambient Surface
 
@@ -211,6 +171,7 @@ The recommended posture is:
 The following are attractive, but should not jump ahead of the current baseline work:
 
 - adding agent control or approval interception — CodePal is monitoring-only by design; control belongs to each agent's CLI
+- JetBrains IDE workspace activation — JetBrains sessions are monitored through the shared CodeBuddy plugin watcher, but CodePal will not attempt to focus JetBrains windows
 - expanding updater complexity before release trust and validation stay reliable
 - implementing billing before user-value retention is validated
 - overloading README or release messaging with speculative roadmap promises
@@ -219,8 +180,8 @@ The following are attractive, but should not jump ahead of the current baseline 
 
 If planning effort is limited, the recommended decision order is:
 
-1. strengthen monitoring depth
-2. keep macOS distribution trust and release ergonomics reliable
-3. improve update-state UX and recovery
+1. expand Tier 2 agent / terminal coverage (Gemini, Kimi, Warp evaluation)
+2. strengthen monitoring depth
+3. keep macOS distribution trust and release ergonomics reliable
 4. validate sustained usage patterns
 5. design paid / team expansion from real usage evidence

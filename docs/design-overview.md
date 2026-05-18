@@ -38,9 +38,15 @@ The product focus is:
 Phase 1 is explicitly not trying to deliver:
 
 - freeform `text_input`
-- a general CodePal -> agent messaging channel
-- deep IDE or terminal navigation guarantees
+- a general CodePal -> agent messaging channel (capability-gated terminal delivery is shipped for tmux / WezTerm / kitty / iTerm2 / Ghostty, but this is not a universal channel)
 - full control-loop parity across every supported agent
+
+Phase 1 now also includes:
+
+- capability-gated send-message delivery into supported terminals (v1.1.1+)
+- per-terminal precise click-to-navigate jump (v1.1.1+)
+- native macOS notifications and sounds (v1.1.0)
+- session restore from SQLite history on app restart (v1.1.0)
 
 ## Product Direction Beyond Phase 1
 
@@ -117,16 +123,15 @@ Longer-term growth here means better cross-agent control-loop coverage, not rend
 
 ### 3. Messaging Layer
 
-This layer is not part of the current Phase 1 baseline, but it is part of the broader product direction.
+This layer is now partially delivered. Outbound CodePal -> agent message delivery works for terminals that expose a reliable text-injection channel:
 
-Its goal is to support outbound CodePal -> agent message delivery when upstream tools expose safe and stable semantics for:
+- **tmux**: `send-keys -l <text>` + Enter
+- **WezTerm**: `wezterm cli send-text`
+- **kitty**: `kitten @ send-text`
+- **iTerm2**: AppleScript `write text`
+- **Ghostty**: AppleScript `input text`
 
-- session targeting
-- prompt ownership
-- message delivery acknowledgement
-- response correlation
-
-In other words, `send message` belongs to the longer-term architecture, but should not be described as already delivered.
+Delivery is capability-gated via `canReply(session)` — the composer is hidden for environments without a known channel. This is not freeform `text_input`; it is structured message delivery into a known terminal pane.
 
 ### 4. Capability Unification Layer
 

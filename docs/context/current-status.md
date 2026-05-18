@@ -19,10 +19,13 @@
 - Repository now also includes a minimal GitHub Actions CI workflow for `lint + test + build`
 - Repository now also includes a separate macOS GitHub Actions workflow for Electron E2E runs on `main` and manual dispatch
 - Release workflow validates macOS updater assets, including `latest-mac.yml`, dmg / zip artifacts, and blockmap files
-- v1.0.3 release work is complete; release-facing docs should now treat v1.0.3 as the current shipped baseline rather than pending work
-- A patch-level v1.0.5 candidate is accumulating after v1.0.3; current scope is limited to icon polish, expanded-session scroll behavior, Cursor / CodeBuddy payload calibration, CI stability, and local test-build ergonomics
-- A v1.1.0 candidate is now accumulating on top of the v1.0.5 baseline, covering macOS notifications and sounds, allow / approval expansion (Cursor + Claude Code PreToolUse), send-message CodePal → agent delivery, and click-to-navigate jump targets
-- A v1.1.1 patch candidate now sits on top of v1.1.0 and closes the two Tier 1 gaps originally deferred ("UI scaffolding only" send-message and best-effort `open -a` jump): terminal metadata is captured at hook time, send-message is capability-gated and delivers into tmux / Ghostty, and click-to-navigate dispatches per-terminal (tmux switch-client, iTerm2 by session id, Terminal.app by tty, Ghostty activate) before falling back to `open -a`
+- v1.0.3 through v1.1.5 are all shipped. Current shipped baseline is **v1.1.5**.
+- v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
+- v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
+- v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
+- v1.1.3 shipped: removed Claude PreToolUse blocking hook, CodePal is now dashboard-only for Claude approval
+- v1.1.4 shipped: Qoder / Qwen / Factory agent support, dashboard polish from dogfood pass
+- v1.1.5 shipped: WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix, E2E stability
 
 ## What Already Exists
 
@@ -227,34 +230,22 @@ npm run dist:mac
 - freeform `text_input`
 - moving control-loop UX back onto the main dashboard path
 
-### v1.1.0 Shipped
+### v1.1.0–v1.1.5 Shipped
 
-The following v1.1.0 features are now landed against the original roadmap scope in `docs/roadmap-next.md`:
+All v1.1.x releases are shipped. See individual release notes for details:
 
-- macOS notifications and sounds — shipped
-- Allow / approval expansion — shipped for agents with upstream approval hooks (Cursor + Claude Code PreToolUse with real `allow / deny` round-trip); Codex remains bounded by upstream (`notify` is completion-only), CodeBuddy keeps heuristic external-approval surfacing until upstream exposes a structured approval payload
-- Send message / CodePal → agent delivery — **UI scaffolding only** in v1.1.0; no agent has a reachable inbound channel yet, so the composer does not round-trip. Capability-gated terminal delivery (tmux / Ghostty) is delivered in the v1.1.1 patch
-- Click-to-navigate / IDE jump — shared jump-target metadata now flows through external-approval and related session events, and the initial v1.1.0 implementation uses `open -a` as a best-effort activation. Precise per-terminal focus (tmux switch-client, iTerm2 by session id, Terminal.app by tty, Ghostty activate) is delivered in the v1.1.1 patch
-
-The remaining agent-specific approval / delivery gaps are explicit upstream-bounded work and are not treated as v1.1.0 release blockers.
-
-### v1.1.1 Shipped
-
-- Terminal metadata capture at hook time (agent wrapper reads `$TTY`, `$TERM_PROGRAM`, `$ITERM_SESSION_ID`, `$TMUX` / `$TMUX_PANE`, `$GHOSTTY_RESOURCES_DIR`, etc., and `sendEventLine` stamps `meta.terminal` onto every event). `SessionRecord.terminalContext` is merged field-by-field so transient env drops do not clobber the last good snapshot
-- Send-message capability-gated delivery: tmux (`send-keys -l <text>` + Enter, with optional `-S socket`) and Ghostty (AppleScript activate + `System Events` keystroke + Return, best-effort, first use triggers macOS Automation permission). Other terminals hide the composer entirely
-- Precise click-to-navigate dispatch: tmux `switch-client` + `select-window`, iTerm2 AppleScript by session id, Terminal.app AppleScript by tty, Ghostty `activate`; `open -a` remains the final fallback
-- Removed the `--codepal-hook keep-alive` subcommand, `keepAliveHook` module, `SessionRecord.hasInputChannel`, `setInputChannel`, and two coupled e2e specs (`codepal-keepalive.e2e.ts`, `codepal-send-message.e2e.ts`). `ipcHub.sendMessageToSession` is retained on the hub for a future IPC fallback but is no longer wired into the UI send path
-- Composer gating moved to a shared `canReply(session)` helper (tmux pane present, or Ghostty with a known `terminalSessionId`); `SessionMessageInput` no longer carries `hasInputChannel` or the "not connected to …" placeholder
+- `docs/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
+- `docs/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
+- `docs/release-notes-v1.1.2.md` — blocking-hook TTL fix, sendEventLine handshake
+- `docs/release-notes-v1.1.3.md` — removed Claude PreToolUse blocking hook, dashboard-only for Claude approval
+- `docs/release-notes-v1.1.4.md` — Qoder / Qwen / Factory agent support, dashboard polish
+- `docs/release-notes-v1.1.5.md` — WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix
 
 ## Next-Step Pointer
 
 For release-facing and forward-looking work, use:
 
 - `docs/context/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
-- `docs/context/2026-04-13-post-v1.0.3-handoff.md` for the post-v1.0.3 handoff and current patch-candidate context
-- `docs/release-notes-v1.0.3.md` for release-facing summary
-- `docs/release-notes-v1.0.5.md` for the prior patch-level candidate summary
-- `docs/release-notes-v1.1.0.md` for the v1.1.0 candidate summary
-- `docs/release-notes-v1.1.1.md` (and `docs/release-notes-v1.1.1.zh-CN.md`) for the current v1.1.1 patch candidate summary while T1.1 manual verification is in progress
-- `docs/roadmap-next.md` for forward-looking prioritization
+- `docs/release-notes-v1.1.5.md` for the current shipped baseline
+- `docs/roadmap-next.md` for forward-looking prioritization (Tier 2 agent/terminal expansion, monitoring depth, product polish)
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
