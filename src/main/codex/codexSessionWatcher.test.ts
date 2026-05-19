@@ -234,10 +234,12 @@ describe("createCodexSessionWatcher", () => {
 
     const onEvent = vi.fn();
     const onUsageSnapshot = vi.fn();
+    const onTokenUsage = vi.fn();
     const watcher = createCodexSessionWatcher({
       sessionsRoot: tmpDir,
       onEvent,
       onUsageSnapshot,
+      onTokenUsage,
       initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
     });
 
@@ -285,5 +287,74 @@ describe("createCodexSessionWatcher", () => {
         }),
       }),
     );
+    expect(onTokenUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "019d5259-c667-7f20-8671-cfef325536d3",
+        agent: "codex",
+        model: undefined,
+        inputTokens: 180,
+        outputTokens: 40,
+        cacheReadTokens: 120,
+        reasoningTokens: 8,
+        sourceKind: "codex-jsonl",
+        sourceKey: "codex:019d5259-c667-7f20-8671-cfef325536d3:total:1200:120:800:20:last:300:40:120:8",
+      }),
+    );
+  });
+
+  it("does not emit duplicate token usage writes for repeated Codex snapshots", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-codex-"));
+    const sessionDir = path.join(tmpDir, "2026", "04", "03");
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const filePath = path.join(
+      sessionDir,
+      "rollout-2026-04-03T15-58-28-019d5259-c667-7f20-8671-cfef325536d3.jsonl",
+    );
+    const tokenCount = (timestamp: string) =>
+      JSON.stringify({
+        timestamp,
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: {
+              input_tokens: 1200,
+              cached_input_tokens: 800,
+              output_tokens: 120,
+              reasoning_output_tokens: 20,
+              total_tokens: 1320,
+            },
+            last_token_usage: {
+              input_tokens: 300,
+              cached_input_tokens: 120,
+              output_tokens: 40,
+              reasoning_output_tokens: 8,
+              total_tokens: 340,
+            },
+            model_context_window: 258400,
+          },
+        },
+      });
+
+    fs.writeFileSync(
+      filePath,
+      [
+        tokenCount("2026-04-03T09:58:30.686Z"),
+        tokenCount("2026-04-03T09:58:31.000Z"),
+        "",
+      ].join("\n"),
+    );
+
+    const onTokenUsage = vi.fn();
+    const watcher = createCodexSessionWatcher({
+      sessionsRoot: tmpDir,
+      onEvent: vi.fn(),
+      onTokenUsage,
+      initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
+    });
+
+    await watcher.pollOnce();
+
+    expect(onTokenUsage).toHaveBeenCalledTimes(1);
   });
 });

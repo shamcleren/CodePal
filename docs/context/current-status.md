@@ -60,7 +60,8 @@
   - release hook validates stapled DMG, refreshes dmg blockmap / `latest-mac.yml`, and rejects updater metadata whose size/hash no longer matches final artifacts.
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
-- v1.0.3 through v1.1.9 are all shipped. Current shipped baseline is **v1.1.9**.
+- v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
+- v1.0.3 through v1.1.10 are all shipped. Current shipped baseline is **v1.1.10**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -71,6 +72,7 @@
 - v1.1.7 shipped: Claude / Codex usage backfill, longer analytics retention, readable Top Sessions, and clearer compact Analytics cards
 - v1.1.8 shipped: macOS release hotfix for the v1.1.7 app bundle signature failure, plus stricter packaged-artifact validation
 - v1.1.9 shipped: legacy analytics history migration startup fix, history-disabled startup fallback, and explicit startup failure logging
+- v1.1.10 shipped: analytics duplicate cleanup, Codex token snapshot dedupe, and Codex cached-input accounting fix
 
 ## What Already Exists
 
@@ -177,7 +179,7 @@
 - Release artifacts include dmg, zip, blockmap files, and `latest-mac.yml`
 - Signed / notarized distribution is the expected public release path when Apple credentials are configured
 - v1.0.3 release assets are treated as shipped; future release work should preserve updater metadata and signing / notarization verification rather than re-describing v1.0.3 as pending
-- Current v1.1.9 local unit / lint / build / E2E / macOS packaging verification is green on 2026-05-19.
+- Current v1.1.10 local unit / lint / build verification is green on 2026-05-19.
 
 ### Pending Action Loop
 
@@ -282,9 +284,9 @@ npm run dist:mac
 - freeform `text_input`
 - moving control-loop UX back onto the main dashboard path
 
-### v1.1.0–v1.1.9 Release Track
+### v1.1.0–v1.1.10 Release Track
 
-v1.1.0 through v1.1.9 are shipped. See individual release notes for details:
+v1.1.0 through v1.1.10 are shipped. See individual release notes for details:
 
 - `docs/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -296,12 +298,13 @@ v1.1.0 through v1.1.9 are shipped. See individual release notes for details:
 - `docs/release-notes-v1.1.7.md` — Claude / Codex usage backfill, analytics retention, readable Top Sessions
 - `docs/release-notes-v1.1.8.md` — macOS launch hotfix and stricter release artifact validation
 - `docs/release-notes-v1.1.9.md` — legacy analytics history migration startup fix and history-disabled startup fallback
+- `docs/release-notes-v1.1.10.md` — analytics duplicate cleanup, Codex token snapshot dedupe, and cached-input accounting fix
 
 ## Next-Step Pointer
 
 For release-facing and forward-looking work, use:
 
 - `docs/context/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
-- `docs/release-notes-v1.1.9.md` for the v1.1.9 release
+- `docs/release-notes-v1.1.10.md` for the v1.1.10 release
 - `docs/roadmap-next.md` for forward-looking prioritization (Tier 2 agent/terminal expansion, monitoring depth, product polish)
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist

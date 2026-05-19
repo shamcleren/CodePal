@@ -6,6 +6,7 @@ import { normalizeCodexLogEvent } from "../../adapters/codex/normalizeCodexLogEv
 import { isSessionStatus } from "../../shared/sessionTypes";
 import type { UsageSnapshot, TokenUsageWrite } from "../../shared/usageTypes";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
+import { codexInputTokensForStorage, makeCodexTokenUsageSourceKey } from "./codexUsage";
 
 type CodexSessionWatcherOptions = {
   sessionsRoot: string;
@@ -145,6 +146,10 @@ function usageSnapshotFromLine(line: string, sourcePath: string, model?: string)
   const outputTokens = numberValue(preferredUsage.output_tokens);
   const cachedInput = numberValue(preferredUsage.cached_input_tokens);
   const reasoningOutput = numberValue(preferredUsage.reasoning_output_tokens);
+  const totalInputTokens = numberValue(totalUsage.input_tokens);
+  const totalOutputTokens = numberValue(totalUsage.output_tokens);
+  const totalCacheReadTokens = numberValue(totalUsage.cached_input_tokens);
+  const totalReasoningTokens = numberValue(totalUsage.reasoning_output_tokens);
 
   return {
     snapshot: {
@@ -182,12 +187,21 @@ function usageSnapshotFromLine(line: string, sourcePath: string, model?: string)
       agent: "codex",
       model,
       timestamp,
-      inputTokens,
+      inputTokens: codexInputTokensForStorage(inputTokens, cachedInput),
       outputTokens,
       cacheReadTokens: cachedInput,
       reasoningTokens: reasoningOutput,
       sourceKind: "codex-jsonl",
-      sourceKey: `codex:${sessionId}:${timestamp}:${inputTokens ?? 0}:${outputTokens ?? 0}:${cachedInput ?? 0}:${reasoningOutput ?? 0}`,
+      sourceKey: makeCodexTokenUsageSourceKey(sessionId, {
+        inputTokens,
+        outputTokens,
+        cacheReadTokens: cachedInput,
+        reasoningTokens: reasoningOutput,
+        totalInputTokens,
+        totalOutputTokens,
+        totalCacheReadTokens,
+        totalReasoningTokens,
+      }),
     },
   };
 }
@@ -204,6 +218,7 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
     options.initialBootstrapLookbackMs ?? ACTIVE_SESSION_STALENESS_MS;
   const cursors = new Map<string, FileCursor>();
   const sessionModelMap = new Map<string, string>();
+  const emittedTokenUsageSourceKeys = new Set<string>();
   const debug = process.env.CODEPAL_DEBUG_CODEX === "1";
   const scheduler = createAdaptivePollScheduler({
     poll: () => api.pollOnce(),
@@ -252,7 +267,13 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
       const usageResult = usageSnapshotFromLine(trimmed, filePath, sessionModelMap.get(sessionIdFromPath(filePath) ?? ""));
       if (usageResult) {
         options.onUsageSnapshot?.(usageResult.snapshot);
-        options.onTokenUsage?.(usageResult.tokenWrite);
+        const sourceKey = usageResult.tokenWrite.sourceKey;
+        if (!sourceKey || !emittedTokenUsageSourceKeys.has(sourceKey)) {
+          if (sourceKey) {
+            emittedTokenUsageSourceKeys.add(sourceKey);
+          }
+          options.onTokenUsage?.(usageResult.tokenWrite);
+        }
       }
       const normalized = normalizeCodexLogEvent(trimmed, filePath);
       if (!normalized || !isSessionStatus(normalized.status)) continue;

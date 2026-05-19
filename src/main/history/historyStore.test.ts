@@ -467,6 +467,99 @@ describe("createHistoryStore", () => {
     ]);
   });
 
+  it("keeps unkeyed token usage writes distinct", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath });
+
+    store.writeTokenUsage({
+      sessionId: "codebuddy-session",
+      agent: "codebuddy",
+      model: "mimo-v2.5-pro",
+      timestamp: 100,
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+    store.writeTokenUsage({
+      sessionId: "codebuddy-session",
+      agent: "codebuddy",
+      model: "mimo-v2.5-pro",
+      timestamp: 200,
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+
+    expect(store.getTokenUsageByAgent(0, 1_000, "codebuddy")).toEqual([
+      expect.objectContaining({
+        agent: "codebuddy",
+        inputTokens: 200,
+        outputTokens: 100,
+        totalTokens: 300,
+        requestCount: 2,
+      }),
+    ]);
+  });
+
+  it("removes legacy token usage rows duplicated by backfilled source-key rows", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    const legacyDb = new DatabaseSync(dbPath);
+    legacyDb.exec(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        tool TEXT NOT NULL,
+        status TEXT NOT NULL,
+        title TEXT,
+        latest_task TEXT,
+        updated_at INTEGER NOT NULL,
+        last_user_message_at INTEGER,
+        has_pending_actions INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE token_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        model TEXT,
+        timestamp INTEGER NOT NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+        cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+        reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+        source_kind TEXT,
+        source_key TEXT,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+
+      INSERT INTO sessions (id, tool, status, updated_at)
+      VALUES ('codex-session', 'codex', 'completed', 1000);
+
+      INSERT INTO token_usage (
+        session_id, agent, model, timestamp, input_tokens, output_tokens,
+        cache_read_tokens, reasoning_tokens, source_kind, source_key
+      )
+      VALUES
+        ('codex-session', 'codex', 'gpt-5.5', 1000, 300, 40, 120, 8, NULL, NULL),
+        ('codex-session', 'codex', 'gpt-5.5', 1300, 300, 40, 120, 8, 'codex-jsonl', 'codex:codex-session:stable');
+    `);
+    legacyDb.close();
+
+    store = createHistoryStore({ dbPath });
+
+    expect(store.getTokenUsageByModel(0, 2_000)).toEqual([
+      expect.objectContaining({
+        agent: "codex",
+        model: "gpt-5.5",
+        inputTokens: 180,
+        outputTokens: 40,
+        cacheReadTokens: 120,
+        totalTokens: 340,
+        requestCount: 1,
+      }),
+    ]);
+  });
+
   it("keeps analytics history when detailed session history expires", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
     const dbPath = path.join(tmpDir, "history.sqlite");

@@ -1,6 +1,6 @@
 {
   "name": "codepal",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "private": true,
   "type": "module",
   "main": "out/main/main.js",

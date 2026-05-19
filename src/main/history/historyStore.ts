@@ -21,6 +21,8 @@ const USAGE_IMPORT_COMPLETED_AT_KEY = "usageImport.completedAt";
 const USAGE_IMPORT_CLAUDE_ROWS_KEY = "usageImport.claudeRowsImported";
 const USAGE_IMPORT_CODEX_ROWS_KEY = "usageImport.codexRowsImported";
 const USAGE_IMPORT_LAST_ERROR_KEY = "usageImport.lastError";
+const CODEX_CACHED_INPUT_NORMALIZED_KEY = "usage.codexCachedInputNormalized.v1";
+const TOKEN_USAGE_SEMANTIC_CLEANUP_KEY = "usage.semanticCleanup.v1";
 const SQLITE_SIDE_FILES = ["", "-wal", "-shm"] as const;
 
 type CleanupRetention = HistoryRetentionPreset | `${number}d`;
@@ -250,6 +252,209 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       ON token_usage (agent, source_key)
       WHERE source_key IS NOT NULL
   `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_token_usage_semantic
+      ON token_usage (
+        agent, session_id, model, input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens
+      )
+  `);
+
+  const codexCachedInputNormalized = db
+    .prepare(`SELECT value FROM history_meta WHERE key = ?`)
+    .get(CODEX_CACHED_INPUT_NORMALIZED_KEY);
+  if (!codexCachedInputNormalized) {
+    db.exec(`
+      UPDATE token_usage
+      SET input_tokens = MAX(input_tokens - cache_read_tokens, 0)
+      WHERE agent = 'codex'
+        AND cache_read_tokens > 0;
+
+      INSERT INTO history_meta (key, value)
+      VALUES ('${CODEX_CACHED_INPUT_NORMALIZED_KEY}', '1')
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+    `);
+  }
+
+  const semanticCleanupCompleted = db
+    .prepare(`SELECT value FROM history_meta WHERE key = ?`)
+    .get(TOKEN_USAGE_SEMANTIC_CLEANUP_KEY);
+  if (!semanticCleanupCompleted) {
+    db.exec(`
+    DROP TABLE IF EXISTS temp_token_usage_keyed_semantic;
+    CREATE TEMP TABLE temp_token_usage_keyed_semantic AS
+      SELECT
+        agent,
+        session_id,
+        COALESCE(model, '') AS model_key,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens,
+        cache_creation_tokens,
+        reasoning_tokens
+      FROM token_usage
+      WHERE source_key IS NOT NULL
+        AND source_key != ''
+      GROUP BY agent, session_id, COALESCE(model, ''), input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens;
+    CREATE INDEX temp_token_usage_keyed_semantic_idx
+      ON temp_token_usage_keyed_semantic (
+        agent, session_id, model_key, input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens
+      );
+
+    DELETE FROM token_usage
+    WHERE id IN (
+      SELECT legacy.id
+      FROM token_usage AS legacy
+      JOIN temp_token_usage_keyed_semantic AS keyed
+        ON keyed.agent = legacy.agent
+       AND keyed.session_id = legacy.session_id
+       AND keyed.model_key = COALESCE(legacy.model, '')
+       AND keyed.input_tokens = legacy.input_tokens
+       AND keyed.output_tokens = legacy.output_tokens
+       AND keyed.cache_read_tokens = legacy.cache_read_tokens
+       AND keyed.cache_creation_tokens = legacy.cache_creation_tokens
+       AND keyed.reasoning_tokens = legacy.reasoning_tokens
+      WHERE legacy.source_key IS NULL
+         OR legacy.source_key = ''
+    );
+    DROP TABLE IF EXISTS temp_token_usage_keyed_semantic;
+
+    DROP TABLE IF EXISTS temp_token_usage_missing_keep;
+    CREATE TEMP TABLE temp_token_usage_missing_keep AS
+      SELECT
+        MIN(id) AS keep_id,
+        agent,
+        session_id,
+        COALESCE(model, '') AS model_key,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens,
+        cache_creation_tokens,
+        reasoning_tokens
+      FROM token_usage
+      WHERE source_key IS NULL
+         OR source_key = ''
+      GROUP BY agent, session_id, COALESCE(model, ''), input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens;
+    CREATE INDEX temp_token_usage_missing_keep_idx
+      ON temp_token_usage_missing_keep (
+        agent, session_id, model_key, input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens
+      );
+
+    DELETE FROM token_usage
+    WHERE id IN (
+      SELECT missing.id
+      FROM token_usage AS missing
+      JOIN temp_token_usage_missing_keep AS keep
+        ON keep.agent = missing.agent
+       AND keep.session_id = missing.session_id
+       AND keep.model_key = COALESCE(missing.model, '')
+       AND keep.input_tokens = missing.input_tokens
+       AND keep.output_tokens = missing.output_tokens
+       AND keep.cache_read_tokens = missing.cache_read_tokens
+       AND keep.cache_creation_tokens = missing.cache_creation_tokens
+       AND keep.reasoning_tokens = missing.reasoning_tokens
+      WHERE (missing.source_key IS NULL OR missing.source_key = '')
+        AND missing.id != keep.keep_id
+    );
+    DROP TABLE IF EXISTS temp_token_usage_missing_keep;
+
+    DROP TABLE IF EXISTS temp_codex_stable_semantic;
+    CREATE TEMP TABLE temp_codex_stable_semantic AS
+      SELECT
+        session_id,
+        COALESCE(model, '') AS model_key,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens,
+        cache_creation_tokens,
+        reasoning_tokens
+      FROM token_usage
+      WHERE agent = 'codex'
+        AND source_kind = 'codex-jsonl'
+        AND source_key LIKE '%:total:%:last:%'
+      GROUP BY session_id, COALESCE(model, ''), input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens;
+    CREATE INDEX temp_codex_stable_semantic_idx
+      ON temp_codex_stable_semantic (
+        session_id, model_key, input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens
+      );
+
+    DELETE FROM token_usage
+    WHERE id IN (
+      SELECT old.id
+      FROM token_usage AS old
+      JOIN temp_codex_stable_semantic AS stable
+        ON stable.session_id = old.session_id
+       AND stable.model_key = COALESCE(old.model, '')
+       AND stable.input_tokens = old.input_tokens
+       AND stable.output_tokens = old.output_tokens
+       AND stable.cache_read_tokens = old.cache_read_tokens
+       AND stable.cache_creation_tokens = old.cache_creation_tokens
+       AND stable.reasoning_tokens = old.reasoning_tokens
+      WHERE old.agent = 'codex'
+        AND old.source_kind = 'codex-jsonl'
+        AND old.source_key IS NOT NULL
+        AND old.source_key != ''
+        AND old.source_key NOT LIKE '%:total:%:last:%'
+    );
+    DROP TABLE IF EXISTS temp_codex_stable_semantic;
+
+    DROP TABLE IF EXISTS temp_codex_old_keep;
+    CREATE TEMP TABLE temp_codex_old_keep AS
+      SELECT
+        MIN(id) AS keep_id,
+        session_id,
+        COALESCE(model, '') AS model_key,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens,
+        cache_creation_tokens,
+        reasoning_tokens
+      FROM token_usage
+      WHERE agent = 'codex'
+        AND source_kind = 'codex-jsonl'
+        AND source_key IS NOT NULL
+        AND source_key != ''
+        AND source_key NOT LIKE '%:total:%:last:%'
+      GROUP BY session_id, COALESCE(model, ''), input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens;
+    CREATE INDEX temp_codex_old_keep_idx
+      ON temp_codex_old_keep (
+        session_id, model_key, input_tokens, output_tokens,
+        cache_read_tokens, cache_creation_tokens, reasoning_tokens
+      );
+
+    DELETE FROM token_usage
+    WHERE id IN (
+      SELECT old.id
+      FROM token_usage AS old
+      JOIN temp_codex_old_keep AS keep
+        ON keep.session_id = old.session_id
+       AND keep.model_key = COALESCE(old.model, '')
+       AND keep.input_tokens = old.input_tokens
+       AND keep.output_tokens = old.output_tokens
+       AND keep.cache_read_tokens = old.cache_read_tokens
+       AND keep.cache_creation_tokens = old.cache_creation_tokens
+       AND keep.reasoning_tokens = old.reasoning_tokens
+      WHERE old.agent = 'codex'
+        AND old.source_kind = 'codex-jsonl'
+        AND old.source_key IS NOT NULL
+        AND old.source_key != ''
+        AND old.source_key NOT LIKE '%:total:%:last:%'
+        AND old.id != keep.keep_id
+    );
+    DROP TABLE IF EXISTS temp_codex_old_keep;
+
+    INSERT INTO history_meta (key, value)
+    VALUES ('${TOKEN_USAGE_SEMANTIC_CLEANUP_KEY}', '1')
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+  `);
+  }
 
   // Seed default model pricing (upsert so user edits survive)
   const seedPricing = db.prepare(`
@@ -444,6 +649,23 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       reasoning_tokens = ?,
       source_kind = ?
     WHERE id = ?
+  `);
+  const deleteLegacyDuplicateTokenUsageStmt = db.prepare(`
+    DELETE FROM token_usage
+    WHERE (? IS NULL OR id != ?)
+      AND session_id = ?
+      AND agent = ?
+      AND COALESCE(model, '') = COALESCE(?, '')
+      AND input_tokens = ?
+      AND output_tokens = ?
+      AND cache_read_tokens = ?
+      AND cache_creation_tokens = ?
+      AND reasoning_tokens = ?
+      AND (
+        source_key IS NULL
+        OR source_key = ''
+        OR (? = 'codex' AND source_kind = 'codex-jsonl' AND source_key NOT LIKE '%:total:%:last:%')
+      )
   `);
   const deleteTokenUsageBeforeStmt = db.prepare(`DELETE FROM token_usage WHERE timestamp < ?`);
 
@@ -692,6 +914,11 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       typeof entry.sourceKind === "string" && entry.sourceKind.trim()
         ? entry.sourceKind.trim()
         : null;
+    const inputTokens = entry.inputTokens ?? 0;
+    const outputTokens = entry.outputTokens ?? 0;
+    const cacheReadTokens = entry.cacheReadTokens ?? 0;
+    const cacheCreationTokens = entry.cacheCreationTokens ?? 0;
+    const reasoningTokens = entry.reasoningTokens ?? 0;
 
     db.exec("BEGIN");
     try {
@@ -700,16 +927,31 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         sourceKey !== null
           ? (findTokenUsageBySourceStmt.get(entry.agent, sourceKey) as { id: number } | undefined)
           : undefined;
+      if (sourceKey !== null) {
+        deleteLegacyDuplicateTokenUsageStmt.run(
+          existing?.id ?? null,
+          existing?.id ?? null,
+          entry.sessionId,
+          entry.agent,
+          entry.model ?? null,
+          inputTokens,
+          outputTokens,
+          cacheReadTokens,
+          cacheCreationTokens,
+          reasoningTokens,
+          entry.agent,
+        );
+      }
       if (existing) {
         updateTokenUsageByIdStmt.run(
           entry.sessionId,
           entry.model ?? null,
           entry.timestamp,
-          entry.inputTokens ?? 0,
-          entry.outputTokens ?? 0,
-          entry.cacheReadTokens ?? 0,
-          entry.cacheCreationTokens ?? 0,
-          entry.reasoningTokens ?? 0,
+          inputTokens,
+          outputTokens,
+          cacheReadTokens,
+          cacheCreationTokens,
+          reasoningTokens,
           sourceKind,
           existing.id,
         );
@@ -719,11 +961,11 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
           entry.agent,
           entry.model ?? null,
           entry.timestamp,
-          entry.inputTokens ?? 0,
-          entry.outputTokens ?? 0,
-          entry.cacheReadTokens ?? 0,
-          entry.cacheCreationTokens ?? 0,
-          entry.reasoningTokens ?? 0,
+          inputTokens,
+          outputTokens,
+          cacheReadTokens,
+          cacheCreationTokens,
+          reasoningTokens,
           sourceKind,
           sourceKey,
         );

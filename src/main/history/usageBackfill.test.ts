@@ -85,6 +85,13 @@ describe("runUsageBackfill", () => {
           payload: {
             type: "token_count",
             info: {
+              total_token_usage: {
+                input_tokens: 200,
+                output_tokens: 75,
+                cached_input_tokens: 50,
+                reasoning_output_tokens: 25,
+                total_tokens: 275,
+              },
               last_token_usage: {
                 input_tokens: 200,
                 output_tokens: 75,
@@ -130,10 +137,10 @@ describe("runUsageBackfill", () => {
         expect.objectContaining({
           agent: "codex",
           model: "gpt-5.5",
-          inputTokens: 200,
+          inputTokens: 150,
           outputTokens: 75,
           cacheReadTokens: 50,
-          totalTokens: 325,
+          totalTokens: 275,
           requestCount: 1,
         }),
         expect.objectContaining({
@@ -160,6 +167,79 @@ describe("runUsageBackfill", () => {
         }),
       ]),
     );
+  });
+
+  it("dedupes repeated Codex token_count snapshots and stores cached input once", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-usage-backfill-codex-dupe-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    const codexRoot = path.join(tmpDir, ".codex", "sessions", "2026", "05");
+    fs.mkdirSync(codexRoot, { recursive: true });
+
+    const codexSessionId = "12345678-1234-1234-1234-123456789def";
+    const tokenCount = (timestamp: string) =>
+      JSON.stringify({
+        type: "event_msg",
+        timestamp,
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: {
+              input_tokens: 1200,
+              cached_input_tokens: 800,
+              output_tokens: 120,
+              reasoning_output_tokens: 20,
+              total_tokens: 1320,
+            },
+            last_token_usage: {
+              input_tokens: 300,
+              cached_input_tokens: 120,
+              output_tokens: 40,
+              reasoning_output_tokens: 8,
+              total_tokens: 340,
+            },
+            model_context_window: 258400,
+          },
+        },
+      });
+
+    fs.writeFileSync(
+      path.join(codexRoot, `${codexSessionId}.jsonl`),
+      [
+        JSON.stringify({
+          type: "turn_context",
+          timestamp: "2026-05-12T11:00:00.000Z",
+          payload: { model: "gpt-5.5" },
+        }),
+        tokenCount("2026-05-12T11:01:00.000Z"),
+        tokenCount("2026-05-12T11:01:30.000Z"),
+        "",
+      ].join("\n"),
+    );
+
+    store = createHistoryStore({ dbPath, now: () => Date.parse("2026-05-19T00:00:00.000Z") });
+
+    const status = runUsageBackfill({
+      historyStore: store,
+      claudeProjectsPath: path.join(tmpDir, ".claude", "projects"),
+      codexSessionsPath: path.join(tmpDir, ".codex", "sessions"),
+      now: () => Date.parse("2026-05-19T00:00:00.000Z"),
+    });
+
+    expect(status).toMatchObject({
+      codexRowsImported: 2,
+      lastError: null,
+    });
+    expect(store.getTokenUsageByModel(0, Date.parse("2026-05-13T00:00:00.000Z"))).toEqual([
+      expect.objectContaining({
+        agent: "codex",
+        model: "gpt-5.5",
+        inputTokens: 180,
+        outputTokens: 40,
+        cacheReadTokens: 120,
+        totalTokens: 340,
+        requestCount: 1,
+      }),
+    ]);
   });
 
   it("imports history cooperatively so large backfills can yield after startup", async () => {

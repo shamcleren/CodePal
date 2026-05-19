@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import type { TokenUsageWrite, UsageImportStatus } from "../../shared/usageTypes";
+import { codexInputTokensForStorage, makeCodexTokenUsageSourceKey } from "../codex/codexUsage";
 import type { createHistoryStore } from "./historyStore";
 
 type HistoryStoreForBackfill = Pick<
@@ -326,18 +327,31 @@ function codexUsageFromLine(
   const outputTokens = numberValue(usage.output_tokens);
   const cacheReadTokens = numberValue(usage.cached_input_tokens);
   const reasoningTokens = numberValue(usage.reasoning_output_tokens);
+  const totalInputTokens = numberValue(totalUsage.input_tokens);
+  const totalOutputTokens = numberValue(totalUsage.output_tokens);
+  const totalCacheReadTokens = numberValue(totalUsage.cached_input_tokens);
+  const totalReasoningTokens = numberValue(totalUsage.reasoning_output_tokens);
 
   return {
     sessionId,
     agent: "codex",
     model,
     timestamp,
-    inputTokens,
+    inputTokens: codexInputTokensForStorage(inputTokens, cacheReadTokens),
     outputTokens,
     cacheReadTokens,
     reasoningTokens,
     sourceKind: "codex-jsonl",
-    sourceKey: `codex:${sessionId}:${timestamp}:${inputTokens ?? 0}:${outputTokens ?? 0}:${cacheReadTokens ?? 0}:${reasoningTokens ?? 0}`,
+    sourceKey: makeCodexTokenUsageSourceKey(sessionId, {
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      reasoningTokens,
+      totalInputTokens,
+      totalOutputTokens,
+      totalCacheReadTokens,
+      totalReasoningTokens,
+    }),
   };
 }
 
