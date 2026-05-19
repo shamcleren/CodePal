@@ -64,4 +64,5 @@ export CODEPAL_PUBLISH_RELEASE=1
 
 cd "$PROJECT_ROOT"
 npm run build
-exec npx electron-builder --mac zip dmg --publish always
+npx electron-builder --mac zip dmg --publish always
+node scripts/finalize-mac-release-metadata.cjs
