@@ -50,9 +50,16 @@ const latestMac = {
   releaseDate: new Date().toISOString(),
 };
 
-fs.writeFileSync(latestMacPath, YAML.stringify(latestMac));
+const latestMacText = YAML.stringify(latestMac).replace(
+  /^releaseDate: .+$/m,
+  `releaseDate: '${latestMac.releaseDate}'`,
+);
+fs.writeFileSync(latestMacPath, latestMacText);
 
 const reread = YAML.parse(fs.readFileSync(latestMacPath, "utf8"));
+if (typeof reread.releaseDate !== "string") {
+  throw new Error("Final latest-mac.yml releaseDate must remain a string.");
+}
 for (const artifact of artifacts) {
   const fileInfo = reread.files.find((candidate) => candidate.url === artifact.url);
   if (!fileInfo || fileInfo.size !== artifact.size || fileInfo.sha512 !== artifact.sha512) {
