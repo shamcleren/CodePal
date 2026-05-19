@@ -226,4 +226,43 @@ describe("historyRuntime", () => {
     });
     expect(await clearStore?.()).toEqual({ ...diagnostics, enabled: false });
   });
+
+  it("keeps history IPC handlers available when persistence startup is disabled", () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    const ipcMain = {
+      handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
+        handlers.set(channel, handler);
+      }),
+    };
+
+    registerHistoryIpcHandlers({
+      ipcMain,
+      historyStore: null,
+      getPersistenceEnabled: () => true,
+    });
+
+    expect(handlers.get("codepal:get-history-diagnostics")?.()).toEqual({
+      enabled: false,
+      dbPath: "",
+      dbSizeBytes: 0,
+      estimatedSessionCount: 0,
+      estimatedActivityCount: 0,
+      lastCleanupAt: null,
+    });
+    expect(
+      handlers.get("codepal:get-session-history-page")?.({}, { sessionId: "missing" }),
+    ).toEqual({
+      items: [],
+      nextCursor: null,
+      hasMore: false,
+    });
+    expect(handlers.get("codepal:clear-history-store")?.()).toEqual({
+      enabled: false,
+      dbPath: "",
+      dbSizeBytes: 0,
+      estimatedSessionCount: 0,
+      estimatedActivityCount: 0,
+      lastCleanupAt: null,
+    });
+  });
 });

@@ -180,7 +180,7 @@ function wireActionResponseIpc(
   homeDir: string,
   integrationService: ReturnType<typeof createIntegrationService>,
   updateService: ReturnType<typeof createUpdateService>,
-  currentHistoryStore: ReturnType<typeof createAppHistoryStore>,
+  currentHistoryStore: ReturnType<typeof createAppHistoryStore> | null,
 ) {
   ipcMain.handle("codepal:get-sessions", () => {
     const sessions = sessionStore.getSessions();
@@ -262,13 +262,17 @@ function wireActionResponseIpc(
   ipcMain.handle("codepal:get-home-dir", () => app.getPath("home"));
   ipcMain.handle("codepal:reload-app-settings", () => {
     const settings = settingsService.reloadSettings();
-    applyHistorySettingsAtRuntime(currentHistoryStore, settings);
+    if (currentHistoryStore) {
+      applyHistorySettingsAtRuntime(currentHistoryStore, settings);
+    }
     return settings;
   });
   ipcMain.handle("codepal:get-app-settings-path", () => settingsService.filePath);
   ipcMain.handle("codepal:update-app-settings", (_event, payload: unknown) => {
     const settings = settingsService.updateSettings((payload ?? {}) as AppSettingsPatch);
-    applyHistorySettingsAtRuntime(currentHistoryStore, settings);
+    if (currentHistoryStore) {
+      applyHistorySettingsAtRuntime(currentHistoryStore, settings);
+    }
     return settings;
   });
   ipcMain.handle("codepal:get-provider-gateway-status", () => {
@@ -532,7 +536,7 @@ function scheduleUsageBackfillAfterStartup(options: {
 async function wireIpcHub(
   integrationService: ReturnType<typeof createIntegrationService>,
   settingsService: ReturnType<typeof createSettingsService>,
-  currentHistoryStore: ReturnType<typeof createAppHistoryStore>,
+  currentHistoryStore: ReturnType<typeof createAppHistoryStore> | null,
   usageSnapshotCache?: ReturnType<typeof createUsageSnapshotCache>,
 ): Promise<"listening" | "already_running" | "error"> {
   const hub = createIpcHub({
@@ -771,7 +775,7 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       }
     });
 
-    app.whenReady().then(async () => {
+    void app.whenReady().then(async () => {
       const homeDir = process.env.CODEPAL_HOME_DIR?.trim() || app.getPath("home");
       const templateSettingsPath = app.isPackaged
         ? path.join(app.getAppPath(), "config", "settings.template.yaml")
@@ -790,35 +794,54 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       });
       installMainProcessFileLogger(path.join(app.getPath("userData"), "logs"));
       await startClaudeDesktopProviderGateway(settingsService, gatewaySecretStore);
-      historyStore = createAppHistoryStore({
-        userDataPath: app.getPath("userData"),
-      });
-      historyWriter = createDeferredHistoryWriter({
-        historyStore,
-        onError: (error) => {
-          console.error("[CodePal History] failed to persist session event:", error);
-        },
-      });
-      applyHistorySettingsAtRuntime(historyStore, appSettings);
-      if (appSettings.history.persistenceEnabled && historyStore) {
-        const RESTORE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-        const MAX_RESTORE_COUNT = 150;
-        try {
-          const recentSessions = historyStore.getRecentSessions({
-            maxAgeMs: RESTORE_MAX_AGE_MS,
-            limit: MAX_RESTORE_COUNT,
-          });
-          for (const record of recentSessions) {
-            sessionStore.seedFromHistory(record);
+      try {
+        historyStore = createAppHistoryStore({
+          userDataPath: app.getPath("userData"),
+        });
+        historyWriter = createDeferredHistoryWriter({
+          historyStore,
+          onError: (error) => {
+            console.error("[CodePal History] failed to persist session event:", error);
+          },
+        });
+        applyHistorySettingsAtRuntime(historyStore, appSettings);
+        if (appSettings.history.persistenceEnabled) {
+          const RESTORE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+          const MAX_RESTORE_COUNT = 150;
+          try {
+            const recentSessions = historyStore.getRecentSessions({
+              maxAgeMs: RESTORE_MAX_AGE_MS,
+              limit: MAX_RESTORE_COUNT,
+            });
+            for (const record of recentSessions) {
+              sessionStore.seedFromHistory(record);
+            }
+            if (recentSessions.length > 0) {
+              console.log(
+                `[CodePal] Restored ${recentSessions.length} session(s) from history`,
+              );
+            }
+          } catch (error) {
+            console.error("[CodePal] Failed to restore sessions from history:", error);
           }
-          if (recentSessions.length > 0) {
-            console.log(
-              `[CodePal] Restored ${recentSessions.length} session(s) from history`,
-            );
-          }
-        } catch (error) {
-          console.error("[CodePal] Failed to restore sessions from history:", error);
         }
+      } catch (error) {
+        console.error(
+          "[CodePal History] failed to initialize; persistence disabled for this launch:",
+          error,
+        );
+        try {
+          historyWriter?.close();
+        } catch (closeError) {
+          console.error("[CodePal History] failed to close writer after startup error:", closeError);
+        }
+        historyWriter = null;
+        try {
+          historyStore?.close();
+        } catch (closeError) {
+          console.error("[CodePal History] failed to close store after startup error:", closeError);
+        }
+        historyStore = null;
       }
       const usageSnapshotCache = createUsageSnapshotCache({
         filePath: path.join(app.getPath("userData"), "usage-snapshot-cache.json"),
@@ -957,6 +980,9 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
           activeWindow.show();
         }
       });
+    }).catch((error) => {
+      console.error("[CodePal] startup failed:", error);
+      app.quit();
     });
   })
   .catch((err) => {

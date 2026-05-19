@@ -15,7 +15,7 @@ type HistoryStoreLike = Pick<
 
 type RegisterHistoryIpcHandlersOptions = {
   ipcMain: Pick<IpcMain, "handle">;
-  historyStore: Pick<HistoryStore, "clearAll" | "getDiagnostics" | "getSessionHistoryPage">;
+  historyStore: Pick<HistoryStore, "clearAll" | "getDiagnostics" | "getSessionHistoryPage"> | null;
   getPersistenceEnabled: () => boolean;
 };
 
@@ -62,6 +62,17 @@ export function toHistoryDiagnostics(
   return {
     ...historyStore.getDiagnostics(),
     enabled,
+  };
+}
+
+function disabledHistoryDiagnostics(): HistoryDiagnostics {
+  return {
+    enabled: false,
+    dbPath: "",
+    dbSizeBytes: 0,
+    estimatedSessionCount: 0,
+    estimatedActivityCount: 0,
+    lastCleanupAt: null,
   };
 }
 
@@ -160,9 +171,18 @@ export function registerHistoryIpcHandlers(options: RegisterHistoryIpcHandlersOp
   const failedSessionIds = new Set<string>();
 
   options.ipcMain.handle("codepal:get-history-diagnostics", () =>
-    toHistoryDiagnostics(options.historyStore, options.getPersistenceEnabled()),
+    options.historyStore
+      ? toHistoryDiagnostics(options.historyStore, options.getPersistenceEnabled())
+      : disabledHistoryDiagnostics(),
   );
   options.ipcMain.handle("codepal:get-session-history-page", (_event, payload: unknown) => {
+    if (!options.historyStore) {
+      return {
+        items: [],
+        nextCursor: null,
+        hasMore: false,
+      };
+    }
     const request = payload as SessionHistoryPageRequest;
     if (
       failOnceSessionId &&
@@ -176,6 +196,9 @@ export function registerHistoryIpcHandlers(options: RegisterHistoryIpcHandlersOp
     return options.historyStore.getSessionHistoryPage(request);
   });
   options.ipcMain.handle("codepal:clear-history-store", () => {
+    if (!options.historyStore) {
+      return disabledHistoryDiagnostics();
+    }
     options.historyStore.clearAll();
     return toHistoryDiagnostics(options.historyStore, options.getPersistenceEnabled());
   });

@@ -221,9 +221,6 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       ON token_usage (timestamp DESC);
     CREATE INDEX IF NOT EXISTS idx_token_usage_agent_ts
       ON token_usage (agent, timestamp DESC);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_token_usage_source_key
-      ON token_usage (agent, source_key)
-      WHERE source_key IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS model_pricing (
       model_id TEXT PRIMARY KEY,
@@ -247,6 +244,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       }
     }
   }
+  // Keep column migrations before indexes that depend on the migrated columns.
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_token_usage_source_key
       ON token_usage (agent, source_key)

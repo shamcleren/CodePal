@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import { createHistoryStore } from "./historyStore";
@@ -46,6 +47,71 @@ describe("createHistoryStore", () => {
       lastCleanupAt: null,
     });
     expect(diagnostics.dbSizeBytes).toBeGreaterThan(0);
+  });
+
+  it("migrates legacy token usage columns before creating the source key index", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    const legacyDb = new DatabaseSync(dbPath);
+    legacyDb.exec(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        tool TEXT NOT NULL,
+        status TEXT NOT NULL,
+        title TEXT,
+        latest_task TEXT,
+        updated_at INTEGER NOT NULL,
+        last_user_message_at INTEGER,
+        has_pending_actions INTEGER NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE token_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        agent TEXT NOT NULL,
+        model TEXT,
+        timestamp INTEGER NOT NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+        cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+        reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+    `);
+    legacyDb.close();
+
+    store = createHistoryStore({ dbPath });
+    store.writeTokenUsage({
+      sessionId: "legacy-session",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: 1_000,
+      inputTokens: 11,
+      outputTokens: 5,
+      sourceKind: "codex-history",
+      sourceKey: "legacy-row-1",
+    });
+    store.writeTokenUsage({
+      sessionId: "legacy-session",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: 1_100,
+      inputTokens: 13,
+      outputTokens: 7,
+      sourceKind: "codex-history",
+      sourceKey: "legacy-row-1",
+    });
+
+    expect(store.getTokenUsageByAgent(0, 2_000, "codex")).toMatchObject([
+      {
+        agent: "codex",
+        inputTokens: 13,
+        outputTokens: 7,
+        totalTokens: 20,
+        requestCount: 1,
+      },
+    ]);
   });
 
   it("persists activity history and reads newest-first pages with idempotent item inserts", () => {
