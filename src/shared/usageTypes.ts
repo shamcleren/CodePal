@@ -100,6 +100,8 @@ export interface TokenUsageWrite {
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
   reasoningTokens?: number;
+  sourceKind?: string;
+  sourceKey?: string;
 }
 
 export interface DailyTokenStats {
@@ -125,6 +127,37 @@ export interface ModelTokenStats {
   requestCount: number;
 }
 
+export interface AgentTokenStats {
+  agent: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  totalTokens: number;
+  requestCount: number;
+}
+
+export interface SessionTokenStats {
+  sessionId: string;
+  agent: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  totalTokens: number;
+  requestCount: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
+}
+
+export interface UsageImportStatus {
+  completedAt: number | null;
+  claudeRowsImported: number;
+  codexRowsImported: number;
+  lastError: string | null;
+}
+
 export interface ModelPricing {
   modelId: string;
   displayName: string;
@@ -148,5 +181,8 @@ export interface SessionStatsEntry {
 export interface TokenStatsResult {
   daily: DailyTokenStats[];
   byModel: ModelTokenStats[];
+  byAgent: AgentTokenStats[];
+  topSessions: SessionTokenStats[];
+  importStatus: UsageImportStatus;
   pricing: ModelPricing[];
 }

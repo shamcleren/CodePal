@@ -186,6 +186,8 @@ function usageSnapshotFromLine(line: string, sourcePath: string, model?: string)
       outputTokens,
       cacheReadTokens: cachedInput,
       reasoningTokens: reasoningOutput,
+      sourceKind: "codex-jsonl",
+      sourceKey: `codex:${sessionId}:${timestamp}:${inputTokens ?? 0}:${outputTokens ?? 0}:${cachedInput ?? 0}:${reasoningOutput ?? 0}`,
     },
   };
 }

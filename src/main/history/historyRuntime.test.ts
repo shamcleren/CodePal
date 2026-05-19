@@ -43,14 +43,14 @@ describe("historyRuntime", () => {
     applyHistorySettingsAtRuntime(historyStore, {
       history: {
         persistenceEnabled: false,
-        retentionDays: 7,
-        maxStorageMb: 250,
+        detailRetention: "90d",
+        analyticsRetention: "forever",
       },
     });
 
     expect(historyStore.runCleanup).toHaveBeenCalledWith({
-      retentionDays: 7,
-      maxStorageMb: 250,
+      detailRetention: "90d",
+      analyticsRetention: "forever",
     });
   });
 

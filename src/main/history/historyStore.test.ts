@@ -274,7 +274,7 @@ describe("createHistoryStore", () => {
 
     expect(firstPage.items.map((item) => item.id)).toEqual(["m-third", "a-second"]);
 
-    store.runCleanup({ retentionDays: 2, maxStorageMb: 100 });
+    store.runCleanup({ detailRetention: "2d", analyticsRetention: "forever" });
 
     const secondPage = store.getSessionHistoryPage({
       sessionId: "s1",
@@ -352,7 +352,7 @@ describe("createHistoryStore", () => {
       ],
     });
 
-    const result = store.runCleanup({ retentionDays: 2, maxStorageMb: 100 });
+    const result = store.runCleanup({ detailRetention: "2d", analyticsRetention: "forever" });
 
     expect(result.lastCleanupAt).toBe(now());
     expect(result.estimatedSessionCount).toBe(1);
@@ -360,6 +360,131 @@ describe("createHistoryStore", () => {
     expect(store.getSessionHistoryPage({ sessionId: "old", limit: 10 }).items).toEqual([]);
     expect(store.getSessionHistoryPage({ sessionId: "fresh", limit: 10 }).items).toMatchObject([
       { id: "fresh-1" },
+    ]);
+  });
+
+  it("deduplicates token usage by source key and keeps the latest parsed values", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath });
+
+    store.writeTokenUsage({
+      sessionId: "historical-claude",
+      agent: "claude",
+      model: "claude-sonnet-4-5-20250929",
+      timestamp: 100,
+      inputTokens: 100,
+      outputTokens: 50,
+      sourceKind: "claude-jsonl",
+      sourceKey: "claude:message:msg_1",
+    });
+    store.writeTokenUsage({
+      sessionId: "historical-claude",
+      agent: "claude",
+      model: "claude-sonnet-4-5-20250929",
+      timestamp: 100,
+      inputTokens: 120,
+      outputTokens: 60,
+      sourceKind: "claude-jsonl",
+      sourceKey: "claude:message:msg_1",
+    });
+
+    expect(store.getTokenUsageByModel(0, 1_000)).toEqual([
+      expect.objectContaining({
+        model: "claude-sonnet-4-5-20250929",
+        agent: "claude",
+        inputTokens: 120,
+        outputTokens: 60,
+        totalTokens: 180,
+        requestCount: 1,
+      }),
+    ]);
+  });
+
+  it("keeps analytics history when detailed session history expires", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    const now = () => 10 * 24 * 60 * 60 * 1000;
+    store = createHistoryStore({ dbPath, now });
+
+    store.writeSessionEvent({
+      session: {
+        id: "old",
+        tool: "codex",
+        status: "completed",
+        updatedAt: now() - 5 * 24 * 60 * 60 * 1000,
+        hasPendingActions: false,
+      },
+      activityItems: [
+        makeActivityItem({
+          id: "old-1",
+          timestamp: now() - 5 * 24 * 60 * 60 * 1000,
+          body: "old item",
+        }),
+      ],
+    });
+    store.writeTokenUsage({
+      sessionId: "old",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: now() - 5 * 24 * 60 * 60 * 1000,
+      inputTokens: 200,
+      outputTokens: 100,
+      sourceKind: "codex-jsonl",
+      sourceKey: "codex:old:1",
+    });
+
+    store.runCleanup({ detailRetention: "2d", analyticsRetention: "forever" });
+
+    expect(store.getSessionHistoryPage({ sessionId: "old", limit: 10 }).items).toEqual([]);
+    expect(store.getTokenUsageByModel(0, now() + 1)).toEqual([
+      expect.objectContaining({
+        model: "gpt-5.5",
+        agent: "codex",
+        totalTokens: 300,
+        requestCount: 1,
+      }),
+    ]);
+
+    store.runCleanup({ detailRetention: "2d", analyticsRetention: "2d" });
+
+    expect(store.getTokenUsageByModel(0, now() + 1)).toEqual([]);
+  });
+
+  it("summarizes token usage by agent and by top sessions", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath });
+
+    store.writeTokenUsage({
+      sessionId: "s1",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: 100,
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheReadTokens: 25,
+      sourceKind: "codex-jsonl",
+      sourceKey: "codex:s1:1",
+    });
+    store.writeTokenUsage({
+      sessionId: "s2",
+      agent: "claude",
+      model: "claude-sonnet-4-5-20250929",
+      timestamp: 200,
+      inputTokens: 500,
+      outputTokens: 200,
+      sourceKind: "claude-jsonl",
+      sourceKey: "claude:s2:1",
+    });
+
+    expect(store.getTokenUsageByAgent(0, 1_000)).toEqual([
+      expect.objectContaining({ agent: "claude", totalTokens: 700, requestCount: 1 }),
+      expect.objectContaining({ agent: "codex", totalTokens: 175, requestCount: 1 }),
+    ]);
+    expect(store.getTopTokenUsageSessions(0, 1_000, undefined, 5)).toEqual([
+      expect.objectContaining({ sessionId: "s2", agent: "claude", totalTokens: 700 }),
+      expect.objectContaining({ sessionId: "s1", agent: "codex", totalTokens: 175 }),
     ]);
   });
 

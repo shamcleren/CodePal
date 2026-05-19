@@ -90,32 +90,33 @@ describe("appSettings", () => {
 
     expect(settings.history).toEqual({
       persistenceEnabled: true,
-      retentionDays: 2,
-      maxStorageMb: 100,
+      detailRetention: "30d",
+      analyticsRetention: "forever",
     });
   });
 
-  it("clamps history settings to the supported range", () => {
+  it("normalizes history retention settings and migrates legacy day values", () => {
     const settings = normalizeAppSettings({
       version: 1,
       history: {
         persistenceEnabled: false,
         retentionDays: 99,
         maxStorageMb: 2,
+        analyticsRetention: "180d",
       },
     });
 
     expect(settings.history).toEqual({
       persistenceEnabled: false,
-      retentionDays: 30,
-      maxStorageMb: 10,
+      detailRetention: "180d",
+      analyticsRetention: "180d",
     });
   });
 
   it("merges nested history settings without dropping existing values", () => {
     const patch: AppSettingsPatch = {
       history: {
-        retentionDays: 1,
+        detailRetention: "90d",
       },
     };
 
@@ -124,8 +125,8 @@ describe("appSettings", () => {
         version: 1,
         history: {
           persistenceEnabled: true,
-          retentionDays: 10,
-          maxStorageMb: 250,
+          detailRetention: "30d",
+          analyticsRetention: "forever",
         },
       }),
       patch,
@@ -133,8 +134,8 @@ describe("appSettings", () => {
 
     expect(merged.history).toEqual({
       persistenceEnabled: true,
-      retentionDays: 1,
-      maxStorageMb: 250,
+      detailRetention: "90d",
+      analyticsRetention: "forever",
     });
   });
 

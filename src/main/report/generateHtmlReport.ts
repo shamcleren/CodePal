@@ -1,4 +1,12 @@
-import type { DailyTokenStats, ModelPricing, ModelTokenStats, SessionStatsEntry } from "../../shared/usageTypes";
+import type {
+  AgentTokenStats,
+  DailyTokenStats,
+  ModelPricing,
+  ModelTokenStats,
+  SessionStatsEntry,
+  SessionTokenStats,
+  UsageImportStatus,
+} from "../../shared/usageTypes";
 
 export type HtmlReportInput = {
   startDate: string;
@@ -6,6 +14,9 @@ export type HtmlReportInput = {
   sessionStats: SessionStatsEntry[];
   daily: DailyTokenStats[];
   byModel: ModelTokenStats[];
+  byAgent?: AgentTokenStats[];
+  topSessions?: SessionTokenStats[];
+  importStatus?: UsageImportStatus;
   pricing: ModelPricing[];
 };
 
@@ -21,6 +32,10 @@ function fmtTokens(n: number): string {
 
 function fmtCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
+}
+
+function fmtDateTime(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 16).replace("T", " ");
 }
 
 function estimateCost(
@@ -84,7 +99,7 @@ export function generateHtmlReport(input: HtmlReportInput): string {
     const existing = dailyByDate.get(d.date) ?? { input: 0, output: 0, cache: 0 };
     existing.input += d.inputTokens;
     existing.output += d.outputTokens;
-    existing.cache += d.cacheReadTokens;
+    existing.cache += d.cacheReadTokens + d.cacheCreationTokens;
     dailyByDate.set(d.date, existing);
   }
   const dailyEntries = Array.from(dailyByDate.entries()).sort((a, b) => a[0].localeCompare(b[0]));
@@ -94,8 +109,15 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   for (const [date, vals] of dailyEntries) {
     const total = vals.input + vals.output + vals.cache;
     const pct = (total / maxDaily) * 100;
-    chartBars += `<div class="bar-col" title="${esc(date)}: ${fmtTokens(total)} tokens">
-      <div class="bar" style="height:${Math.max(2, pct)}%"></div>
+    const inputPct = total > 0 ? (vals.input / total) * pct : 0;
+    const outputPct = total > 0 ? (vals.output / total) * pct : 0;
+    chartBars += `<div class="bar-col" title="${esc(date)}\nInput: ${fmtTokens(vals.input)}\nOutput: ${fmtTokens(vals.output)}\nCache: ${fmtTokens(vals.cache)}\nTotal: ${fmtTokens(total)}">
+      <div class="bar-value">${fmtTokens(total)}</div>
+      <div class="bar-stack" style="height:${Math.max(2, pct)}%">
+        <div class="bar-seg bar-input" style="height:${inputPct / Math.max(2, pct) * 100}%"></div>
+        <div class="bar-seg bar-output" style="height:${outputPct / Math.max(2, pct) * 100}%"></div>
+        <div class="bar-seg bar-cache" style="flex:1"></div>
+      </div>
       <div class="bar-label">${esc(date.slice(5))}</div>
     </div>\n`;
   }
@@ -116,6 +138,41 @@ export function generateHtmlReport(input: HtmlReportInput): string {
       <td class="num">${fmtCost(cost)}</td>
     </tr>\n`;
   }
+
+  let agentRows = "";
+  for (const agent of input.byAgent ?? []) {
+    const totalInputLike = agent.inputTokens + agent.cacheReadTokens + agent.cacheCreationTokens;
+    const cacheRate = totalInputLike > 0 ? agent.cacheReadTokens / totalInputLike : 0;
+    agentRows += `<tr>
+      <td>${esc(AGENT_LABELS[agent.agent] ?? agent.agent)}</td>
+      <td class="num">${agent.requestCount}</td>
+      <td class="num">${fmtTokens(agent.totalTokens)}</td>
+      <td class="num">${fmtTokens(agent.inputTokens)}</td>
+      <td class="num">${fmtTokens(agent.outputTokens)}</td>
+      <td class="num">${cacheRate > 0 ? Math.round(cacheRate * 100) + "%" : "&mdash;"}</td>
+    </tr>\n`;
+  }
+
+  let topSessionRows = "";
+  for (const session of input.topSessions ?? []) {
+    topSessionRows += `<tr>
+      <td>${esc(session.sessionId)}</td>
+      <td>${esc(AGENT_LABELS[session.agent] ?? session.agent)}</td>
+      <td>${esc(session.model)}</td>
+      <td class="num">${session.requestCount}</td>
+      <td class="num">${fmtTokens(session.totalTokens)}</td>
+      <td class="num">${fmtDateTime(session.lastSeenAt)}</td>
+    </tr>\n`;
+  }
+
+  const importStatus = input.importStatus;
+  const importSummary = importStatus
+    ? `Backfill: ${
+        importStatus.completedAt ? fmtDateTime(importStatus.completedAt) : "not completed"
+      } · Claude rows: ${importStatus.claudeRowsImported} · Codex rows: ${importStatus.codexRowsImported}${
+        importStatus.lastError ? ` · Error: ${esc(importStatus.lastError)}` : ""
+      }`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -159,31 +216,51 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   /* Chart */
   .chart-wrap {
     padding: 16px; border-radius: var(--radius);
-    border: 1px solid var(--border); background: var(--bg2); margin-bottom: 32px;
+    border: 1px solid var(--border); background: var(--bg2); margin-bottom: 8px;
   }
   .chart {
-    display: flex; align-items: flex-end; gap: 4px; height: 120px;
+    display: flex; align-items: flex-end; gap: 4px; height: 140px;
   }
   .bar-col {
     flex: 1; min-width: 12px; display: flex; flex-direction: column;
-    justify-content: flex-end; height: 100%; position: relative;
+    justify-content: flex-end; align-items: center; height: 100%; gap: 2px;
   }
-  .bar {
-    border-radius: 3px 3px 0 0;
-    background: linear-gradient(180deg, var(--accent), var(--green));
-    opacity: 0.85; transition: opacity 0.15s;
+  .bar-value {
+    font-size: 9px; font-weight: 600; color: var(--muted); white-space: nowrap;
+    opacity: 0; transition: opacity 0.15s;
   }
-  .bar-col:hover .bar { opacity: 1; }
+  .bar-col:hover .bar-value { opacity: 1; }
+  .bar-stack {
+    width: 100%; max-width: 28px; display: flex; flex-direction: column;
+    justify-content: flex-end; border-radius: 3px 3px 0 0; overflow: hidden;
+  }
+  .bar-seg { width: 100%; min-height: 1px; }
+  .bar-input { background: var(--accent); opacity: 0.8; }
+  .bar-output { background: var(--green); opacity: 0.75; }
+  .bar-cache { background: rgba(121,168,255,0.3); opacity: 0.5; }
+  .bar-col:hover .bar-input, .bar-col:hover .bar-output, .bar-col:hover .bar-cache { opacity: 1; }
   .bar-label {
     font-size: 10px; text-align: center; color: var(--muted);
     margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .chart-legend {
+    display: flex; gap: 16px; justify-content: center; font-size: 11px; color: var(--muted);
+    margin-bottom: 32px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 2px; display: inline-block;
+  }
+  .legend-dot--input { background: var(--accent); opacity: 0.8; }
+  .legend-dot--output { background: var(--green); opacity: 0.75; }
+  .legend-dot--cache { background: rgba(121,168,255,0.3); opacity: 0.5; }
 
   /* Tables */
   table {
     width: 100%; border-collapse: collapse; font-size: 13px;
     border-radius: var(--radius); overflow: hidden;
     border: 1px solid var(--border); background: var(--bg2);
+    table-layout: fixed;
   }
   thead { background: rgba(255,255,255,0.03); }
   th {
@@ -194,6 +271,7 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: rgba(255,255,255,0.02); }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
+  th.num { text-align: right; }
   .agent-tag { opacity: 0.5; margin-right: 6px; font-size: 11px; }
 
   .footer { margin-top: 48px; color: var(--muted); font-size: 11px; text-align: center; }
@@ -220,13 +298,32 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   </div>
 
   ${dailyEntries.length > 0 ? `<h2>Daily Trend</h2>
-  <div class="chart-wrap"><div class="chart">${chartBars}</div></div>` : ""}
+  <div class="chart-wrap"><div class="chart">${chartBars}</div></div>
+  <div class="chart-legend">
+    <span class="legend-item"><span class="legend-dot legend-dot--input"></span>Input</span>
+    <span class="legend-item"><span class="legend-dot legend-dot--output"></span>Output</span>
+    <span class="legend-item"><span class="legend-dot legend-dot--cache"></span>Cache</span>
+  </div>` : ""}
 
   ${input.byModel.length > 0 ? `<h2>By Model</h2>
   <table><thead><tr>
     <th>Model</th><th class="num">Requests</th><th class="num">Input</th>
     <th class="num">Output</th><th class="num">Cache Hit</th><th class="num">Cache Read</th><th class="num">Cost</th>
   </tr></thead><tbody>${modelRows}</tbody></table>` : ""}
+
+  ${agentRows ? `<h2>By Agent</h2>
+  <table><thead><tr>
+    <th>Agent</th><th class="num">Requests</th><th class="num">Total</th>
+    <th class="num">Input</th><th class="num">Output</th><th class="num">Cache Hit</th>
+  </tr></thead><tbody>${agentRows}</tbody></table>` : ""}
+
+  ${topSessionRows ? `<h2>Top Sessions</h2>
+  <table><thead><tr>
+    <th>Session</th><th>Agent</th><th>Model</th><th class="num">Requests</th>
+    <th class="num">Tokens</th><th class="num">Last Seen</th>
+  </tr></thead><tbody>${topSessionRows}</tbody></table>` : ""}
+
+  ${importSummary ? `<p class="footer">${importSummary}</p>` : ""}
 
   <div class="footer">Generated by CodePal · ${new Date().toISOString().slice(0, 19).replace("T", " ")}</div>
 </div>

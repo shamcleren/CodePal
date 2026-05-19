@@ -98,6 +98,9 @@ function extractUsageSnapshot(
       : undefined;
   const model = typeof message?.model === "string" ? message.model : undefined;
   const timestamp = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : Date.now();
+  const messageId =
+    (typeof message?.id === "string" && message.id.trim()) ||
+    (typeof entry.uuid === "string" && entry.uuid.trim());
 
   return {
     snapshot: {
@@ -125,6 +128,10 @@ function extractUsageSnapshot(
       outputTokens: output,
       cacheReadTokens: cachedInput,
       cacheCreationTokens: cacheCreation,
+      sourceKind: "claude-jsonl",
+      sourceKey: messageId
+        ? `claude:${messageId}`
+        : `claude:${path.resolve(sourcePath)}:${timestamp}:${input ?? 0}:${output ?? 0}:${cachedInput ?? 0}:${cacheCreation ?? 0}`,
     },
   };
 }

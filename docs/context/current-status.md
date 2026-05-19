@@ -34,15 +34,14 @@
   - `release/CodePal-1.1.6-arm64.zip.blockmap`
   - `release/latest-mac.yml`
 - v1.1.6 notarization returned `Accepted`, and the `.app` / `.dmg` staple steps completed locally.
-- v1.0.3 through v1.1.5 are all shipped. Current shipped baseline is **v1.1.5**.
-- Current patch candidate is **v1.1.6**.
+- v1.0.3 through v1.1.6 are all shipped. Current shipped baseline is **v1.1.6**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
 - v1.1.3 shipped: removed Claude PreToolUse blocking hook, CodePal is now dashboard-only for Claude approval
 - v1.1.4 shipped: Qoder / Qwen / Factory agent support, dashboard polish from dogfood pass
 - v1.1.5 shipped: WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix, E2E stability
-- v1.1.6 candidate: standalone Analytics page and HTML reports, clearer Provider Gateway settings, Phase 1 dashboard polish, Codex subexecution merge/noise reduction
+- v1.1.6 shipped: standalone Analytics page and HTML reports, clearer Provider Gateway settings, Phase 1 dashboard polish, Codex subexecution merge/noise reduction
 
 ## What Already Exists
 
@@ -91,8 +90,10 @@
   - `completed` / `idle` / `offline`: 24 hours
   - `error`: 48 hours
 - Full normalized session history is now also persisted locally in `~/Library/Application Support/codepal/history.sqlite`:
-  - default retention: 2 days
-  - default storage cap: 100 MB
+  - detailed session/activity retention defaults to 30 days
+  - token usage analytics retention defaults to forever
+  - old `retentionDays` settings are migrated to the nearest supported detail-retention preset
+  - automatic max-size trimming has been removed; the settings UI shows current DB size and keeps clear actions explicit
   - full history is read on demand in the existing expanded session details view
   - clearing persisted history only removes CodePal-managed SQLite history, not upstream logs
 - Expanded session rows now keep the outer session list pinned to the expanded row bottom while the details panel grows, so opening a lower row does not leave the newest details below the visible viewport
@@ -122,7 +123,8 @@
 - Invalid or incompatible existing config structures are reported back to the UI instead of being force-overwritten
 - Codex diagnostics treat healthy session-log monitoring as the active path and suppress stale legacy `~/.codex/hooks.json` incompatibility warnings, because current Codex monitoring no longer depends on that legacy file
 - Main process now also carries a dedicated usage aggregation path separate from session timeline state
-- Analytics now has a standalone renderer page with `today` / `7d` / `30d` presets, custom date ranges, per-model breakdowns, and self-contained HTML report generation.
+- Usage analytics now backfills local Claude / Codex token history from `~/.claude/projects/**/*.jsonl` and `~/.codex/sessions/**/*.jsonl`; imported rows are keyed by source so startup rescans are idempotent.
+- Analytics now has a standalone renderer page with `today` / `7d` / `30d` presets, custom date ranges, compact model / agent breakdowns, and self-contained detailed HTML report generation.
 - Renderer top bar now uses a compact quota-first usage strip
 - Usage strip now supports `compact` / `detailed` density, with reset times either shown inline or exposed by hover title
 - Claude Code usage visibility is implemented through two sources:
@@ -252,7 +254,7 @@ npm run dist:mac
 
 ### v1.1.0–v1.1.6 Release Track
 
-v1.1.0 through v1.1.5 are shipped. v1.1.6 is the current patch candidate. See individual release notes for details:
+v1.1.0 through v1.1.6 are shipped. See individual release notes for details:
 
 - `docs/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -267,6 +269,6 @@ v1.1.0 through v1.1.5 are shipped. v1.1.6 is the current patch candidate. See in
 For release-facing and forward-looking work, use:
 
 - `docs/context/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
-- `docs/release-notes-v1.1.6.md` for the current patch candidate
+- `docs/release-notes-v1.1.6.md` for the v1.1.6 release
 - `docs/roadmap-next.md` for forward-looking prioritization (Tier 2 agent/terminal expansion, monitoring depth, product polish)
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist

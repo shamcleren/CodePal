@@ -50,8 +50,8 @@ export function applyHistorySettingsAtRuntime(
   settings: Pick<AppSettings, "history">,
 ) {
   return historyStore.runCleanup({
-    retentionDays: settings.history.retentionDays,
-    maxStorageMb: settings.history.maxStorageMb,
+    detailRetention: settings.history.detailRetention,
+    analyticsRetention: settings.history.analyticsRetention,
   });
 }
 

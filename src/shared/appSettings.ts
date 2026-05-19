@@ -23,10 +23,14 @@ export type CodeBuddyEndpointSettings = {
   cookieNames: string[];
 };
 
+export const HISTORY_RETENTION_PRESETS = ["30d", "90d", "180d", "365d", "forever"] as const;
+
+export type HistoryRetentionPreset = (typeof HISTORY_RETENTION_PRESETS)[number];
+
 export type HistorySettings = {
   persistenceEnabled: boolean;
-  retentionDays: number;
-  maxStorageMb: number;
+  detailRetention: HistoryRetentionPreset;
+  analyticsRetention: HistoryRetentionPreset;
 };
 
 export type NotificationSettings = {
@@ -107,8 +111,8 @@ export const defaultUsageDisplaySettings: UsageDisplaySettings = {
 
 export const defaultHistorySettings: HistorySettings = {
   persistenceEnabled: true,
-  retentionDays: 2,
-  maxStorageMb: 100,
+  detailRetention: "30d",
+  analyticsRetention: "forever",
 };
 
 export const defaultNotificationSettings: NotificationSettings = {
@@ -314,11 +318,23 @@ function normalizeUsageDisplaySettings(value: unknown): UsageDisplaySettings {
   };
 }
 
-function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+function isHistoryRetentionPreset(value: unknown): value is HistoryRetentionPreset {
+  return HISTORY_RETENTION_PRESETS.includes(value as HistoryRetentionPreset);
+}
+
+function legacyDaysToHistoryRetentionPreset(
+  value: unknown,
+  fallback: HistoryRetentionPreset,
+): HistoryRetentionPreset {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
   }
-  return Math.min(max, Math.max(min, Math.trunc(value)));
+  const days = Math.max(1, Math.trunc(value));
+  if (days <= 30) return "30d";
+  if (days <= 90) return "90d";
+  if (days <= 180) return "180d";
+  if (days <= 365) return "365d";
+  return "forever";
 }
 
 function normalizeHistorySettings(value: unknown): HistorySettings {
@@ -327,23 +343,23 @@ function normalizeHistorySettings(value: unknown): HistorySettings {
     return { ...defaultHistorySettings };
   }
 
+  const detailRetention = isHistoryRetentionPreset(candidate.detailRetention)
+    ? candidate.detailRetention
+    : legacyDaysToHistoryRetentionPreset(
+        candidate.retentionDays,
+        defaultHistorySettings.detailRetention,
+      );
+  const analyticsRetention = isHistoryRetentionPreset(candidate.analyticsRetention)
+    ? candidate.analyticsRetention
+    : defaultHistorySettings.analyticsRetention;
+
   return {
     persistenceEnabled:
       typeof candidate.persistenceEnabled === "boolean"
         ? candidate.persistenceEnabled
         : defaultHistorySettings.persistenceEnabled,
-    retentionDays: clampNumber(
-      candidate.retentionDays,
-      1,
-      30,
-      defaultHistorySettings.retentionDays,
-    ),
-    maxStorageMb: clampNumber(
-      candidate.maxStorageMb,
-      10,
-      1024,
-      defaultHistorySettings.maxStorageMb,
-    ),
+    detailRetention,
+    analyticsRetention,
   };
 }
 

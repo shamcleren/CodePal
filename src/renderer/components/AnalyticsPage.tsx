@@ -3,6 +3,7 @@ import type { ModelPricing, TokenStatsResult } from "../../shared/usageTypes";
 import { useI18n } from "../i18n";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
+type BreakdownMode = "model" | "agent";
 
 function resolveRange(preset: RangePreset, customStart?: string, customEnd?: string): { start: number; end: number } {
   const now = Date.now();
@@ -63,6 +64,7 @@ export function AnalyticsPage() {
   const [range, setRange] = useState<RangePreset>("7d");
   const [customStart, setCustomStart] = useState(weekAgoStr());
   const [customEnd, setCustomEnd] = useState(todayStr());
+  const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("model");
   const [data, setData] = useState<TokenStatsResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -102,13 +104,22 @@ export function AnalyticsPage() {
     ? totalCacheRead / (totalCacheRead + totalInput + totalCacheCreation)
     : 0;
   const totalCost = (data?.byModel ?? []).reduce((s, m) => s + estimateCost(m, pricingMap, m.model), 0);
+  const topAgent = data?.byAgent?.[0];
+  const topModel = data?.byModel?.[0];
+  const importStatus = data?.importStatus;
+  const importSummary = importStatus?.completedAt
+    ? i18n.t("tokenStats.backfillSummary", {
+        claude: importStatus.claudeRowsImported,
+        codex: importStatus.codexRowsImported,
+      })
+    : i18n.t("tokenStats.backfillPending");
 
   const dailyByDate = new Map<string, { input: number; output: number; cache: number }>();
   for (const d of data?.daily ?? []) {
     const existing = dailyByDate.get(d.date) ?? { input: 0, output: 0, cache: 0 };
     existing.input += d.inputTokens;
     existing.output += d.outputTokens;
-    existing.cache += d.cacheReadTokens;
+    existing.cache += d.cacheReadTokens + d.cacheCreationTokens;
     dailyByDate.set(d.date, existing);
   }
   const dailyEntries = Array.from(dailyByDate.entries()).sort((a, b) => a[0].localeCompare(b[0]));
@@ -126,9 +137,44 @@ export function AnalyticsPage() {
     { label: i18n.t("tokenStats.requests"), value: String(totalRequests) },
     { label: i18n.t("tokenStats.input"), value: formatTokens(totalInput) },
     { label: i18n.t("tokenStats.output"), value: formatTokens(totalOutput) },
+    {
+      label: i18n.t("tokenStats.topAgent"),
+      value: topAgent ? `${topAgent.agent} · ${formatTokens(topAgent.totalTokens)}` : "—",
+    },
+    {
+      label: i18n.t("tokenStats.topModel"),
+      value: topModel ? `${topModel.model}` : "—",
+    },
     { label: i18n.t("tokenStats.cacheHit"), value: `${Math.round(cacheHitRate * 100)}%` },
     { label: i18n.t("tokenStats.estimatedCost"), value: formatCost(totalCost) },
   ];
+
+  const breakdownRows =
+    breakdownMode === "model"
+      ? (data?.byModel ?? []).slice(0, 8).map((m) => ({
+          key: `${m.agent}-${m.model}`,
+          name: m.model,
+          agent: m.agent,
+          requestCount: m.requestCount,
+          inputTokens: m.inputTokens,
+          outputTokens: m.outputTokens,
+          cacheReadTokens: m.cacheReadTokens,
+          cacheCreationTokens: m.cacheCreationTokens,
+          totalTokens: m.totalTokens,
+          cost: estimateCost(m, pricingMap, m.model),
+        }))
+      : (data?.byAgent ?? []).map((agent) => ({
+          key: agent.agent,
+          name: agent.agent,
+          agent: "",
+          requestCount: agent.requestCount,
+          inputTokens: agent.inputTokens,
+          outputTokens: agent.outputTokens,
+          cacheReadTokens: agent.cacheReadTokens,
+          cacheCreationTokens: agent.cacheCreationTokens,
+          totalTokens: agent.totalTokens,
+          cost: 0,
+        }));
 
   return (
     <div className="analytics-page">
@@ -203,60 +249,111 @@ export function AnalyticsPage() {
         ))}
       </div>
 
+      {importStatus ? (
+        <div className="analytics-page__import-strip">
+          <span>{importSummary}</span>
+          {importStatus.lastError ? (
+            <span className="analytics-page__import-error">{importStatus.lastError}</span>
+          ) : null}
+        </div>
+      ) : null}
+
       {dailyEntries.length > 0 ? (
         <div className="analytics-page__section">
           <div className="analytics-page__section-title">{i18n.t("tokenStats.dailyTrend")}</div>
-          <div className="analytics-page__chart">
-            {dailyEntries.map(([date, vals]) => {
-              const total = vals.input + vals.output + vals.cache;
-              const heightPct = (total / maxDailyTokens) * 100;
-              return (
-                <div
-                  key={date}
-                  className="analytics-page__chart-col"
-                  title={`${date}\n${i18n.t("tokenStats.input")}: ${formatTokens(vals.input)}\n${i18n.t("tokenStats.output")}: ${formatTokens(vals.output)}\n${i18n.t("tokenStats.cache")}: ${formatTokens(vals.cache)}`}
-                >
+          <div className="analytics-page__chart-wrap">
+            <div className="analytics-page__chart-y-axis">
+              <span>{formatTokens(maxDailyTokens)}</span>
+              <span>{formatTokens(Math.round(maxDailyTokens * 0.5))}</span>
+              <span>0</span>
+            </div>
+            <div className="analytics-page__chart">
+              {dailyEntries.map(([date, vals]) => {
+                const total = vals.input + vals.output + vals.cache;
+                const heightPct = (total / maxDailyTokens) * 100;
+                const inputPct = total > 0 ? (vals.input / total) * heightPct : 0;
+                const outputPct = total > 0 ? (vals.output / total) * heightPct : 0;
+                return (
                   <div
-                    className="analytics-page__chart-bar"
-                    style={{ height: `${Math.max(2, heightPct)}%` }}
-                  />
-                  <div className="analytics-page__chart-label">{date.slice(5)}</div>
-                </div>
-              );
-            })}
+                    key={date}
+                    className="analytics-page__chart-col"
+                    title={`${date}\n${i18n.t("tokenStats.input")}: ${formatTokens(vals.input)}\n${i18n.t("tokenStats.output")}: ${formatTokens(vals.output)}\n${i18n.t("tokenStats.cache")}: ${formatTokens(vals.cache)}\n${i18n.t("tokenStats.totalTokens")}: ${formatTokens(total)}`}
+                  >
+                    <div className="analytics-page__chart-value">{formatTokens(total)}</div>
+                    <div className="analytics-page__chart-bar-group" style={{ height: `${Math.max(2, heightPct)}%` }}>
+                      <div className="analytics-page__chart-bar analytics-page__chart-bar--input" style={{ height: `${inputPct / Math.max(2, heightPct) * 100}%` }} />
+                      <div className="analytics-page__chart-bar analytics-page__chart-bar--output" style={{ height: `${outputPct / Math.max(2, heightPct) * 100}%` }} />
+                      <div className="analytics-page__chart-bar analytics-page__chart-bar--cache" style={{ flex: 1 }} />
+                    </div>
+                    <div className="analytics-page__chart-label">{date.slice(5)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="analytics-page__chart-legend">
+            <span className="analytics-page__legend-item"><span className="analytics-page__legend-dot analytics-page__legend-dot--input" />{i18n.t("tokenStats.input")}</span>
+            <span className="analytics-page__legend-item"><span className="analytics-page__legend-dot analytics-page__legend-dot--output" />{i18n.t("tokenStats.output")}</span>
+            <span className="analytics-page__legend-item"><span className="analytics-page__legend-dot analytics-page__legend-dot--cache" />{i18n.t("tokenStats.cache")}</span>
           </div>
         </div>
       ) : null}
 
-      {(data?.byModel ?? []).length > 0 ? (
+      {breakdownRows.length > 0 ? (
         <div className="analytics-page__section">
-          <div className="analytics-page__section-title">{i18n.t("tokenStats.byModel")}</div>
+          <div className="analytics-page__section-header">
+            <div className="analytics-page__section-title">{i18n.t("tokenStats.breakdown")}</div>
+            <div className="analytics-page__segmented" aria-label={i18n.t("tokenStats.breakdown")}>
+              <button
+                type="button"
+                className={`analytics-page__segment ${breakdownMode === "model" ? "analytics-page__segment--active" : ""}`}
+                onClick={() => setBreakdownMode("model")}
+              >
+                {i18n.t("tokenStats.byModel")}
+              </button>
+              <button
+                type="button"
+                className={`analytics-page__segment ${breakdownMode === "agent" ? "analytics-page__segment--active" : ""}`}
+                onClick={() => setBreakdownMode("agent")}
+              >
+                {i18n.t("tokenStats.byAgent")}
+              </button>
+            </div>
+          </div>
           <table className="analytics-page__table">
             <thead>
               <tr>
-                <th>{i18n.t("tokenStats.model")}</th>
+                <th className="analytics-page__table-model">
+                  {breakdownMode === "model" ? i18n.t("tokenStats.model") : i18n.t("tokenStats.agent")}
+                </th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.requests")}</th>
+                <th className="analytics-page__table-num">{i18n.t("tokenStats.totalTokens")}</th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.input")}</th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.output")}</th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.cacheHit")}</th>
-                <th className="analytics-page__table-num">{i18n.t("tokenStats.cost")}</th>
+                {breakdownMode === "model" ? (
+                  <th className="analytics-page__table-num">{i18n.t("tokenStats.cost")}</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
-              {(data?.byModel ?? []).map((m) => {
-                const modelTotal = m.inputTokens + m.cacheReadTokens + m.cacheCreationTokens;
-                const modelCacheRate = modelTotal > 0 ? m.cacheReadTokens / modelTotal : 0;
+              {breakdownRows.map((row) => {
+                const inputLikeTotal = row.inputTokens + row.cacheReadTokens + row.cacheCreationTokens;
+                const cacheRate = inputLikeTotal > 0 ? row.cacheReadTokens / inputLikeTotal : 0;
                 return (
-                <tr key={`${m.agent}-${m.model}`}>
-                  <td>
-                    <span className="analytics-page__table-agent">{m.agent}</span>
-                    {m.model}
+                <tr key={row.key}>
+                  <td className="analytics-page__table-model">
+                    {row.agent ? <span className="analytics-page__table-agent">{row.agent}</span> : null}
+                    {row.name}
                   </td>
-                  <td className="analytics-page__table-num">{m.requestCount}</td>
-                  <td className="analytics-page__table-num">{formatTokens(m.inputTokens)}</td>
-                  <td className="analytics-page__table-num">{formatTokens(m.outputTokens)}</td>
-                  <td className="analytics-page__table-num">{modelCacheRate > 0 ? `${Math.round(modelCacheRate * 100)}%` : "—"}</td>
-                  <td className="analytics-page__table-num">{formatCost(estimateCost(m, pricingMap, m.model))}</td>
+                  <td className="analytics-page__table-num">{row.requestCount}</td>
+                  <td className="analytics-page__table-num">{formatTokens(row.totalTokens)}</td>
+                  <td className="analytics-page__table-num">{formatTokens(row.inputTokens)}</td>
+                  <td className="analytics-page__table-num">{formatTokens(row.outputTokens)}</td>
+                  <td className="analytics-page__table-num">{cacheRate > 0 ? `${Math.round(cacheRate * 100)}%` : "—"}</td>
+                  {breakdownMode === "model" ? (
+                    <td className="analytics-page__table-num">{formatCost(row.cost)}</td>
+                  ) : null}
                 </tr>
                 );
               })}

@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
-import type { KeyboardEvent } from "react";
-import type { HistorySettings } from "../../shared/appSettings";
+import {
+  HISTORY_RETENTION_PRESETS,
+  type HistoryRetentionPreset,
+  type HistorySettings,
+} from "../../shared/appSettings";
 import type { HistoryDiagnostics } from "../../shared/historyTypes";
 import { useI18n } from "../i18n";
 
@@ -14,8 +16,6 @@ type HistorySettingsPanelProps = {
   onClearSessionHistory?: () => void;
 };
 
-type HistoryNumberField = "retentionDays" | "maxStorageMb";
-
 function formatBytes(value: number): string {
   if (value >= 1024 * 1024) {
     return `${(value / (1024 * 1024)).toFixed(1)} MB`;
@@ -24,25 +24,6 @@ function formatBytes(value: number): string {
     return `${(value / 1024).toFixed(1)} KB`;
   }
   return `${value} B`;
-}
-
-export function commitHistoryNumberDraft(
-  draft: string,
-  fallback: number,
-  min: number,
-  max: number,
-): number {
-  const trimmed = draft.trim();
-  if (!trimmed) {
-    return fallback;
-  }
-
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-
-  return Math.min(max, Math.max(min, Math.trunc(parsed)));
 }
 
 export function HistorySettingsPanel({
@@ -55,50 +36,9 @@ export function HistorySettingsPanel({
   onClearSessionHistory,
 }: HistorySettingsPanelProps) {
   const { t, formatDateTime } = useI18n();
-  const [drafts, setDrafts] = useState({
-    retentionDays: String(settings.retentionDays),
-    maxStorageMb: String(settings.maxStorageMb),
-  });
 
-  useEffect(() => {
-    setDrafts({
-      retentionDays: String(settings.retentionDays),
-      maxStorageMb: String(settings.maxStorageMb),
-    });
-  }, [settings.maxStorageMb, settings.retentionDays]);
-
-  function setDraft(field: HistoryNumberField, value: string) {
-    setDrafts((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  }
-
-  function commitDraft(field: HistoryNumberField) {
-    const nextValue =
-      field === "retentionDays"
-        ? commitHistoryNumberDraft(drafts.retentionDays, settings.retentionDays, 1, 30)
-        : commitHistoryNumberDraft(drafts.maxStorageMb, settings.maxStorageMb, 10, 1024);
-
-    setDraft(field, String(nextValue));
-
-    if (field === "retentionDays") {
-      if (nextValue !== settings.retentionDays) {
-        onUpdate({ retentionDays: nextValue });
-      }
-      return;
-    }
-
-    if (nextValue !== settings.maxStorageMb) {
-      onUpdate({ maxStorageMb: nextValue });
-    }
-  }
-
-  function handleDraftKeyDown(event: KeyboardEvent<HTMLInputElement>, field: HistoryNumberField) {
-    if (event.key === "Enter") {
-      commitDraft(field);
-      event.currentTarget.blur();
-    }
+  function retentionLabel(preset: HistoryRetentionPreset): string {
+    return t(`history.retention.${preset}`);
   }
 
   return (
@@ -119,28 +59,34 @@ export function HistorySettingsPanel({
 
       <div className="display-panel__agents">
         <label className="display-panel__toggle">
-          <span>{t("history.retentionDays")}</span>
-          <input
-            type="number"
-            min={1}
-            max={30}
-            value={drafts.retentionDays}
-            onChange={(event) => setDraft("retentionDays", event.target.value)}
-            onBlur={() => commitDraft("retentionDays")}
-            onKeyDown={(event) => handleDraftKeyDown(event, "retentionDays")}
-          />
+          <span>{t("history.detailRetention")}</span>
+          <select
+            value={settings.detailRetention}
+            onChange={(event) =>
+              onUpdate({ detailRetention: event.target.value as HistoryRetentionPreset })
+            }
+          >
+            {HISTORY_RETENTION_PRESETS.map((preset) => (
+              <option key={preset} value={preset}>
+                {retentionLabel(preset)}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="display-panel__toggle">
-          <span>{t("history.maxStorageMb")}</span>
-          <input
-            type="number"
-            min={10}
-            max={1024}
-            value={drafts.maxStorageMb}
-            onChange={(event) => setDraft("maxStorageMb", event.target.value)}
-            onBlur={() => commitDraft("maxStorageMb")}
-            onKeyDown={(event) => handleDraftKeyDown(event, "maxStorageMb")}
-          />
+          <span>{t("history.analyticsRetention")}</span>
+          <select
+            value={settings.analyticsRetention}
+            onChange={(event) =>
+              onUpdate({ analyticsRetention: event.target.value as HistoryRetentionPreset })
+            }
+          >
+            {HISTORY_RETENTION_PRESETS.map((preset) => (
+              <option key={preset} value={preset}>
+                {retentionLabel(preset)}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 

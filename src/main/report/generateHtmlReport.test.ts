@@ -118,6 +118,56 @@ describe("generateHtmlReport", () => {
     expect(html).toContain("$18.00"); // 1M*3 + 1M*15 = $18
   });
 
+  it("includes detailed analytics sections for agents, sessions, and backfill status", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+      sessionStats: [],
+      daily: [],
+      byModel: [],
+      byAgent: [
+        {
+          agent: "codex",
+          inputTokens: 1_000,
+          outputTokens: 500,
+          cacheReadTokens: 250,
+          cacheCreationTokens: 0,
+          totalTokens: 1_750,
+          requestCount: 4,
+        },
+      ],
+      topSessions: [
+        {
+          sessionId: "session-1",
+          agent: "codex",
+          model: "gpt-5.5",
+          inputTokens: 1_000,
+          outputTokens: 500,
+          cacheReadTokens: 250,
+          cacheCreationTokens: 0,
+          totalTokens: 1_750,
+          requestCount: 4,
+          firstSeenAt: Date.parse("2026-05-12T10:00:00.000Z"),
+          lastSeenAt: Date.parse("2026-05-12T10:30:00.000Z"),
+        },
+      ],
+      importStatus: {
+        completedAt: Date.parse("2026-05-18T10:00:00.000Z"),
+        claudeRowsImported: 2,
+        codexRowsImported: 3,
+        lastError: null,
+      },
+      pricing: [],
+    });
+
+    expect(html).toContain("By Agent");
+    expect(html).toContain("Top Sessions");
+    expect(html).toContain("Backfill");
+    expect(html).toContain("session-1");
+    expect(html).toContain("Claude rows: 2");
+    expect(html).toContain("Codex rows: 3");
+  });
+
   it("escapes HTML in model names", () => {
     const html = generateHtmlReport({
       startDate: "2026-05-12",

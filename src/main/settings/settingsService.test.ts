@@ -37,8 +37,8 @@ describe("settingsService", () => {
       },
       history: {
         persistenceEnabled: true,
-        retentionDays: 2,
-        maxStorageMb: 100,
+        detailRetention: "30d",
+        analyticsRetention: "forever",
       },
       codebuddy: {
         enterprise: {

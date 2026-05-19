@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n";
-import { commitHistoryNumberDraft, HistorySettingsPanel } from "./HistorySettingsPanel";
+import { HistorySettingsPanel } from "./HistorySettingsPanel";
 
 describe("HistorySettingsPanel", () => {
   it("renders persisted history controls and diagnostics", () => {
@@ -10,8 +10,8 @@ describe("HistorySettingsPanel", () => {
         <HistorySettingsPanel
           settings={{
             persistenceEnabled: true,
-            retentionDays: 2,
-            maxStorageMb: 100,
+            detailRetention: "30d",
+            analyticsRetention: "forever",
           }}
           diagnostics={{
             enabled: true,
@@ -31,8 +31,9 @@ describe("HistorySettingsPanel", () => {
     );
 
     expect(html).toContain("Persisted History");
-    expect(html).toContain("Retention Days");
-    expect(html).toContain("Max Storage (MB)");
+    expect(html).toContain("Detailed Session Retention");
+    expect(html).toContain("Analytics Retention");
+    expect(html).toContain("Forever");
     expect(html).toContain("Current DB Size: 2.0 KB");
     expect(html).toContain("Stored Sessions: 3");
     expect(html).toContain("Stored Events: 10");
@@ -48,8 +49,8 @@ describe("HistorySettingsPanel", () => {
         <HistorySettingsPanel
           settings={{
             persistenceEnabled: false,
-            retentionDays: 7,
-            maxStorageMb: 200,
+            detailRetention: "30d",
+            analyticsRetention: "forever",
           }}
           diagnostics={null}
           loading={true}
@@ -61,17 +62,9 @@ describe("HistorySettingsPanel", () => {
     );
 
     expect(html).toContain("持久化历史");
-    expect(html).toContain("保留天数");
+    expect(html).toContain("详细会话保留");
+    expect(html).toContain("分析数据保留");
     expect(html).toContain("清理中…");
     expect(html).toContain("历史库：已停用");
-  });
-
-  it("commits numeric drafts only when finalized and clamps them into range", () => {
-    expect(commitHistoryNumberDraft("14", 2, 1, 30)).toBe(14);
-    expect(commitHistoryNumberDraft("", 2, 1, 30)).toBe(2);
-    expect(commitHistoryNumberDraft("bad", 2, 1, 30)).toBe(2);
-    expect(commitHistoryNumberDraft("0", 2, 1, 30)).toBe(1);
-    expect(commitHistoryNumberDraft("2048", 100, 10, 1024)).toBe(1024);
-    expect(commitHistoryNumberDraft("12.9", 100, 10, 1024)).toBe(12);
   });
 });

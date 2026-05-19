@@ -51,6 +51,7 @@ import {
   queueAcceptedSessionEventWrite,
   registerHistoryIpcHandlers,
 } from "./history/historyRuntime";
+import { runUsageBackfill } from "./history/usageBackfill";
 import { installMainProcessFileLogger } from "./logging/appLogger";
 import { createNotificationService } from "./notification/notificationService";
 import type { NotificationService } from "./notification/notificationService";
@@ -200,10 +201,27 @@ function wireActionResponseIpc(
     return usageStore.getOverview();
   });
   ipcMain.handle("codepal:get-token-stats", (_event, startMs: number, endMs: number, agent?: string) => {
-    if (!currentHistoryStore) return { daily: [], byModel: [], pricing: [] };
+    if (!currentHistoryStore) {
+      return {
+        daily: [],
+        byModel: [],
+        byAgent: [],
+        topSessions: [],
+        importStatus: {
+          completedAt: null,
+          claudeRowsImported: 0,
+          codexRowsImported: 0,
+          lastError: null,
+        },
+        pricing: [],
+      };
+    }
     return {
       daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs, agent),
       byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs, agent),
+      byAgent: currentHistoryStore.getTokenUsageByAgent(startMs, endMs, agent),
+      topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, agent, 10),
+      importStatus: currentHistoryStore.getUsageImportStatus(),
       pricing: currentHistoryStore.getModelPricing(),
     };
   });
@@ -229,6 +247,9 @@ function wireActionResponseIpc(
       sessionStats: currentHistoryStore.getSessionStats(startMs, endMs),
       daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs),
       byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs),
+      byAgent: currentHistoryStore.getTokenUsageByAgent(startMs, endMs),
+      topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, undefined, 25),
+      importStatus: currentHistoryStore.getUsageImportStatus(),
       pricing: currentHistoryStore.getModelPricing(),
     });
     const filePath = path.join(os.tmpdir(), `codepal-report-${Date.now()}.html`);
@@ -718,6 +739,23 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       });
       applyHistorySettingsAtRuntime(historyStore, appSettings);
       if (appSettings.history.persistenceEnabled && historyStore) {
+        setImmediate(() => {
+          if (!historyStore) {
+            return;
+          }
+          const status = runUsageBackfill({
+            historyStore,
+            claudeProjectsPath: path.join(homeDir, ".claude", "projects"),
+            codexSessionsPath: path.join(homeDir, ".codex", "sessions"),
+          });
+          if (status.lastError) {
+            console.error("[CodePal Usage] history backfill failed:", status.lastError);
+          } else if (status.claudeRowsImported > 0 || status.codexRowsImported > 0) {
+            console.log(
+              `[CodePal Usage] Backfilled ${status.claudeRowsImported} Claude row(s) and ${status.codexRowsImported} Codex row(s)`,
+            );
+          }
+        });
         const RESTORE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
         const MAX_RESTORE_COUNT = 150;
         try {

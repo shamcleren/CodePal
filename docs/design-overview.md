@@ -181,6 +181,8 @@ The renderer still treats the dashboard list as a summary surface. Full retained
 
 On startup, recent user-initiated sessions (last 24 hours, up to 150) are restored from the SQLite history store into the in-memory session store. This means the dashboard is immediately populated after an app update or restart without resurfacing lifecycle-only noise such as bare "session ended" rows. Restored sessions that were `running` or `waiting` at shutdown are normalized to `idle`, and live hook events always take precedence over restored state.
 
+Usage analytics is intentionally retained separately from detailed session transcripts. Detailed activity history defaults to a 30-day local retention window, while token analytics defaults to forever and can be backfilled from Claude and Codex local JSONL history. The in-app Analytics page stays compact for day-to-day scanning; the generated HTML report is the detailed export surface for model, agent, session, and import-status breakdowns.
+
 ## Integration Strategy
 
 CodePal supports multiple intake styles because upstream tools expose different surfaces.

@@ -6,8 +6,8 @@ display:
   density: detailed
 history:
   persistenceEnabled: true
-  retentionDays: 2
-  maxStorageMb: 100
+  detailRetention: 30d
+  analyticsRetention: forever
 providerGateway:
   enabled: true
   host: 127.0.0.1

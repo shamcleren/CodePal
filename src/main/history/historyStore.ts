@@ -1,18 +1,33 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import type { HistoryRetentionPreset } from "../../shared/appSettings";
 import type { HistoryDiagnostics, SessionHistoryPage, SessionHistoryPageRequest } from "../../shared/historyTypes";
 import type { ActivityItem } from "../../shared/sessionTypes";
-import type { DailyTokenStats, ModelPricing, ModelTokenStats, TokenUsageWrite } from "../../shared/usageTypes";
+import type {
+  AgentTokenStats,
+  DailyTokenStats,
+  ModelPricing,
+  ModelTokenStats,
+  SessionTokenStats,
+  TokenUsageWrite,
+  UsageImportStatus,
+} from "../../shared/usageTypes";
 
 const DEFAULT_PAGE_LIMIT = 100;
 const MAX_PAGE_LIMIT = 200;
 const LAST_CLEANUP_AT_KEY = "lastCleanupAt";
+const USAGE_IMPORT_COMPLETED_AT_KEY = "usageImport.completedAt";
+const USAGE_IMPORT_CLAUDE_ROWS_KEY = "usageImport.claudeRowsImported";
+const USAGE_IMPORT_CODEX_ROWS_KEY = "usageImport.codexRowsImported";
+const USAGE_IMPORT_LAST_ERROR_KEY = "usageImport.lastError";
 const SQLITE_SIDE_FILES = ["", "-wal", "-shm"] as const;
 
+type CleanupRetention = HistoryRetentionPreset | `${number}d`;
+
 type CleanupOptions = {
-  retentionDays: number;
-  maxStorageMb: number;
+  detailRetention: CleanupRetention;
+  analyticsRetention: CleanupRetention;
 };
 
 type HistoryCursor = {
@@ -97,6 +112,19 @@ function normalizeLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(MAX_PAGE_LIMIT, Math.trunc(limit ?? DEFAULT_PAGE_LIMIT)));
 }
 
+function retentionDays(value: CleanupRetention): number | null {
+  if (value === "forever") {
+    return null;
+  }
+  const days = Number.parseInt(value.replace("d", ""), 10);
+  return Number.isFinite(days) ? Math.max(1, days) : 30;
+}
+
+function cutoffForRetention(nowMs: number, retention: CleanupRetention): number | null {
+  const days = retentionDays(retention);
+  return days === null ? null : nowMs - days * 24 * 60 * 60 * 1000;
+}
+
 function deleteOrphanSessions(db: DatabaseSync) {
   db.exec(`
     DELETE FROM sessions
@@ -177,6 +205,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cache_read_tokens INTEGER NOT NULL DEFAULT 0,
       cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
       reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+      source_kind TEXT,
+      source_key TEXT,
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
 
@@ -184,6 +214,9 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       ON token_usage (timestamp DESC);
     CREATE INDEX IF NOT EXISTS idx_token_usage_agent_ts
       ON token_usage (agent, timestamp DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_token_usage_source_key
+      ON token_usage (agent, source_key)
+      WHERE source_key IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS model_pricing (
       model_id TEXT PRIMARY KEY,
@@ -193,6 +226,24 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cache_read_per_million TEXT NOT NULL DEFAULT '0',
       cache_creation_per_million TEXT NOT NULL DEFAULT '0'
     );
+  `);
+
+  for (const statement of [
+    "ALTER TABLE token_usage ADD COLUMN source_kind TEXT",
+    "ALTER TABLE token_usage ADD COLUMN source_key TEXT",
+  ]) {
+    try {
+      db.exec(statement);
+    } catch (error) {
+      if (!String((error as Error).message).toLowerCase().includes("duplicate column")) {
+        throw error;
+      }
+    }
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_token_usage_source_key
+      ON token_usage (agent, source_key)
+      WHERE source_key IS NOT NULL
   `);
 
   // Seed default model pricing (upsert so user edits survive)
@@ -330,31 +381,39 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   `);
   const deleteActivityBeforeStmt = db.prepare(`DELETE FROM session_activity_items WHERE timestamp < ?`);
   const deleteDebugBeforeStmt = db.prepare(`DELETE FROM session_event_debug WHERE timestamp < ?`);
-  const oldestActivityRowsStmt = db.prepare(`
-    SELECT insert_seq AS insertSeq
-    FROM session_activity_items
-    ORDER BY timestamp ASC, insert_seq ASC
-    LIMIT ?
-  `);
-  const oldestDebugRowsStmt = db.prepare(`
-    SELECT id
-    FROM session_event_debug
-    ORDER BY timestamp ASC, id ASC
-    LIMIT ?
-  `);
-  const deleteActivityBySeqStmt = db.prepare(`DELETE FROM session_activity_items WHERE insert_seq = ?`);
-  const deleteDebugByIdStmt = db.prepare(`DELETE FROM session_event_debug WHERE id = ?`);
 
   // Token usage statements
+  const ensureTokenUsageSessionStmt = db.prepare(`
+    INSERT INTO sessions (id, tool, status, title, latest_task, updated_at, last_user_message_at, has_pending_actions)
+    VALUES (?, ?, 'unknown', NULL, NULL, ?, NULL, 0)
+    ON CONFLICT(id) DO UPDATE SET
+      updated_at = MAX(sessions.updated_at, excluded.updated_at)
+  `);
   const insertTokenUsageStmt = db.prepare(`
-    INSERT INTO token_usage (session_id, agent, model, timestamp, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, reasoning_tokens)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO token_usage (
+      session_id, agent, model, timestamp, input_tokens, output_tokens,
+      cache_read_tokens, cache_creation_tokens, reasoning_tokens, source_kind, source_key
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const findTokenUsageBySourceStmt = db.prepare(`
+    SELECT id FROM token_usage WHERE agent = ? AND source_key = ? LIMIT 1
+  `);
+  const updateTokenUsageByIdStmt = db.prepare(`
+    UPDATE token_usage
+    SET
+      session_id = ?,
+      model = ?,
+      timestamp = ?,
+      input_tokens = ?,
+      output_tokens = ?,
+      cache_read_tokens = ?,
+      cache_creation_tokens = ?,
+      reasoning_tokens = ?,
+      source_kind = ?
+    WHERE id = ?
   `);
   const deleteTokenUsageBeforeStmt = db.prepare(`DELETE FROM token_usage WHERE timestamp < ?`);
-  const oldestTokenUsageRowsStmt = db.prepare(`
-    SELECT id FROM token_usage ORDER BY timestamp ASC, id ASC LIMIT ?
-  `);
-  const deleteTokenUsageByIdStmt = db.prepare(`DELETE FROM token_usage WHERE id = ?`);
 
   const dailyStatsStmt = db.prepare(`
     SELECT
@@ -389,6 +448,43 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       AND (? IS NULL OR agent = ?)
     GROUP BY model, agent
     ORDER BY totalTokens DESC
+  `);
+
+  const agentStatsStmt = db.prepare(`
+    SELECT
+      agent,
+      SUM(input_tokens) AS inputTokens,
+      SUM(output_tokens) AS outputTokens,
+      SUM(cache_read_tokens) AS cacheReadTokens,
+      SUM(cache_creation_tokens) AS cacheCreationTokens,
+      SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) AS totalTokens,
+      COUNT(*) AS requestCount
+    FROM token_usage
+    WHERE timestamp >= ? AND timestamp < ?
+      AND (? IS NULL OR agent = ?)
+    GROUP BY agent
+    ORDER BY totalTokens DESC
+  `);
+
+  const topSessionStatsStmt = db.prepare(`
+    SELECT
+      session_id AS sessionId,
+      agent,
+      COALESCE(model, 'unknown') AS model,
+      SUM(input_tokens) AS inputTokens,
+      SUM(output_tokens) AS outputTokens,
+      SUM(cache_read_tokens) AS cacheReadTokens,
+      SUM(cache_creation_tokens) AS cacheCreationTokens,
+      SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) AS totalTokens,
+      COUNT(*) AS requestCount,
+      MIN(timestamp) AS firstSeenAt,
+      MAX(timestamp) AS lastSeenAt
+    FROM token_usage
+    WHERE timestamp >= ? AND timestamp < ?
+      AND (? IS NULL OR agent = ?)
+    GROUP BY session_id, agent, model
+    ORDER BY totalTokens DESC
+    LIMIT ?
   `);
 
   const sessionStatsStmt = db.prepare(`
@@ -554,17 +650,55 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
   function writeTokenUsage(entry: TokenUsageWrite) {
     assertOpen();
-    insertTokenUsageStmt.run(
-      entry.sessionId,
-      entry.agent,
-      entry.model ?? null,
-      entry.timestamp,
-      entry.inputTokens ?? 0,
-      entry.outputTokens ?? 0,
-      entry.cacheReadTokens ?? 0,
-      entry.cacheCreationTokens ?? 0,
-      entry.reasoningTokens ?? 0,
-    );
+    const sourceKey =
+      typeof entry.sourceKey === "string" && entry.sourceKey.trim()
+        ? entry.sourceKey.trim()
+        : null;
+    const sourceKind =
+      typeof entry.sourceKind === "string" && entry.sourceKind.trim()
+        ? entry.sourceKind.trim()
+        : null;
+
+    db.exec("BEGIN");
+    try {
+      ensureTokenUsageSessionStmt.run(entry.sessionId, entry.agent, entry.timestamp);
+      const existing =
+        sourceKey !== null
+          ? (findTokenUsageBySourceStmt.get(entry.agent, sourceKey) as { id: number } | undefined)
+          : undefined;
+      if (existing) {
+        updateTokenUsageByIdStmt.run(
+          entry.sessionId,
+          entry.model ?? null,
+          entry.timestamp,
+          entry.inputTokens ?? 0,
+          entry.outputTokens ?? 0,
+          entry.cacheReadTokens ?? 0,
+          entry.cacheCreationTokens ?? 0,
+          entry.reasoningTokens ?? 0,
+          sourceKind,
+          existing.id,
+        );
+      } else {
+        insertTokenUsageStmt.run(
+          entry.sessionId,
+          entry.agent,
+          entry.model ?? null,
+          entry.timestamp,
+          entry.inputTokens ?? 0,
+          entry.outputTokens ?? 0,
+          entry.cacheReadTokens ?? 0,
+          entry.cacheCreationTokens ?? 0,
+          entry.reasoningTokens ?? 0,
+          sourceKind,
+          sourceKey,
+        );
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   function getTokenUsageDailyStats(
@@ -635,6 +769,104 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }));
   }
 
+  function getTokenUsageByAgent(
+    startMs: number,
+    endMs: number,
+    agent?: string,
+  ): AgentTokenStats[] {
+    assertOpen();
+    const rows = agentStatsStmt.all(
+      startMs,
+      endMs,
+      agent ?? null,
+      agent ?? null,
+    ) as Array<{
+      agent: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      totalTokens: number;
+      requestCount: number;
+    }>;
+    return rows.map((row) => ({
+      agent: row.agent,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      cacheReadTokens: row.cacheReadTokens,
+      cacheCreationTokens: row.cacheCreationTokens,
+      totalTokens: row.totalTokens,
+      requestCount: row.requestCount,
+    }));
+  }
+
+  function getTopTokenUsageSessions(
+    startMs: number,
+    endMs: number,
+    agent?: string,
+    limit = 20,
+  ): SessionTokenStats[] {
+    assertOpen();
+    const normalizedLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+    const rows = topSessionStatsStmt.all(
+      startMs,
+      endMs,
+      agent ?? null,
+      agent ?? null,
+      normalizedLimit,
+    ) as Array<{
+      sessionId: string;
+      agent: string;
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      totalTokens: number;
+      requestCount: number;
+      firstSeenAt: number;
+      lastSeenAt: number;
+    }>;
+    return rows.map((row) => ({
+      sessionId: row.sessionId,
+      agent: row.agent,
+      model: row.model,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      cacheReadTokens: row.cacheReadTokens,
+      cacheCreationTokens: row.cacheCreationTokens,
+      totalTokens: row.totalTokens,
+      requestCount: row.requestCount,
+      firstSeenAt: row.firstSeenAt,
+      lastSeenAt: row.lastSeenAt,
+    }));
+  }
+
+  function getUsageImportStatus(): UsageImportStatus {
+    assertOpen();
+    const completedAt = lastCleanupStmt.get(USAGE_IMPORT_COMPLETED_AT_KEY) as { value: string } | undefined;
+    const claudeRows = lastCleanupStmt.get(USAGE_IMPORT_CLAUDE_ROWS_KEY) as { value: string } | undefined;
+    const codexRows = lastCleanupStmt.get(USAGE_IMPORT_CODEX_ROWS_KEY) as { value: string } | undefined;
+    const lastError = lastCleanupStmt.get(USAGE_IMPORT_LAST_ERROR_KEY) as { value: string } | undefined;
+    const parsedCompletedAt = completedAt ? Number.parseInt(completedAt.value, 10) : NaN;
+    const parsedClaudeRows = claudeRows ? Number.parseInt(claudeRows.value, 10) : NaN;
+    const parsedCodexRows = codexRows ? Number.parseInt(codexRows.value, 10) : NaN;
+    return {
+      completedAt: Number.isFinite(parsedCompletedAt) ? parsedCompletedAt : null,
+      claudeRowsImported: Number.isFinite(parsedClaudeRows) ? parsedClaudeRows : 0,
+      codexRowsImported: Number.isFinite(parsedCodexRows) ? parsedCodexRows : 0,
+      lastError: lastError?.value || null,
+    };
+  }
+
+  function setUsageImportStatus(status: UsageImportStatus) {
+    assertOpen();
+    upsertMetaStmt.run(USAGE_IMPORT_COMPLETED_AT_KEY, String(status.completedAt ?? ""));
+    upsertMetaStmt.run(USAGE_IMPORT_CLAUDE_ROWS_KEY, String(status.claudeRowsImported));
+    upsertMetaStmt.run(USAGE_IMPORT_CODEX_ROWS_KEY, String(status.codexRowsImported));
+    upsertMetaStmt.run(USAGE_IMPORT_LAST_ERROR_KEY, status.lastError ?? "");
+  }
+
   function getSessionStats(
     startMs: number,
     endMs: number,
@@ -696,89 +928,30 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
   function runCleanup(cleanup: CleanupOptions): HistoryDiagnostics {
     assertOpen();
-    const retentionCutoff = now() - Math.max(1, cleanup.retentionDays) * 24 * 60 * 60 * 1000;
+    const currentTime = now();
+    const detailCutoff = cutoffForRetention(currentTime, cleanup.detailRetention);
+    const analyticsCutoff = cutoffForRetention(currentTime, cleanup.analyticsRetention);
 
     db.exec("BEGIN");
     try {
-      deleteActivityBeforeStmt.run(retentionCutoff);
-      deleteDebugBeforeStmt.run(retentionCutoff);
-      deleteTokenUsageBeforeStmt.run(retentionCutoff);
+      if (detailCutoff !== null) {
+        deleteActivityBeforeStmt.run(detailCutoff);
+        deleteDebugBeforeStmt.run(detailCutoff);
+      }
+      if (analyticsCutoff !== null) {
+        deleteTokenUsageBeforeStmt.run(analyticsCutoff);
+      }
       deleteOrphanSessions(db);
-      upsertMetaStmt.run(LAST_CLEANUP_AT_KEY, String(now()));
+      upsertMetaStmt.run(LAST_CLEANUP_AT_KEY, String(currentTime));
       db.exec("COMMIT");
     } catch (error) {
       db.exec("ROLLBACK");
       throw error;
     }
 
-    const maxBytes = Math.max(1, cleanup.maxStorageMb) * 1024 * 1024;
     checkpointWal("TRUNCATE");
     db.exec("VACUUM");
     checkpointWal("TRUNCATE");
-    let currentSize = totalSqliteSize(options.dbPath);
-    let trimmed = false;
-
-    while (currentSize > maxBytes) {
-      const oldestActivityRows = oldestActivityRowsStmt.all(200) as Array<{ insertSeq: number }>;
-      if (oldestActivityRows.length > 0) {
-        db.exec("BEGIN");
-        try {
-          for (const row of oldestActivityRows) {
-            deleteActivityBySeqStmt.run(row.insertSeq);
-          }
-          deleteOrphanSessions(db);
-          db.exec("COMMIT");
-        } catch (error) {
-          db.exec("ROLLBACK");
-          throw error;
-        }
-        trimmed = true;
-      } else {
-        const oldestDebugRows = oldestDebugRowsStmt.all(200) as Array<{ id: number }>;
-        if (oldestDebugRows.length > 0) {
-          db.exec("BEGIN");
-          try {
-            for (const row of oldestDebugRows) {
-              deleteDebugByIdStmt.run(row.id);
-            }
-            deleteOrphanSessions(db);
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
-          trimmed = true;
-        } else {
-          const oldestTokenRows = oldestTokenUsageRowsStmt.all(200) as Array<{ id: number }>;
-          if (oldestTokenRows.length === 0) {
-            break;
-          }
-          db.exec("BEGIN");
-          try {
-            for (const row of oldestTokenRows) {
-              deleteTokenUsageByIdStmt.run(row.id);
-            }
-            deleteOrphanSessions(db);
-            db.exec("COMMIT");
-          } catch (error) {
-            db.exec("ROLLBACK");
-            throw error;
-          }
-          trimmed = true;
-        }
-      }
-
-      checkpointWal("TRUNCATE");
-      db.exec("VACUUM");
-      checkpointWal("TRUNCATE");
-      currentSize = totalSqliteSize(options.dbPath);
-    }
-
-    if (!trimmed) {
-      checkpointWal("TRUNCATE");
-      db.exec("VACUUM");
-      checkpointWal("TRUNCATE");
-    }
 
     return getDiagnostics();
   }
@@ -803,7 +976,11 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     writeTokenUsage,
     getTokenUsageDailyStats,
     getTokenUsageByModel,
+    getTokenUsageByAgent,
+    getTopTokenUsageSessions,
     getSessionStats,
+    getUsageImportStatus,
+    setUsageImportStatus,
     getModelPricing,
     upsertModelPricing,
   };
