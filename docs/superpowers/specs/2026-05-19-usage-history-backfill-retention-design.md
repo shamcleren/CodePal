@@ -127,16 +127,33 @@ Recommended defaults:
 The settings UI should show current database size and manual cleanup actions,
 but size alone should not automatically delete analytics data.
 
-Analytics should grow from a simple overview into a compact analysis workspace:
+Analytics should grow from a simple overview into a two-layer analysis surface:
+
+1. CodePal in-app Analytics: compact, glanceable, operational.
+2. External HTML report: detailed, scrollable, shareable, and suitable for
+   longer inspection.
+
+The two surfaces should reuse the same data/query layer, but they should not
+show the same density of information.
+
+The in-app surface should include:
 
 - summary cards for tokens, requests, cache hit rate, estimated cost, top model,
   and top agent
-- stacked daily trend showing input, output, cache read, and cache creation
-- agent and model breakdown table with sortable columns
-- expensive sessions table for finding outliers
-- optional weekly/monthly grouping for longer ranges
+- one stacked trend chart showing input, output, cache read, and cache creation
+- one compact breakdown table with a model/agent toggle
+- a short top-sessions preview for finding obvious outliers
 - import status for historical Claude/Codex backfill
-- HTML report with the same metrics, suitable for sharing or archiving
+
+The external report should include the fuller analysis:
+
+- all summary metrics
+- stacked daily/weekly/monthly trend charts
+- separate model and agent tables
+- top sessions table with more rows
+- cache details
+- import status and generated timestamp
+- optional raw JSON export in a later release
 
 ## Settings Model
 
@@ -328,14 +345,36 @@ Manual action:
 
 ## Analytics UX
 
-The page should stay dense and operational. It should not look like a sales
-dashboard. The first viewport should answer:
+The in-app page should stay dense and operational. It should not look like a
+sales dashboard. The first viewport should answer:
 
 1. How much did I use?
 2. What did it probably cost?
 3. Which agent/model caused most of it?
 4. Is cache helping or just inflating total tokens?
 5. Did any day or session spike?
+
+### Surface Split
+
+The CodePal panel is a monitoring surface with limited space. Its Analytics
+page should be the "what should I notice now?" view:
+
+- use 6 to 8 summary cards
+- show one chart at a time
+- show one compact table at a time
+- show a top 5 session preview only when there are clear outliers
+- provide an "Open detailed report" action for deeper analysis
+
+The external HTML report is the "let me inspect this properly" view:
+
+- can use a wider, document-like layout
+- can show more rows and multiple sections at once
+- can include explanatory footnotes about accuracy and cost calculation
+- can be archived or shared as a point-in-time report
+
+This split is important because trying to make the in-app panel as complete as
+the report will make CodePal feel crowded, while making the report as minimal as
+the panel wastes the external page.
 
 ### Range Controls
 
@@ -354,6 +393,17 @@ Add longer-range grouping behavior:
 
 The selected grouping should apply to both the in-app chart and HTML report.
 
+In-app behavior:
+
+- auto-pick the grouping by selected range
+- expose grouping only when needed
+
+External report behavior:
+
+- show the selected grouping
+- optionally include secondary rollups, such as monthly totals for a yearly
+  report
+
 ### Summary Cards
 
 Keep the current cards and add:
@@ -365,8 +415,8 @@ Keep the current cards and add:
 - cache creation total
 - average tokens per request
 
-Do not show more than eight cards at once on the default view. If more metrics
-are useful, put them in the report or secondary tables.
+Do not show more than eight cards at once in the in-app view. If more metrics
+are useful, put them in the external report or secondary tables.
 
 ### Daily/Weekly/Monthly Trend Chart
 
@@ -390,12 +440,15 @@ thin out rather than collide.
 
 ### Breakdown Tables
 
-Add two primary tables:
+The in-app view should have one primary breakdown table with a segmented
+control:
 
 1. By model
 2. By agent
 
-Both should show:
+The external report should show both tables as separate sections.
+
+Both table modes should show:
 
 - requests
 - input
@@ -411,7 +464,18 @@ panel is narrow, following the same spirit as `ccusage` responsive tables.
 
 ### Expensive Sessions
 
-Add a "Top sessions" table for the selected range.
+Add a "Top sessions" section for the selected range.
+
+In-app:
+
+- show only the top 5 rows
+- hide the section entirely when there is no meaningful outlier
+- keep rows compact enough for the floating panel
+
+External report:
+
+- show a longer table, such as top 20 rows
+- include more context and full-ish session identifiers
 
 Columns:
 
@@ -443,14 +507,18 @@ A later release can add:
 
 ### HTML Report
 
-The HTML report should mirror the in-app page:
+The HTML report should be the detailed counterpart to the in-app page, not a
+pixel-for-pixel mirror:
 
 - summary cards
 - stacked trend chart
-- model table
-- agent table
-- top sessions table
+- optional weekly/monthly rollup when useful
+- model table with more rows
+- agent table with more rows
+- top sessions table with more rows
+- cache details
 - import status and generated timestamp
+- accuracy/cost footnote
 
 The report remains self-contained and local.
 
