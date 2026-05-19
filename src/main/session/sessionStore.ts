@@ -626,6 +626,35 @@ function cursorSessionCwd(session: InternalSessionRecord): string | undefined {
   return firstMetaString(session.meta, "cwd");
 }
 
+function isCodexSubexecutionMeta(meta: Record<string, unknown> | undefined): boolean {
+  const threadSource = firstMetaString(meta, "codex_thread_source")?.toLowerCase();
+  const subagentKind = firstMetaString(meta, "codex_subagent_kind");
+  const source = firstMetaString(meta, "source")?.toLowerCase();
+  return (
+    threadSource === "subagent" ||
+    Boolean(subagentKind) ||
+    source?.startsWith("subagent:") === true
+  );
+}
+
+function codexSessionCwd(session: InternalSessionRecord | undefined): string | undefined {
+  return firstMetaString(session?.meta, "cwd");
+}
+
+function codexEventCwd(
+  event: SessionEvent,
+  existing: InternalSessionRecord | undefined,
+): string | undefined {
+  return firstMetaString(event.meta, "cwd") ?? codexSessionCwd(existing);
+}
+
+function codexEventIsSubexecution(
+  event: SessionEvent,
+  existing: InternalSessionRecord | undefined,
+): boolean {
+  return isCodexSubexecutionMeta(event.meta) || isCodexSubexecutionMeta(existing?.meta);
+}
+
 function shouldHideCodeBuddyDuplicateShell(
   session: InternalSessionRecord,
   allSessions: InternalSessionRecord[],
@@ -660,51 +689,80 @@ type ResolvedSessionTarget = {
   sessionId: string;
   seed?: InternalSessionRecord;
   absorbedSessionId?: string;
+  aliasSessionId?: string;
 };
+
+function sortCodexMergeCandidates(timestamp: number) {
+  return (left: InternalSessionRecord, right: InternalSessionRecord): number => {
+    const leftDelta = Math.abs(left.updatedAt - timestamp);
+    const rightDelta = Math.abs(right.updatedAt - timestamp);
+    if (leftDelta !== rightDelta) {
+      return leftDelta - rightDelta;
+    }
+    return right.updatedAt - left.updatedAt;
+  };
+}
 
 function resolveSessionTarget(
   sessions: Map<string, InternalSessionRecord>,
   event: SessionEvent,
+  codexSubexecutionParents?: Map<string, string>,
 ): ResolvedSessionTarget {
   // Merge Codex guardian subagent sessions into parent user sessions
   if (event.tool === "codex") {
-    const isSubagent = firstMetaString(event.meta, "codex_thread_source") === "subagent";
-    const cwd = firstMetaString(event.meta, "cwd");
-    if (isSubagent && cwd) {
+    const aliasedParentId = codexSubexecutionParents?.get(event.sessionId);
+    const eventThreadSource = firstMetaString(event.meta, "codex_thread_source")?.toLowerCase();
+    if (aliasedParentId && eventThreadSource !== "user") {
+      const parent = sessions.get(aliasedParentId);
+      if (parent) {
+        return { sessionId: parent.id, seed: parent, aliasSessionId: event.sessionId };
+      }
+      codexSubexecutionParents?.delete(event.sessionId);
+    }
+
+    const existing = sessions.get(event.sessionId);
+    const isSubexecution = codexEventIsSubexecution(event, existing);
+    const cwd = codexEventCwd(event, existing);
+    if (isSubexecution && cwd) {
       // Subagent event → find most recent user session with same cwd within window
       const userCandidate = [...sessions.values()]
         .filter(
           (session) =>
             session.tool === "codex" &&
             session.id !== event.sessionId &&
-            firstMetaString(session.meta, "cwd") === cwd &&
-            firstMetaString(session.meta, "codex_thread_source") !== "subagent" &&
+            codexSessionCwd(session) === cwd &&
+            !isCodexSubexecutionMeta(session.meta) &&
             Math.abs(session.updatedAt - event.timestamp) <= CODEX_SUBAGENT_MERGE_WINDOW_MS,
         )
-        .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+        .sort(sortCodexMergeCandidates(event.timestamp))[0];
       if (userCandidate) {
-        return { sessionId: userCandidate.id, seed: userCandidate };
+        return {
+          sessionId: userCandidate.id,
+          seed: userCandidate,
+          aliasSessionId: event.sessionId,
+        };
       }
       return { sessionId: event.sessionId };
     }
 
     // User event → absorb any existing subagent-only session from same cwd
-    if (!isSubagent && cwd && !sessions.has(event.sessionId)) {
+    if (!isSubexecution && cwd && !sessions.has(event.sessionId)) {
       const subagentCandidate = [...sessions.values()]
         .filter(
           (session) =>
             session.tool === "codex" &&
             session.id !== event.sessionId &&
-            firstMetaString(session.meta, "cwd") === cwd &&
-            firstMetaString(session.meta, "codex_thread_source") === "subagent" &&
+            codexSessionCwd(session) === cwd &&
+            isCodexSubexecutionMeta(session.meta) &&
             Math.abs(session.updatedAt - event.timestamp) <= CODEX_SUBAGENT_MERGE_WINDOW_MS,
         )
-        .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+        .sort(sortCodexMergeCandidates(event.timestamp))[0];
       if (subagentCandidate) {
         return {
           sessionId: event.sessionId,
           seed: subagentCandidate,
           absorbedSessionId: subagentCandidate.id,
+          aliasSessionId: subagentCandidate.id,
         };
       }
     }
@@ -788,8 +846,60 @@ type SessionStoreOptions = {
   onPendingActionCreated?: (params: PendingActionCreated) => void;
 };
 
+const CODEX_IDENTITY_META_KEYS = [
+  "cwd",
+  "codex_thread_source",
+  "codex_subagent_kind",
+  "source",
+  "model_provider",
+] as const;
+
+function mergeSessionMeta(
+  previous: Record<string, unknown> | undefined,
+  next: Record<string, unknown> | undefined,
+  options?: {
+    preserveCodexParentIdentity?: boolean;
+    promoteCodexUserFromSubexecution?: boolean;
+  },
+): Record<string, unknown> | undefined {
+  if (!previous) {
+    return next;
+  }
+  if (!next) {
+    return previous;
+  }
+
+  const merged: Record<string, unknown> = { ...previous, ...next };
+
+  if (options?.preserveCodexParentIdentity) {
+    for (const key of CODEX_IDENTITY_META_KEYS) {
+      if (previous[key] !== undefined) {
+        merged[key] = previous[key];
+      } else if (key !== "cwd" && key !== "model_provider") {
+        delete merged[key];
+      }
+    }
+  }
+
+  if (options?.promoteCodexUserFromSubexecution) {
+    if (next.codex_thread_source === undefined && previous.codex_thread_source === "subagent") {
+      delete merged.codex_thread_source;
+    }
+    if (next.codex_subagent_kind === undefined) {
+      delete merged.codex_subagent_kind;
+    }
+    const source = firstMetaString(merged, "source")?.toLowerCase();
+    if (next.source === undefined && source?.startsWith("subagent:")) {
+      delete merged.source;
+    }
+  }
+
+  return merged;
+}
+
 export function createSessionStore(options?: SessionStoreOptions) {
   const sessions = new Map<string, InternalSessionRecord>();
+  const codexSubexecutionParents = new Map<string, string>();
 
   function preparePendingActionResponse(
     sessionId: string,
@@ -994,7 +1104,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
       if (!isSessionStatus(event.status)) {
         return;
       }
-      const resolvedTarget = resolveSessionTarget(sessions, event);
+      const resolvedTarget = resolveSessionTarget(sessions, event, codexSubexecutionParents);
       const sessionId = resolvedTarget.sessionId;
       const prev = sessions.get(sessionId) ?? resolvedTarget.seed;
       const nextClosedLedger = new Map(prev?.closedLedger ?? []);
@@ -1070,6 +1180,14 @@ export function createSessionStore(options?: SessionStoreOptions) {
         prev?.terminalContext,
         terminalContextFromEvent(event),
       );
+      const mergingCodexSubexecutionIntoParent =
+        event.tool === "codex" &&
+        resolvedTarget.aliasSessionId === event.sessionId &&
+        resolvedTarget.sessionId !== event.sessionId &&
+        prev !== undefined &&
+        !isCodexSubexecutionMeta(prev.meta);
+      const promotingCodexUserFromSubexecution =
+        event.tool === "codex" && resolvedTarget.absorbedSessionId !== undefined;
       const internal: InternalSessionRecord = {
         id: sessionId,
         tool: event.tool,
@@ -1079,7 +1197,10 @@ export function createSessionStore(options?: SessionStoreOptions) {
             ? prev.title
             : (event.title ?? prev?.title),
         task: preservePreviousStatus ? prev?.task : event.task,
-        meta: event.meta ?? prev?.meta,
+        meta: mergeSessionMeta(prev?.meta, event.meta, {
+          preserveCodexParentIdentity: mergingCodexSubexecutionIntoParent,
+          promoteCodexUserFromSubexecution: promotingCodexUserFromSubexecution,
+        }),
         updatedAt: nextUpdatedAt,
         lastUserMessageAt: nextLastUserMessageAt,
         activityItems: nextActivityItems,
@@ -1090,6 +1211,13 @@ export function createSessionStore(options?: SessionStoreOptions) {
         ...(nextTerminalContext ? { terminalContext: nextTerminalContext } : {}),
       };
       sessions.set(sessionId, internal);
+      if (
+        event.tool === "codex" &&
+        resolvedTarget.aliasSessionId &&
+        resolvedTarget.aliasSessionId !== sessionId
+      ) {
+        codexSubexecutionParents.set(resolvedTarget.aliasSessionId, sessionId);
+      }
       if (resolvedTarget.absorbedSessionId && resolvedTarget.absorbedSessionId !== sessionId) {
         sessions.delete(resolvedTarget.absorbedSessionId);
       }

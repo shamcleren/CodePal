@@ -514,6 +514,301 @@ describe("createSessionStore", () => {
     });
   });
 
+  it("merges Codex subexecution events marked by subagent kind into an existing user session in the same cwd", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-user",
+      tool: "codex",
+      status: "running",
+      task: "检查当前实现",
+      timestamp: 100,
+      meta: {
+        cwd: "/tmp/codepal",
+        codex_thread_source: "user",
+        event_type: "session_meta",
+      },
+      activityItems: [
+        {
+          id: "codex-user:user",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "检查当前实现",
+          timestamp: 100,
+        },
+      ],
+    });
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-guardian",
+      tool: "codex",
+      status: "running",
+      task: "guardian finished",
+      timestamp: 110,
+      meta: {
+        cwd: "/tmp/codepal",
+        codex_subagent_kind: "guardian",
+        source: "subagent:guardian",
+        event_type: "session_meta",
+      },
+      activityItems: [
+        {
+          id: "codex-guardian:result",
+          kind: "tool",
+          source: "tool",
+          title: "guardian",
+          body: "guardian finished",
+          timestamp: 110,
+          toolName: "guardian",
+          toolPhase: "result",
+        },
+      ],
+    });
+
+    expect(store.getSessions()).toMatchObject([
+      {
+        id: "codex-user",
+        lastUserMessageAt: 100,
+        activityItems: [
+          expect.objectContaining({
+            kind: "tool",
+            body: "guardian finished",
+          }),
+          expect.objectContaining({
+            source: "user",
+            body: "检查当前实现",
+          }),
+        ],
+      },
+    ]);
+  });
+
+  it("absorbs an earlier Codex source.subagent shell when the user session arrives later", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-sandbox",
+      tool: "codex",
+      status: "running",
+      task: "sandbox check",
+      timestamp: 100,
+      meta: {
+        cwd: "/tmp/codepal",
+        source: "subagent:sandbox",
+        event_type: "session_meta",
+      },
+      activityItems: [
+        {
+          id: "codex-sandbox:result",
+          kind: "tool",
+          source: "tool",
+          title: "sandbox",
+          body: "sandbox check",
+          timestamp: 100,
+          toolName: "sandbox",
+          toolPhase: "result",
+        },
+      ],
+    });
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-user",
+      tool: "codex",
+      status: "running",
+      task: "继续实现归并",
+      timestamp: 110,
+      meta: {
+        cwd: "/tmp/codepal",
+        codex_thread_source: "user",
+        event_type: "session_meta",
+      },
+      activityItems: [
+        {
+          id: "codex-user:user",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "继续实现归并",
+          timestamp: 110,
+        },
+      ],
+    });
+
+    expect(store.getSessions()).toMatchObject([
+      {
+        id: "codex-user",
+        activityItems: [
+          expect.objectContaining({
+            source: "user",
+            body: "继续实现归并",
+          }),
+          expect.objectContaining({
+            kind: "tool",
+            body: "sandbox check",
+          }),
+        ],
+      },
+    ]);
+  });
+
+  it("keeps follow-up Codex subexecution output merged after the subagent session_meta was assigned to a parent", () => {
+    const store = createSessionStore();
+    const chunkOutput = [
+      "Chunk ID: ccc62d",
+      "Wall time: 0.0002 seconds",
+      "Process exited with code 0",
+      "Original token count: 1305",
+      "Output:",
+      "PASS src/main/session/sessionStore.test.ts",
+    ].join("\n");
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-user",
+      tool: "codex",
+      status: "running",
+      task: "跑测试",
+      timestamp: 100,
+      meta: {
+        cwd: "/tmp/codepal",
+        codex_thread_source: "user",
+        event_type: "session_meta",
+      },
+      activityItems: [
+        {
+          id: "codex-user:user",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "跑测试",
+          timestamp: 100,
+        },
+      ],
+    });
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-guardian",
+      tool: "codex",
+      status: "running",
+      task: "Codex session: codepal",
+      timestamp: 105,
+      meta: {
+        cwd: "/tmp/codepal",
+        codex_thread_source: "subagent",
+        codex_subagent_kind: "guardian",
+        source: "subagent:guardian",
+        event_type: "session_meta",
+      },
+    });
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-guardian",
+      tool: "codex",
+      status: "running",
+      task: "Chunk ID: ccc62d",
+      timestamp: 110,
+      meta: {
+        event_type: "response_item",
+        item_type: "function_call_output",
+      },
+      activityItems: [
+        {
+          id: "codex-guardian:tool-output",
+          kind: "tool",
+          source: "tool",
+          title: "exec_command",
+          body: chunkOutput,
+          timestamp: 110,
+          toolName: "exec_command",
+          toolPhase: "result",
+        },
+      ],
+    });
+
+    const sessions = store.getSessions();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({
+      id: "codex-user",
+      activityItems: expect.arrayContaining([
+        expect.objectContaining({
+          kind: "tool",
+          title: "exec_command",
+          body: chunkOutput,
+        }),
+        expect.objectContaining({
+          source: "user",
+          body: "跑测试",
+        }),
+      ]),
+    });
+  });
+
+  it("does not merge Codex subexecution sessions from a different cwd or outside the 30 minute window", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-user",
+      tool: "codex",
+      status: "running",
+      task: "主会话",
+      timestamp: 100,
+      meta: {
+        cwd: "/tmp/codepal",
+        codex_thread_source: "user",
+      },
+      activityItems: [
+        {
+          id: "codex-user:user",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "主会话",
+          timestamp: 100,
+        },
+      ],
+    });
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-other-cwd",
+      tool: "codex",
+      status: "running",
+      task: "other cwd",
+      timestamp: 110,
+      meta: {
+        cwd: "/tmp/other",
+        source: "subagent:guardian",
+      },
+    });
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-too-late",
+      tool: "codex",
+      status: "running",
+      task: "too late",
+      timestamp: 100 + 31 * 60 * 1000,
+      meta: {
+        cwd: "/tmp/codepal",
+        codex_thread_source: "subagent",
+      },
+    });
+
+    expect(store.getSessions().map((session) => session.id)).toEqual([
+      "codex-too-late",
+      "codex-other-cwd",
+      "codex-user",
+    ]);
+  });
+
   it("keeps recent activity lines in reverse chronological order", () => {
     const store = createSessionStore();
 

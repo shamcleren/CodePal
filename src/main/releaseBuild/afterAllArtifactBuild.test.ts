@@ -30,7 +30,7 @@ function loadAfterAllArtifactBuild(): (buildResult: unknown) => Promise<unknown[
 async function runHookWithFakeArtifacts() {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codepal-after-artifact-"));
   const appPath = path.join(tempDir, "mac-arm64", "CodePal.app");
-  const dmgPath = path.join(tempDir, "CodePal-1.1.5-arm64.dmg");
+  const dmgPath = path.join(tempDir, "CodePal-1.1.6-arm64.dmg");
 
   await fs.mkdir(appPath, { recursive: true });
   await fs.writeFile(dmgPath, "");
@@ -41,7 +41,7 @@ async function runHookWithFakeArtifacts() {
     await afterAllArtifactBuild({
       artifactPaths: [dmgPath],
       outDir: tempDir,
-      configuration: { buildVersion: "1.1.5" },
+      configuration: { buildVersion: "1.1.6" },
     });
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -99,15 +99,15 @@ test("publishes to GitHub when release publishing is explicitly enabled", async 
 
   const ghCalls = spawnCalls.filter((call) => call.command === "gh").map((call) => call.args);
   expect(ghCalls).toEqual([
-    ["release", "upload", "v1.1.5", expect.stringContaining("CodePal-1.1.5-arm64.dmg"), "--clobber"],
+    ["release", "upload", "v1.1.6", expect.stringContaining("CodePal-1.1.6-arm64.dmg"), "--clobber"],
     [
       "release",
       "edit",
-      "v1.1.5",
+      "v1.1.6",
       "--draft=false",
       "--latest",
       "--notes-file",
-      path.resolve(process.cwd(), "docs/release-notes-v1.1.5.md"),
+      path.resolve(process.cwd(), "docs/release-notes-v1.1.6.md"),
     ],
   ]);
 });

@@ -56,6 +56,7 @@
 - [ ] `README.md` 已对齐当前产品状态
 - [ ] `README.zh-CN.md` 已对齐当前产品状态
 - [ ] 本次版本的 `docs/release-notes-vX.Y.Z.md` 可直接用于 GitHub Release
+- [ ] release notes 足够短，可放进应用内更新面板：只写 3 到 5 个重点变化，不写完整 commit 清单或长篇背景
 - [ ] release notes 使用 Markdown 正文，不要把 HTML 片段直接暴露给应用内更新面板
 - [ ] release notes 中的下载文件名与实际版本号一致
 
@@ -63,6 +64,7 @@
 
 - [ ] 不要把还没做完的 roadmap 内容写成已交付能力
 - [ ] 不要保留已经过时的“当前限制”描述
+- [ ] 如果需要完整 changelog，把细节放到 `docs/context/current-status.md` 或独立设计 / handoff 文档里，不要塞进 release notes
 
 ## D. 当前版本边界确认
 
@@ -119,7 +121,7 @@
 
 在今天这个项目状态下：
 
-- v1.0.3 已经完成，后续不要再把它写成待发或签名前测试分发
+- v1.1.5 是当前已发基线，v1.1.6 是当前 patch candidate；后续不要再把 v1.0.x 文档写成当前发版目标
 - 工程验证、README、Release 文案、CI / E2E 入口、updater metadata 校验，已经是当前发布基线的一部分
 - 正式分发仍然依赖 Developer ID 与 notary 凭据保持可用，并且每次 release 都应重新验证 `Accepted`
 

@@ -106,6 +106,22 @@ function looksLikeCodeSnippetSummary(text: string): boolean {
   );
 }
 
+function looksLikeCodexToolRunOutput(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return (
+    /^Chunk ID:\s*\S+/i.test(trimmed) ||
+    (
+      /^Wall time:\s*/im.test(trimmed) &&
+      /^Process exited with code\s+/im.test(trimmed)
+    ) ||
+    /^Original token count:\s*/im.test(trimmed)
+  );
+}
+
 function isLowValueSummaryText(text: string | undefined): boolean {
   if (!text) {
     return true;
@@ -124,8 +140,20 @@ function isLowValueSummaryText(text: string | undefined): boolean {
     isLowSignalSurfaceText(trimmed) ||
     looksLikeRejectedToolUseText(trimmed) ||
     looksLikeCommandJson(trimmed) ||
-    looksLikeCodeSnippetSummary(trimmed)
+    looksLikeCodeSnippetSummary(trimmed) ||
+    looksLikeCodexToolRunOutput(trimmed)
   );
+}
+
+function toolTimelineSummary(item: TimelineItem): string {
+  const toolName = (item.toolName ?? item.title ?? item.label ?? "Tool").trim() || "Tool";
+  if (item.toolPhase === "result" && looksLikeCodexToolRunOutput(item.body)) {
+    return `${toolName} completed`;
+  }
+  if (item.toolPhase === "call" && isLowValueSummaryText(item.body)) {
+    return `${toolName} started`;
+  }
+  return item.body.trim() || toolName;
 }
 
 function preferredTimelineSurfaceText(timelineItems: TimelineItem[]): string | undefined {
@@ -136,6 +164,9 @@ function preferredTimelineSurfaceText(timelineItems: TimelineItem[]): string | u
     }
     if (item.kind === "message") {
       return lastMeaningfulSentence(body);
+    }
+    if (item.kind === "tool") {
+      continue;
     }
     return body;
   }
@@ -551,11 +582,11 @@ function buildCollapsedSummary(record: SessionRecord, timelineItems: TimelineIte
     if (titleLike.has(comparable)) {
       return false;
     }
+    if (item.kind === "tool") {
+      return Boolean(toolTimelineSummary(item));
+    }
     if (isLowValueSummaryText(item.body)) {
       return false;
-    }
-    if (item.kind === "tool") {
-      return true;
     }
     if (item.kind === "message") {
       return false;
@@ -581,10 +612,39 @@ function buildCollapsedSummary(record: SessionRecord, timelineItems: TimelineIte
   }
 
   if (preferred.kind === "tool") {
-    return preferred.body;
+    return toolTimelineSummary(preferred);
   }
 
   return preferred.body;
+}
+
+function buildHoverSummary(
+  record: SessionRecord,
+  timelineItems: TimelineItem[],
+  collapsedSummary: string,
+): string {
+  if (record.task?.trim() && !isLowValueSummaryText(record.task)) {
+    return record.task.trim();
+  }
+
+  const preferred = timelineItems.find((item) => {
+    if (item.kind === "tool") {
+      return Boolean(toolTimelineSummary(item));
+    }
+    return !isLowValueSummaryText(item.body);
+  });
+
+  if (preferred?.kind === "message") {
+    return lastMeaningfulSentence(preferred.body);
+  }
+  if (preferred?.kind === "tool") {
+    return toolTimelineSummary(preferred);
+  }
+  if (preferred) {
+    return preferred.body;
+  }
+
+  return collapsedSummary || record.status;
 }
 
 export function sessionRecordToRow(
@@ -595,6 +655,7 @@ export function sessionRecordToRow(
   const loading = isLowInformationLoadingState(record, timelineItems);
   const i18n = createI18nValue(locale);
   const fallbackSummary = loading ? i18n.t("session.loading") : undefined;
+  const collapsedSummary = fallbackSummary ?? buildCollapsedSummary(record, timelineItems);
   return {
     ...record,
     titleLabel: buildTitleLabel(record, timelineItems, locale),
@@ -603,14 +664,9 @@ export function sessionRecordToRow(
     durationLabel: formatDuration(record.updatedAt),
     pendingCount: record.pendingActions?.length ?? 0,
     loading,
-    collapsedSummary: fallbackSummary ?? buildCollapsedSummary(record, timelineItems),
+    collapsedSummary,
     timelineItems,
     activityItems: record.activityItems ?? [],
-    hoverSummary:
-      fallbackSummary ??
-      record.task ??
-      record.activityItems?.[0]?.body ??
-      record.activities?.[0] ??
-      record.status,
+    hoverSummary: fallbackSummary ?? buildHoverSummary(record, timelineItems, collapsedSummary),
   };
 }

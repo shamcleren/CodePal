@@ -139,8 +139,10 @@ function metaForEntry(
     } else if (payload.source && typeof payload.source === "object") {
       const src = payload.source as Record<string, unknown>;
       const subagent = src.subagent as Record<string, unknown> | undefined;
-      if (subagent && typeof subagent.other === "string") {
-        meta.source = `subagent:${subagent.other}`;
+      if (subagent && typeof subagent.other === "string" && subagent.other.trim()) {
+        const subagentKind = subagent.other.trim();
+        meta.codex_subagent_kind = subagentKind;
+        meta.source = `subagent:${subagentKind}`;
       }
     }
     return meta;

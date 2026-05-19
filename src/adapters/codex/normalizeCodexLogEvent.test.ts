@@ -49,6 +49,40 @@ describe("normalizeCodexLogEvent", () => {
     expect(event?.timestamp).toBe(Date.parse("2026-04-02T02:46:49.900Z"));
   });
 
+  it("maps Codex subagent session_meta shapes into explicit merge metadata", () => {
+    const event = normalizeCodexLogEvent(
+      JSON.stringify({
+        timestamp: "2026-05-19T03:00:00.000Z",
+        type: "session_meta",
+        payload: {
+          id: "019d4c15-8d42-78f1-955e-d57f67061b9f",
+          cwd: "/Users/demo/codepal",
+          thread_source: "subagent",
+          source: {
+            subagent: {
+              other: "guardian",
+            },
+          },
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      sessionId: "019d4c15-8d42-78f1-955e-d57f67061b9f",
+      tool: "codex",
+      status: "running",
+      task: "Codex session: codepal",
+      meta: {
+        event_type: "session_meta",
+        cwd: "/Users/demo/codepal",
+        codex_thread_source: "subagent",
+        codex_subagent_kind: "guardian",
+        source: "subagent:guardian",
+      },
+    });
+  });
+
   it("maps user_message events to running activity", () => {
     const event = normalizeCodexLogEvent(
       JSON.stringify({
@@ -471,6 +505,52 @@ describe("normalizeCodexLogEvent", () => {
           body: "PASS src/adapters/codex/normalizeCodexLogEvent.test.ts",
         },
       ],
+    });
+  });
+
+  it("keeps Chunk ID function_call_output as expanded tool result activity", () => {
+    const chunkOutput = [
+      "Chunk ID: ccc62d",
+      "Wall time: 0.0002 seconds",
+      "Process exited with code 0",
+      "Original token count: 1305",
+      "Output:",
+      "PASS src/main/session/sessionStore.test.ts",
+    ].join("\n");
+    const event = normalizeCodexLogEvent(
+      JSON.stringify({
+        timestamp: "2026-05-19T03:05:00.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          name: "exec_command",
+          call_id: "call_exec",
+          output: chunkOutput,
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      status: "running",
+      task: "Chunk ID: ccc62d",
+      activityItems: [
+        {
+          kind: "tool",
+          source: "tool",
+          title: "exec_command",
+          toolName: "exec_command",
+          toolPhase: "result",
+          body: chunkOutput,
+          meta: {
+            callId: "call_exec",
+          },
+        },
+      ],
+      meta: {
+        event_type: "response_item",
+        item_type: "function_call_output",
+      },
     });
   });
 });

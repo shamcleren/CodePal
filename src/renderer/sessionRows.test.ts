@@ -441,6 +441,87 @@ describe("sessionRecordToRow", () => {
     expect(row.collapsedSummary).toBe("你好，我已经处理完了。");
   });
 
+  it("keeps Codex Chunk ID tool output out of the main title and collapsed summary", () => {
+    const chunkOutput = [
+      "Chunk ID: ccc62d",
+      "Wall time: 0.0002 seconds",
+      "Process exited with code 0",
+      "Original token count: 1305",
+      "Output:",
+      "PASS src/renderer/sessionRows.test.ts",
+    ].join("\n");
+    const row = sessionRecordToRow({
+      id: "codex-chunk-output",
+      tool: "codex",
+      status: "running",
+      task: "Chunk ID: ccc62d",
+      updatedAt: 1_700_000_000_000,
+      activityItems: [
+        {
+          id: "tool-result",
+          kind: "tool",
+          source: "tool",
+          title: "exec_command",
+          body: chunkOutput,
+          timestamp: 1_700_000_000_200,
+          toolName: "exec_command",
+          toolPhase: "result",
+        },
+        {
+          id: "user-1",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "继续实现 Codex 子执行归并",
+          timestamp: 1_700_000_000_100,
+        },
+      ],
+    });
+
+    expect(row.titleLabel).toBe("继续实现 Codex 子执行归并");
+    expect(row.collapsedSummary).toBe("exec_command completed");
+    expect(row.hoverSummary).toBe("exec_command completed");
+    expect(row.timelineItems[0]).toMatchObject({
+      kind: "tool",
+      body: chunkOutput,
+    });
+  });
+
+  it("does not use a bare Codex Chunk ID tool result as the fallback title", () => {
+    const chunkOutput = [
+      "Chunk ID: ccc62d",
+      "Wall time: 0.0002 seconds",
+      "Process exited with code 0",
+      "Original token count: 1305",
+      "Output:",
+      "PASS src/renderer/sessionRows.test.ts",
+    ].join("\n");
+    const row = sessionRecordToRow({
+      id: "codex-subexecution-only",
+      tool: "codex",
+      status: "running",
+      task: "Chunk ID: ccc62d",
+      updatedAt: 1_700_000_000_000,
+      activityItems: [
+        {
+          id: "tool-result",
+          kind: "tool",
+          source: "tool",
+          title: "exec_command",
+          body: chunkOutput,
+          timestamp: 1_700_000_000_200,
+          toolName: "exec_command",
+          toolPhase: "result",
+        },
+      ],
+    });
+
+    expect(row.titleLabel).not.toContain("Chunk ID");
+    expect(row.collapsedSummary).toBe("exec_command completed");
+    expect(row.hoverSummary).toBe("exec_command completed");
+    expect(row.timelineItems[0]?.body).toBe(chunkOutput);
+  });
+
   it("strips markdown syntax from message-derived title and summary text", () => {
     const row = sessionRecordToRow({
       id: "codex-markdown-summary",

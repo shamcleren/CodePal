@@ -9,18 +9,26 @@ Use this directory by purpose rather than trying to read everything in one pass.
 
 ## If You Need Release-Facing Material
 
+- `docs/release-notes-v1.1.6.md`
+  English release notes for the current v1.1.6 patch candidate. Keep this short enough for the in-app update panel.
+- `docs/release-notes-v1.1.6.zh-CN.md`
+  Chinese release notes for the current v1.1.6 patch candidate. Keep this short enough for the in-app update panel.
+- `docs/release-notes-v1.1.5.md`
+  English release notes for the v1.1.5 release.
+- `docs/release-notes-v1.1.5.zh-CN.md`
+  Chinese release notes for the v1.1.5 release.
 - `docs/release-notes-v1.0.3.md`
-  English release notes for the current 1.0.3 release.
+  Historical English release notes for the v1.0.3 release.
 - `docs/release-notes-v1.0.3.zh-CN.md`
-  Chinese release notes for the current 1.0.3 release.
+  Historical Chinese release notes for the v1.0.3 release.
 - `docs/release-notes-v1.0.4.md`
   English release notes draft for the v1.0.4 patch candidate.
 - `docs/release-notes-v1.0.4.zh-CN.md`
   Chinese release notes draft for the v1.0.4 patch candidate.
 - `docs/release-notes-v1.0.5.md`
-  English draft release notes for the current patch-level v1.0.5 candidate.
+  Historical English release notes draft for the v1.0.5 patch candidate.
 - `docs/release-notes-v1.0.5.zh-CN.md`
-  Chinese draft release notes for the current patch-level v1.0.5 candidate.
+  Historical Chinese release notes draft for the v1.0.5 patch candidate.
 - `docs/release-assets.md`
   Asset checklist for README and GitHub Release screenshots / media.
 - `docs/release-assets.zh-CN.md`

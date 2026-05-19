@@ -46,7 +46,7 @@ On startup, recent user-initiated sessions (last 24 hours, up to 150) are restor
 
 ## What's Next
 
-With v1.1.0–v1.1.5 shipped, the near-term focus shifts to:
+With v1.1.0–v1.1.5 shipped and v1.1.6 prepared as the current patch candidate, the near-term focus shifts to:
 
 ### Tier 2 Agent / Terminal Expansion
 
@@ -59,7 +59,7 @@ With v1.1.0–v1.1.5 shipped, the near-term focus shifts to:
 - broader Claude quota calibration beyond the current token usage and statusLine-derived `rate_limits` snapshots
 - broader Cursor real-world payload calibration
 - broader CodeBuddy payload and transcript-shape calibration
-- continued signal-to-noise improvements in the activity timeline
+- continued signal-to-noise improvements in the activity timeline, following the v1.1.6 Codex subexecution merge work
 
 ### Distribution And Release Ergonomics
 
@@ -73,7 +73,7 @@ With v1.1.0–v1.1.5 shipped, the near-term focus shifts to:
 - more predictable settings and diagnostics UX
 - stronger empty / degraded / expired state messaging
 - better resilience around last-known usage and login-state handling
-- refreshed macOS menu bar and in-app icon assets so size, sharpness, and dark-mode rendering stay consistent
+- keep release notes concise enough for the in-app update panel; full changelog detail belongs in status / handoff docs
 
 ## Distribution And Updates
 

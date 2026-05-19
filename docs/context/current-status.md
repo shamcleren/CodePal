@@ -19,13 +19,30 @@
 - Repository now also includes a minimal GitHub Actions CI workflow for `lint + test + build`
 - Repository now also includes a separate macOS GitHub Actions workflow for Electron E2E runs on `main` and manual dispatch
 - Release workflow validates macOS updater assets, including `latest-mac.yml`, dmg / zip artifacts, and blockmap files
+- v1.1.6 candidate validation on 2026-05-19:
+  - `npm test -- src/adapters/codex/normalizeCodexLogEvent.test.ts src/main/session/sessionStore.test.ts src/renderer/sessionRows.test.ts`
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`
+  - `npm run test:e2e`
+  - `npm run dist:mac`
+  - `git diff --check`
+- v1.1.6 local macOS package completed on 2026-05-19:
+  - `release/CodePal-1.1.6-arm64.dmg`
+  - `release/CodePal-1.1.6-arm64.zip`
+  - `release/CodePal-1.1.6-arm64.dmg.blockmap`
+  - `release/CodePal-1.1.6-arm64.zip.blockmap`
+  - `release/latest-mac.yml`
+- v1.1.6 notarization returned `Accepted`, and the `.app` / `.dmg` staple steps completed locally.
 - v1.0.3 through v1.1.5 are all shipped. Current shipped baseline is **v1.1.5**.
+- Current patch candidate is **v1.1.6**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
 - v1.1.3 shipped: removed Claude PreToolUse blocking hook, CodePal is now dashboard-only for Claude approval
 - v1.1.4 shipped: Qoder / Qwen / Factory agent support, dashboard polish from dogfood pass
 - v1.1.5 shipped: WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix, E2E stability
+- v1.1.6 candidate: standalone Analytics page and HTML reports, clearer Provider Gateway settings, Phase 1 dashboard polish, Codex subexecution merge/noise reduction
 
 ## What Already Exists
 
@@ -61,10 +78,12 @@
 - CodeBuddy CN app `ui_messages.json` watching also suppresses JSON-only follow-up completion payloads while preserving real follow-up questions and `conversationId` metadata
 - Cursor and Codex now both have shared fixture-backed calibration baselines under `tests/fixtures/cursor/` and `tests/fixtures/codex/`, and those samples are exercised through adapter plus ingress / watcher tests
 - Cursor tool-result calibration now covers MCP-style `response.result.content[].text` payloads, so richer tool output does not fall back to just the tool name
+- Codex subexecution logs are now treated as internal activity when possible. `thread_source: "subagent"`, `source.subagent.other`, and `source: "subagent:<kind>"` all mark guardian / sandbox / subagent work for `cwd` + 30-minute-window merge into the nearest user session.
 - Timeline and row presentation are now aligned to a dashboard-first baseline:
   - unified message / tool / sideband visual hierarchy
   - lower-noise suppression for duplicate or low-information rows
   - correlated Codex tool-call / tool-result recovery where upstream metadata allows it
+  - Codex `Chunk ID` / shell-result boilerplate stays in expanded timeline but does not take over the main row title or collapsed summary
   - stronger `running` / `waiting` row distinction plus lightweight running motion
   - flat session ordering by `lastUserMessageAt`, then `updatedAt`
 - In-memory session history still uses dashboard-oriented retention windows instead of accumulating forever:
@@ -103,6 +122,7 @@
 - Invalid or incompatible existing config structures are reported back to the UI instead of being force-overwritten
 - Codex diagnostics treat healthy session-log monitoring as the active path and suppress stale legacy `~/.codex/hooks.json` incompatibility warnings, because current Codex monitoring no longer depends on that legacy file
 - Main process now also carries a dedicated usage aggregation path separate from session timeline state
+- Analytics now has a standalone renderer page with `today` / `7d` / `30d` presets, custom date ranges, per-model breakdowns, and self-contained HTML report generation.
 - Renderer top bar now uses a compact quota-first usage strip
 - Usage strip now supports `compact` / `detailed` density, with reset times either shown inline or exposed by hover title
 - Claude Code usage visibility is implemented through two sources:
@@ -125,7 +145,7 @@
 - Release artifacts include dmg, zip, blockmap files, and `latest-mac.yml`
 - Signed / notarized distribution is the expected public release path when Apple credentials are configured
 - v1.0.3 release assets are treated as shipped; future release work should preserve updater metadata and signing / notarization verification rather than re-describing v1.0.3 as pending
-- Current local unit / lint / build / E2E verification is green on 2026-04-13
+- Current v1.1.6 local unit / lint / build / E2E / macOS packaging verification is green on 2026-05-19.
 
 ### Pending Action Loop
 
@@ -197,8 +217,8 @@ npm run dist:mac
 - MiMo provider quota should stay dashboard/manual until MiMo publishes an official account usage or remaining-quota API. The official sources checked on 2026-05-19 were `https://www.mimo-v2.com/docs/faq`, `https://www.mimo-v2.com/docs/pricing`, and `https://www.mimo-v2.com/docs`
 - CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset
 - CodePal-owned app, docs, packaged macOS, and tray icon assets now use the refreshed centered monitoring-panel mark; third-party agent icon normalization remains future polish
-- CodePal → codeagent structured message delivery is now **capability-gated terminal delivery** in v1.1.1 (tmux `send-keys`, Ghostty AppleScript best-effort); the composer renders only when the session has a concrete delivery channel. Terminal.app / iTerm2 / Warp / kitty / WezTerm remain without a reliable text-injection surface, so the composer is hidden rather than disabled there. The earlier `--codepal-hook keep-alive` groundwork was removed in v1.1.1
-- Blocking `allow / deny` approvals now round-trip end-to-end for Cursor and Claude Code; Codex remains blocked by upstream (`notify` hook is completion-only) and CodeBuddy still only supports heuristic external-approval display because upstream `permission_prompt` payloads do not yet include a structured `pendingAction` or a decision write-back channel
+- CodePal → codeagent structured message delivery is **capability-gated terminal delivery**. The composer renders only when the session has a concrete delivery channel: tmux, WezTerm, kitty, iTerm2, or Ghostty. Terminal.app and Warp still lack a reliable supported text-injection surface.
+- CodePal no longer presents Claude PreToolUse as a dashboard approval loop. Agent-native approval remains the source of truth; Codex remains blocked by upstream (`notify` hook is completion-only), and CodeBuddy still only supports heuristic external-approval display because upstream `permission_prompt` payloads do not yet include a structured `pendingAction` or a decision write-back channel.
 - GitHub Project creation is blocked until `gh auth refresh -s project,read:project` is completed
 
 ## Delivery Baseline
@@ -217,6 +237,7 @@ npm run dist:mac
 - Integration diagnostics and repair flow are already in place for Cursor and CodeBuddy user-level hook config
 - Integration diagnostics and repair flow are already in place for all supported agents
 - Claude Code token usage and statusLine `rate_limits` snapshots are already visible in the shared usage surface when available, including last-known cached rate-limit snapshots after restart
+- Token analytics are now available on a standalone Analytics page, including persisted Claude / Codex token records, daily trends, model breakdowns, custom ranges, and HTML reports.
 - Header usage display, update status visibility, compact settings navigation, and settings regrouping are already in place
 - Provider Gateway is a first-class settings feature: CodePal can run a local gateway on `127.0.0.1:15721`, manage provider token presence separately from client configs, expose mapped MiMo models, health-check upstream mappings, and provide reversible Claude Desktop / Codex Desktop switch actions with restart guidance
 - Session ordering and expiration now follow dashboard-oriented defaults
@@ -229,9 +250,9 @@ npm run dist:mac
 - freeform `text_input`
 - moving control-loop UX back onto the main dashboard path
 
-### v1.1.0–v1.1.5 Shipped
+### v1.1.0–v1.1.6 Release Track
 
-All v1.1.x releases are shipped. See individual release notes for details:
+v1.1.0 through v1.1.5 are shipped. v1.1.6 is the current patch candidate. See individual release notes for details:
 
 - `docs/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -239,12 +260,13 @@ All v1.1.x releases are shipped. See individual release notes for details:
 - `docs/release-notes-v1.1.3.md` — removed Claude PreToolUse blocking hook, dashboard-only for Claude approval
 - `docs/release-notes-v1.1.4.md` — Qoder / Qwen / Factory agent support, dashboard polish
 - `docs/release-notes-v1.1.5.md` — WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix
+- `docs/release-notes-v1.1.6.md` — Analytics page, Provider Gateway settings, dashboard polish, Codex subexecution merge
 
 ## Next-Step Pointer
 
 For release-facing and forward-looking work, use:
 
 - `docs/context/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
-- `docs/release-notes-v1.1.5.md` for the current shipped baseline
+- `docs/release-notes-v1.1.6.md` for the current patch candidate
 - `docs/roadmap-next.md` for forward-looking prioritization (Tier 2 agent/terminal expansion, monitoring depth, product polish)
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
