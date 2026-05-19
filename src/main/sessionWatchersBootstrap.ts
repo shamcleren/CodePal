@@ -142,6 +142,7 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
           options.onSessionEventAccepted,
           event,
         ),
+      onTokenUsage: options.writeTokenUsage,
     }),
     jetbrains: jetBrainsLogRoot
       ? makeJetBrainsWatcher({

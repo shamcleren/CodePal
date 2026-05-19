@@ -35,17 +35,13 @@ import { createFloatingWindow } from "./window/createFloatingWindow";
 import type { SessionRecord } from "../shared/sessionTypes";
 import { isSessionJumpTarget } from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
-import type { UsageOverview, UsageSnapshot } from "../shared/usageTypes";
+import type { UsageOverview } from "../shared/usageTypes";
 import {
   PROVIDER_GATEWAY_CLIENT_SETUP_TARGETS,
   type ProviderGatewayClientSetupTarget,
   type ProviderGatewayHealthCheckSummary,
 } from "../shared/providerGatewayTypes";
-import { createCursorDashboardService } from "./usage/cursorDashboardService";
-import { createClaudeQuotaService } from "./usage/claudeQuotaService";
-import { createCodeBuddyInternalQuotaService } from "./usage/codebuddyInternalQuotaService";
-import { createCodeBuddyQuotaService } from "./usage/codebuddyQuotaService";
-import { createUsageSnapshotCache } from "./usage/usageSnapshotCache";
+import { createUsageSnapshotCache, hydrateUsageStoreFromCache } from "./usage/usageSnapshotCache";
 import { createUsageStore } from "./usage/usageStore";
 import { createUpdateService } from "./update/updateService";
 import {
@@ -74,8 +70,6 @@ const sessionStore = createSessionStore({
 });
 const usageStore = createUsageStore();
 const actionResponseTransport = createActionResponseTransport(process.env);
-const CLAUDE_QUOTA_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-const CODEBUDDY_QUOTA_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const requestedHomeDir = process.env.CODEPAL_HOME_DIR?.trim() || "";
 
 if (requestedHomeDir) {
@@ -86,9 +80,6 @@ if (requestedHomeDir) {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let pendingExpirySweepTimer: ReturnType<typeof setInterval> | null = null;
-let claudeQuotaRefreshTimer: ReturnType<typeof setInterval> | null = null;
-let codeBuddyQuotaRefreshTimer: ReturnType<typeof setInterval> | null = null;
-let codeBuddyInternalQuotaRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let sessionWatchers: ReturnType<typeof startSessionWatchers> | null = null;
 let historyStore: ReturnType<typeof createAppHistoryStore> | null = null;
 let historyWriter: ReturnType<typeof createDeferredHistoryWriter> | null = null;
@@ -185,10 +176,6 @@ function wireActionResponseIpc(
   gatewaySecretStore: GatewaySecretStore,
   homeDir: string,
   integrationService: ReturnType<typeof createIntegrationService>,
-  claudeQuotaService: ReturnType<typeof createClaudeQuotaService>,
-  cursorDashboardService: ReturnType<typeof createCursorDashboardService>,
-  codeBuddyQuotaService: ReturnType<typeof createCodeBuddyQuotaService>,
-  codeBuddyInternalQuotaService: ReturnType<typeof createCodeBuddyInternalQuotaService>,
   updateService: ReturnType<typeof createUpdateService>,
   currentHistoryStore: ReturnType<typeof createAppHistoryStore>,
 ) {
@@ -252,16 +239,12 @@ function wireActionResponseIpc(
   ipcMain.handle("codepal:get-home-dir", () => app.getPath("home"));
   ipcMain.handle("codepal:reload-app-settings", () => {
     const settings = settingsService.reloadSettings();
-    codeBuddyQuotaService.updateConfig(settings.codebuddy.code);
-    codeBuddyInternalQuotaService.updateConfig(settings.codebuddy.enterprise);
     applyHistorySettingsAtRuntime(currentHistoryStore, settings);
     return settings;
   });
   ipcMain.handle("codepal:get-app-settings-path", () => settingsService.filePath);
   ipcMain.handle("codepal:update-app-settings", (_event, payload: unknown) => {
     const settings = settingsService.updateSettings((payload ?? {}) as AppSettingsPatch);
-    codeBuddyQuotaService.updateConfig(settings.codebuddy.code);
-    codeBuddyInternalQuotaService.updateConfig(settings.codebuddy.enterprise);
     applyHistorySettingsAtRuntime(currentHistoryStore, settings);
     return settings;
   });
@@ -340,78 +323,10 @@ function wireActionResponseIpc(
   ipcMain.handle("codepal:get-integration-diagnostics", () =>
     integrationService.getDiagnostics(),
   );
-  ipcMain.handle("codepal:get-claude-quota-diagnostics", () =>
-    claudeQuotaService.getDiagnostics(),
-  );
-  ipcMain.handle("codepal:get-cursor-dashboard-diagnostics", () =>
-    cursorDashboardService.getDiagnostics(),
-  );
-  ipcMain.handle("codepal:get-codebuddy-quota-diagnostics", () =>
-    codeBuddyQuotaService.getDiagnostics(),
-  );
-  ipcMain.handle("codepal:get-codebuddy-internal-quota-diagnostics", () =>
-    codeBuddyInternalQuotaService.getDiagnostics(),
-  );
   registerHistoryIpcHandlers({
     ipcMain,
     historyStore: currentHistoryStore,
     getPersistenceEnabled: () => settingsService.getSettings().history.persistenceEnabled,
-  });
-  ipcMain.handle("codepal:connect-cursor-dashboard", async () => {
-    const result = await cursorDashboardService.connectAndSync();
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:connect-codebuddy-quota", async () => {
-    const result = await codeBuddyQuotaService.connectAndSync();
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:connect-codebuddy-internal-quota", async () => {
-    const result = await codeBuddyInternalQuotaService.connectAndSync();
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:refresh-cursor-dashboard-usage", async () => {
-    const result = await cursorDashboardService.refreshUsage();
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:refresh-claude-quota", async () => {
-    const result = await claudeQuotaService.refreshUsage();
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:clear-cursor-dashboard-auth", async () => {
-    const diagnostics = await cursorDashboardService.getDiagnostics();
-    const result = await cursorDashboardService.clearAuth();
-    if (diagnostics.teamId) {
-      usageStore.removeSession("cursor", `cursor-dashboard:${diagnostics.teamId}`);
-    }
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:refresh-codebuddy-quota", async () => {
-    const result = await codeBuddyQuotaService.refreshUsage();
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:clear-codebuddy-quota-auth", async () => {
-    const result = await codeBuddyQuotaService.clearAuth();
-    usageStore.removeSession("codebuddy", "codebuddy-quota");
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:refresh-codebuddy-internal-quota", async () => {
-    const result = await codeBuddyInternalQuotaService.refreshUsage();
-    broadcastUsageOverview();
-    return result;
-  });
-  ipcMain.handle("codepal:clear-codebuddy-internal-quota-auth", async () => {
-    const result = await codeBuddyInternalQuotaService.clearAuth();
-    usageStore.removeSession("codebuddy", "codebuddy-internal-quota");
-    broadcastUsageOverview();
-    return result;
   });
   ipcMain.handle("codepal:install-integration-hooks", (_event, payload: unknown) => {
     const agentId =
@@ -752,18 +667,6 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         clearInterval(pendingExpirySweepTimer);
         pendingExpirySweepTimer = null;
       }
-      if (codeBuddyQuotaRefreshTimer !== null) {
-        clearInterval(codeBuddyQuotaRefreshTimer);
-        codeBuddyQuotaRefreshTimer = null;
-      }
-      if (claudeQuotaRefreshTimer !== null) {
-        clearInterval(claudeQuotaRefreshTimer);
-        claudeQuotaRefreshTimer = null;
-      }
-      if (codeBuddyInternalQuotaRefreshTimer !== null) {
-        clearInterval(codeBuddyInternalQuotaRefreshTimer);
-        codeBuddyInternalQuotaRefreshTimer = null;
-      }
       sessionBroadcastScheduler.cancel();
       sessionWatchers?.stop();
       sessionWatchers = null;
@@ -837,6 +740,7 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       const usageSnapshotCache = createUsageSnapshotCache({
         filePath: path.join(app.getPath("userData"), "usage-snapshot-cache.json"),
       });
+      hydrateUsageStoreFromCache(usageSnapshotCache, usageStore);
       const resolvedAppPath = normalizeAppPath(app.getAppPath()) ?? app.getAppPath();
       const integrationService = createIntegrationService({
         homeDir,
@@ -853,28 +757,6 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         packaged: app.isPackaged,
         execPath: process.execPath,
         appPath: resolvedAppPath,
-      });
-      const cursorDashboardService = createCursorDashboardService({
-        onUsageSnapshot: (snapshot: UsageSnapshot) => {
-          usageStore.applySnapshot(snapshot);
-        },
-      });
-      const claudeQuotaService = createClaudeQuotaService({
-        getCachedSnapshot: () => usageSnapshotCache.loadClaudeRateLimitSnapshot(),
-      });
-      const codeBuddyQuotaService = createCodeBuddyQuotaService({
-        config: appSettings.codebuddy.code,
-        onUsageSnapshot: (snapshot: UsageSnapshot) => {
-          usageStore.applySnapshot(snapshot);
-          broadcastUsageOverview();
-        },
-      });
-      const codeBuddyInternalQuotaService = createCodeBuddyInternalQuotaService({
-        config: appSettings.codebuddy.enterprise,
-        onUsageSnapshot: (snapshot: UsageSnapshot) => {
-          usageStore.applySnapshot(snapshot);
-          broadcastUsageOverview();
-        },
       });
       const updateService = createUpdateService({
         isPackaged: app.isPackaged,
@@ -896,10 +778,6 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       gatewaySecretStore,
       homeDir,
       integrationService,
-        claudeQuotaService,
-        cursorDashboardService,
-        codeBuddyQuotaService,
-        codeBuddyInternalQuotaService,
         updateService,
         historyStore,
       );
@@ -956,52 +834,7 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
             }
           : undefined,
       });
-      const cachedClaudeRateLimitSnapshot = usageSnapshotCache.loadClaudeRateLimitSnapshot();
-      if (cachedClaudeRateLimitSnapshot) {
-        usageStore.applySnapshot(cachedClaudeRateLimitSnapshot);
-      }
       broadcastUsageOverview();
-      void claudeQuotaService.refreshUsage().then((result) => {
-        if (result.synced) {
-          broadcastUsageOverview();
-        }
-      });
-      void cursorDashboardService.refreshUsage().then((result) => {
-        if (result.synced) {
-          broadcastUsageOverview();
-        }
-      });
-      void codeBuddyQuotaService.refreshUsage().then((result) => {
-        if (result.synced) {
-          broadcastUsageOverview();
-        }
-      });
-      void codeBuddyInternalQuotaService.refreshUsage().then((result) => {
-        if (result.synced) {
-          broadcastUsageOverview();
-        }
-      });
-      claudeQuotaRefreshTimer = setInterval(() => {
-        void claudeQuotaService.refreshUsage().then((result) => {
-          if (result.synced) {
-            broadcastUsageOverview();
-          }
-        });
-      }, CLAUDE_QUOTA_REFRESH_INTERVAL_MS);
-      codeBuddyQuotaRefreshTimer = setInterval(() => {
-        void codeBuddyQuotaService.refreshUsage().then((result) => {
-          if (result.synced) {
-            broadcastUsageOverview();
-          }
-        });
-      }, CODEBUDDY_QUOTA_REFRESH_INTERVAL_MS);
-      codeBuddyInternalQuotaRefreshTimer = setInterval(() => {
-        void codeBuddyInternalQuotaService.refreshUsage().then((result) => {
-          if (result.synced) {
-            broadcastUsageOverview();
-          }
-        });
-      }, CODEBUDDY_QUOTA_REFRESH_INTERVAL_MS);
       const win = getOrCreateMainWindow();
       win.webContents.once("dom-ready", () => {
         sessionBroadcastScheduler.flushNow();

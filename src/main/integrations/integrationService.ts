@@ -595,6 +595,13 @@ function inspectCodexConfig(
     : undefined;
   let displayPath = sessionsExist ? sessionsPath : hooksPath;
 
+  function useSessionLogMonitoringStatus() {
+    health = "active";
+    statusMessage = "已接入 Codex 监控（基于 session 日志）";
+    statusMessageKey = "integration.message.codex.monitoring";
+    displayPath = sessionsPath;
+  }
+
   if (hooksConfig.error) {
     health = "repair_needed";
     statusMessage = hooksConfig.error;
@@ -687,10 +694,10 @@ function inspectCodexConfig(
         : "integration.message.codex.enhanced";
       displayPath = configPath;
     } else if (sessionsExist) {
-      health = "active";
+      useSessionLogMonitoringStatus();
     }
   } else if (sessionsExist) {
-    health = "active";
+    useSessionLogMonitoringStatus();
   }
 
   const labels = labelsForHealth(health);

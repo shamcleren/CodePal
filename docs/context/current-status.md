@@ -101,18 +101,17 @@
   - `CodeBuddy` via `~/.codebuddy/settings.json`
 - Writes are idempotent and create a backup before changing an existing file; Provider Gateway client setup appends/updates its own entries, and explicit switch actions save prior defaults before changing the active client provider
 - Invalid or incompatible existing config structures are reported back to the UI instead of being force-overwritten
+- Codex diagnostics treat healthy session-log monitoring as the active path and suppress stale legacy `~/.codex/hooks.json` incompatibility warnings, because current Codex monitoring no longer depends on that legacy file
 - Main process now also carries a dedicated usage aggregation path separate from session timeline state
 - Renderer top bar now uses a compact quota-first usage strip
 - Usage strip now supports `compact` / `detailed` density, with reset times either shown inline or exposed by hover title
-- Claude Code usage / quota visibility is implemented through two sources:
+- Claude Code usage visibility is implemented through two sources:
   - transcript/session-log token usage from `~/.claude/projects/**/*.jsonl`
-  - statusLine-derived `rate_limits` snapshots, retained as last-known local quota data when Claude CLI provides them
-- CodeBuddy usage now has its own网页登录 + cookie-backed sync path for `CodeBuddy Code(app)` monthly quota, separate from the internal aggregate quota page
+  - statusLine-derived `rate_limits` snapshots, retained as last-known local rate-limit data when Claude CLI provides them and hydrated back into the usage strip on app startup
 - Settings layout is now grouped into:
   - `Overview`
   - `Provider Gateway`
   - `Agent Integrations`
-  - `Usage Accounts`
   - `Preferences`
   - `Advanced`
 - Settings navigation now favors short labels and section summaries instead of long repeated explanations
@@ -194,8 +193,9 @@ npm run dist:mac
 - Codex integration currently focuses on session/activity visibility; structured pending-action write-back is not part of the current primary UX
 - Cursor full hook-event calibration is still being expanded beyond the current normalized subset; unknown payloads should continue to be pushed down into adapter/normalizer work instead of renderer-side guessing
 - GoLand and PyCharm should stay on the shared CodeBuddy JetBrains plugin watcher/framework path; other JetBrains IDEs may reuse the same framework, but they are not part of the current V1 calibrated / accepted scope
-- Claude Code has visible token usage plus statusLine-derived quota snapshots when upstream `rate_limits` are present; the remaining gap is the lack of a separate provider-authoritative live quota/reset source
-- CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset, and the separate internal aggregate quota source is still being polished in-product
+- Claude Code has visible token usage plus statusLine-derived quota snapshots when upstream `rate_limits` are present; provider-authoritative MiMo quota is not implemented because the official MiMo docs expose dashboard usage, compatible inference APIs, and RPM/TPM rate limits, but no stable account quota/reset API endpoint
+- MiMo provider quota should stay dashboard/manual until MiMo publishes an official account usage or remaining-quota API. The official sources checked on 2026-05-19 were `https://www.mimo-v2.com/docs/faq`, `https://www.mimo-v2.com/docs/pricing`, and `https://www.mimo-v2.com/docs`
+- CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset
 - CodePal-owned app, docs, packaged macOS, and tray icon assets now use the refreshed centered monitoring-panel mark; third-party agent icon normalization remains future polish
 - CodePal → codeagent structured message delivery is now **capability-gated terminal delivery** in v1.1.1 (tmux `send-keys`, Ghostty AppleScript best-effort); the composer renders only when the session has a concrete delivery channel. Terminal.app / iTerm2 / Warp / kitty / WezTerm remain without a reliable text-injection surface, so the composer is hidden rather than disabled there. The earlier `--codepal-hook keep-alive` groundwork was removed in v1.1.1
 - Blocking `allow / deny` approvals now round-trip end-to-end for Cursor and Claude Code; Codex remains blocked by upstream (`notify` hook is completion-only) and CodeBuddy still only supports heuristic external-approval display because upstream `permission_prompt` payloads do not yet include a structured `pendingAction` or a decision write-back channel
@@ -215,10 +215,9 @@ npm run dist:mac
   - `single_choice`
   - `multi_choice`
 - Integration diagnostics and repair flow are already in place for Cursor and CodeBuddy user-level hook config
-- Cursor dashboard login and spend sync are already in place, including session-expired handling
-- Claude Code token usage and statusLine `rate_limits` snapshots are already visible in the shared usage surface when available
-- CodeBuddy IDE/app monthly quota login and sync are now also in place through the settings panel, including session-expired handling
-- Header usage display, update status visibility, usage density switching, compact settings navigation, and settings regrouping are already in place
+- Integration diagnostics and repair flow are already in place for all supported agents
+- Claude Code token usage and statusLine `rate_limits` snapshots are already visible in the shared usage surface when available, including last-known cached rate-limit snapshots after restart
+- Header usage display, update status visibility, compact settings navigation, and settings regrouping are already in place
 - Provider Gateway is a first-class settings feature: CodePal can run a local gateway on `127.0.0.1:15721`, manage provider token presence separately from client configs, expose mapped MiMo models, health-check upstream mappings, and provide reversible Claude Desktop / Codex Desktop switch actions with restart guidance
 - Session ordering and expiration now follow dashboard-oriented defaults
 - Persisted session history is now available across app restarts, while the main list remains summary-first

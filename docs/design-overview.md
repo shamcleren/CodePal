@@ -160,6 +160,7 @@ Design boundary:
 - Client configs store only the local CodePal gateway URL and dummy local auth values.
 - Real provider tokens stay in CodePal's local secret store or environment fallback.
 - Provider-specific behavior is config-driven through provider profiles and model mappings, not hard-coded into renderer UI.
+- Provider quota surfaces do not scrape provider dashboards. MiMo provider quota should only be added when MiMo publishes a stable official account usage or remaining-quota API; current official docs direct users to dashboard Usage and document compatible inference APIs plus RPM/TPM rate limits.
 
 ## Monitoring Model
 

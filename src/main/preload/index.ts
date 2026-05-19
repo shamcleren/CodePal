@@ -1,18 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AppSettings, AppSettingsPatch } from "../../shared/appSettings";
 import type {
-  ClaudeQuotaDiagnostics,
-  ClaudeQuotaSyncResult,
-} from "../../shared/claudeQuotaTypes";
-import type {
-  CodeBuddyQuotaConnectResult,
-  CodeBuddyQuotaDiagnostics,
-} from "../../shared/codebuddyQuotaTypes";
-import type {
-  CursorDashboardConnectResult,
-  CursorDashboardDiagnostics,
-} from "../../shared/cursorDashboardTypes";
-import type {
   IntegrationAgentId,
   IntegrationDiagnostics,
   IntegrationInstallResult,
@@ -172,76 +160,6 @@ contextBridge.exposeInMainWorld("codepal", {
     return ipcRenderer.invoke("codepal:install-integration-hooks", {
       agentId,
     }) as Promise<IntegrationInstallResult>;
-  },
-  getCursorDashboardDiagnostics() {
-    return ipcRenderer.invoke(
-      "codepal:get-cursor-dashboard-diagnostics",
-    ) as Promise<CursorDashboardDiagnostics>;
-  },
-  getCodeBuddyQuotaDiagnostics() {
-    return ipcRenderer.invoke(
-      "codepal:get-codebuddy-quota-diagnostics",
-    ) as Promise<CodeBuddyQuotaDiagnostics>;
-  },
-  getClaudeQuotaDiagnostics() {
-    return ipcRenderer.invoke(
-      "codepal:get-claude-quota-diagnostics",
-    ) as Promise<ClaudeQuotaDiagnostics>;
-  },
-  getCodeBuddyInternalQuotaDiagnostics() {
-    return ipcRenderer.invoke(
-      "codepal:get-codebuddy-internal-quota-diagnostics",
-    ) as Promise<CodeBuddyQuotaDiagnostics>;
-  },
-  connectCursorDashboard() {
-    return ipcRenderer.invoke(
-      "codepal:connect-cursor-dashboard",
-    ) as Promise<CursorDashboardConnectResult>;
-  },
-  connectCodeBuddyQuota() {
-    return ipcRenderer.invoke(
-      "codepal:connect-codebuddy-quota",
-    ) as Promise<CodeBuddyQuotaConnectResult>;
-  },
-  connectCodeBuddyInternalQuota() {
-    return ipcRenderer.invoke(
-      "codepal:connect-codebuddy-internal-quota",
-    ) as Promise<CodeBuddyQuotaConnectResult>;
-  },
-  refreshCursorDashboardUsage() {
-    return ipcRenderer.invoke(
-      "codepal:refresh-cursor-dashboard-usage",
-    ) as Promise<CursorDashboardConnectResult>;
-  },
-  refreshClaudeQuota() {
-    return ipcRenderer.invoke(
-      "codepal:refresh-claude-quota",
-    ) as Promise<ClaudeQuotaSyncResult>;
-  },
-  clearCursorDashboardAuth() {
-    return ipcRenderer.invoke(
-      "codepal:clear-cursor-dashboard-auth",
-    ) as Promise<CursorDashboardDiagnostics>;
-  },
-  refreshCodeBuddyQuota() {
-    return ipcRenderer.invoke(
-      "codepal:refresh-codebuddy-quota",
-    ) as Promise<CodeBuddyQuotaConnectResult>;
-  },
-  clearCodeBuddyQuotaAuth() {
-    return ipcRenderer.invoke(
-      "codepal:clear-codebuddy-quota-auth",
-    ) as Promise<CodeBuddyQuotaDiagnostics>;
-  },
-  refreshCodeBuddyInternalQuota() {
-    return ipcRenderer.invoke(
-      "codepal:refresh-codebuddy-internal-quota",
-    ) as Promise<CodeBuddyQuotaConnectResult>;
-  },
-  clearCodeBuddyInternalQuotaAuth() {
-    return ipcRenderer.invoke(
-      "codepal:clear-codebuddy-internal-quota-auth",
-    ) as Promise<CodeBuddyQuotaDiagnostics>;
   },
   onOpenSettings(handler: () => void) {
     const channel = "codepal:open-settings";

@@ -1,7 +1,4 @@
 import type { AppSettings } from "../shared/appSettings";
-import type { ClaudeQuotaDiagnostics } from "../shared/claudeQuotaTypes";
-import type { CodeBuddyQuotaDiagnostics } from "../shared/codebuddyQuotaTypes";
-import type { CursorDashboardDiagnostics } from "../shared/cursorDashboardTypes";
 import type { HistoryDiagnostics } from "../shared/historyTypes";
 import type { IntegrationDiagnostics } from "../shared/integrationTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
@@ -13,10 +10,6 @@ type SupportDiagnosticsInput = {
   appSettingsPath: string;
   homeDir: string;
   integrationDiagnostics: IntegrationDiagnostics | null;
-  claudeQuotaDiagnostics: ClaudeQuotaDiagnostics | null;
-  cursorDashboardDiagnostics: CursorDashboardDiagnostics | null;
-  codeBuddyQuotaDiagnostics: CodeBuddyQuotaDiagnostics | null;
-  codeBuddyInternalQuotaDiagnostics: CodeBuddyQuotaDiagnostics | null;
   historyDiagnostics: HistoryDiagnostics | null;
   updateState: AppUpdateState | null;
 };
@@ -49,24 +42,6 @@ function homePath(homeDir: string, suffix: string): string {
     return suffix.startsWith("/") ? suffix : `~/${suffix}`;
   }
   return sanitizeLocalPath(`${homeDir}${suffix}`, homeDir);
-}
-
-function redactTeamId(teamId: string | null | undefined): string {
-  if (!teamId) {
-    return "n/a";
-  }
-  return "redacted";
-}
-
-function formatEndpointHost(endpoint: string | null | undefined): string {
-  if (!endpoint) {
-    return "n/a";
-  }
-  try {
-    return new URL(endpoint).host || "n/a";
-  } catch {
-    return "n/a";
-  }
 }
 
 export function buildSupportDiagnosticsReport(input: SupportDiagnosticsInput): string {
@@ -103,21 +78,6 @@ export function buildSupportDiagnosticsReport(input: SupportDiagnosticsInput): s
       );
     }
   }
-
-  lines.push("");
-  lines.push("Quota and Login");
-  lines.push(
-    `- Claude quota: state=${input.claudeQuotaDiagnostics?.state ?? "n/a"}, lastSyncAt=${formatDateTime(input.claudeQuotaDiagnostics?.lastSyncAt)}, account=${input.claudeQuotaDiagnostics?.accountEmail ? "redacted" : "n/a"}`,
-  );
-  lines.push(
-    `- Cursor Dashboard: state=${input.cursorDashboardDiagnostics?.state ?? "n/a"}, teamId=${redactTeamId(input.cursorDashboardDiagnostics?.teamId)}, lastSyncAt=${formatDateTime(input.cursorDashboardDiagnostics?.lastSyncAt)}`,
-  );
-  lines.push(
-    `- CodeBuddy Code: state=${input.codeBuddyQuotaDiagnostics?.state ?? "n/a"}, lastSyncAt=${formatDateTime(input.codeBuddyQuotaDiagnostics?.lastSyncAt)}, endpointHost=${formatEndpointHost(input.codeBuddyQuotaDiagnostics?.endpoint)}`,
-  );
-  lines.push(
-    `- CodeBuddy Enterprise: state=${input.codeBuddyInternalQuotaDiagnostics?.state ?? "n/a"}, lastSyncAt=${formatDateTime(input.codeBuddyInternalQuotaDiagnostics?.lastSyncAt)}, endpointHost=${formatEndpointHost(input.codeBuddyInternalQuotaDiagnostics?.endpoint)}`,
-  );
 
   lines.push("");
   lines.push("History");

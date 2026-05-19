@@ -1,17 +1,5 @@
 import type { AppSettings, AppSettingsPatch } from "../shared/appSettings";
 import type {
-  ClaudeQuotaDiagnostics,
-  ClaudeQuotaSyncResult,
-} from "../shared/claudeQuotaTypes";
-import type {
-  CodeBuddyQuotaConnectResult,
-  CodeBuddyQuotaDiagnostics,
-} from "../shared/codebuddyQuotaTypes";
-import type {
-  CursorDashboardConnectResult,
-  CursorDashboardDiagnostics,
-} from "../shared/cursorDashboardTypes";
-import type {
   IntegrationAgentId,
   IntegrationDiagnostics,
   IntegrationInstallResult,
@@ -70,20 +58,6 @@ export type CodePalApi = {
   installIntegrationHooks: (
     agentId: IntegrationAgentId,
   ) => Promise<IntegrationInstallResult>;
-  getClaudeQuotaDiagnostics: () => Promise<ClaudeQuotaDiagnostics>;
-  refreshClaudeQuota: () => Promise<ClaudeQuotaSyncResult>;
-  getCodeBuddyQuotaDiagnostics: () => Promise<CodeBuddyQuotaDiagnostics>;
-  getCodeBuddyInternalQuotaDiagnostics: () => Promise<CodeBuddyQuotaDiagnostics>;
-  connectCodeBuddyQuota: () => Promise<CodeBuddyQuotaConnectResult>;
-  connectCodeBuddyInternalQuota: () => Promise<CodeBuddyQuotaConnectResult>;
-  refreshCodeBuddyQuota: () => Promise<CodeBuddyQuotaConnectResult>;
-  refreshCodeBuddyInternalQuota: () => Promise<CodeBuddyQuotaConnectResult>;
-  clearCodeBuddyQuotaAuth: () => Promise<CodeBuddyQuotaDiagnostics>;
-  clearCodeBuddyInternalQuotaAuth: () => Promise<CodeBuddyQuotaDiagnostics>;
-  getCursorDashboardDiagnostics: () => Promise<CursorDashboardDiagnostics>;
-  connectCursorDashboard: () => Promise<CursorDashboardConnectResult>;
-  refreshCursorDashboardUsage: () => Promise<CursorDashboardConnectResult>;
-  clearCursorDashboardAuth: () => Promise<CursorDashboardDiagnostics>;
   onOpenSettings: (handler: () => void) => () => void;
   onFocusSession: (handler: (sessionId: string) => void) => () => void;
   openExternalTarget: (target: string) => Promise<string>;

@@ -238,11 +238,15 @@ export function AnalyticsPage() {
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.requests")}</th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.input")}</th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.output")}</th>
+                <th className="analytics-page__table-num">{i18n.t("tokenStats.cacheHit")}</th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.cost")}</th>
               </tr>
             </thead>
             <tbody>
-              {(data?.byModel ?? []).map((m) => (
+              {(data?.byModel ?? []).map((m) => {
+                const modelTotal = m.inputTokens + m.cacheReadTokens + m.cacheCreationTokens;
+                const modelCacheRate = modelTotal > 0 ? m.cacheReadTokens / modelTotal : 0;
+                return (
                 <tr key={`${m.agent}-${m.model}`}>
                   <td>
                     <span className="analytics-page__table-agent">{m.agent}</span>
@@ -251,9 +255,11 @@ export function AnalyticsPage() {
                   <td className="analytics-page__table-num">{m.requestCount}</td>
                   <td className="analytics-page__table-num">{formatTokens(m.inputTokens)}</td>
                   <td className="analytics-page__table-num">{formatTokens(m.outputTokens)}</td>
+                  <td className="analytics-page__table-num">{modelCacheRate > 0 ? `${Math.round(modelCacheRate * 100)}%` : "—"}</td>
                   <td className="analytics-page__table-num">{formatCost(estimateCost(m, pricingMap, m.model))}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

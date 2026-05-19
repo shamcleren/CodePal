@@ -35,23 +35,6 @@ describe("buildSupportDiagnosticsReport", () => {
           },
         ],
       },
-      cursorDashboardDiagnostics: {
-        state: "connected",
-        message: "ok",
-        teamId: "123",
-        lastSyncAt: Date.parse("2026-04-09T12:01:00.000Z"),
-      },
-      codeBuddyQuotaDiagnostics: {
-        state: "connected",
-        message: "ok",
-        endpoint: "https://example.test/codebuddy",
-        lastSyncAt: Date.parse("2026-04-09T12:02:00.000Z"),
-      },
-      codeBuddyInternalQuotaDiagnostics: {
-        state: "not_connected",
-        message: "nope",
-        endpoint: "https://example.test/internal",
-      },
       historyDiagnostics: {
         enabled: true,
         dbPath: "/Users/demo/Library/Application Support/codepal/history.sqlite",
@@ -78,8 +61,6 @@ describe("buildSupportDiagnosticsReport", () => {
     expect(report).toContain("CodePal Support Diagnostics");
     expect(report).toContain("Resolved Locale: en");
     expect(report).toContain("Listener: tcp 127.0.0.1:17371");
-    expect(report).toContain("Cursor Dashboard: state=connected, teamId=redacted");
-    expect(report).toContain("CodeBuddy Code: state=connected, lastSyncAt=2026-04-09T12:02:00.000Z, endpointHost=example.test");
     expect(report).toContain("History");
     expect(report).toContain("Enabled: yes");
     expect(report).toContain("DB Size Bytes: 42");
@@ -89,8 +70,5 @@ describe("buildSupportDiagnosticsReport", () => {
     expect(report).toContain("~/.codex/sessions/");
     expect(report).not.toContain("/Users/demo");
     expect(report).not.toContain("/tmp/Electron");
-    expect(report).not.toContain("teamId=123");
-    expect(report).not.toContain("https://example.test/codebuddy");
-    expect(report).not.toContain("cookie");
   });
 });

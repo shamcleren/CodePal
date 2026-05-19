@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultAppSettings, type AppSettings, type AppSettingsPatch } from "../shared/appSettings";
-import type { ClaudeQuotaDiagnostics } from "../shared/claudeQuotaTypes";
-import type { CodeBuddyQuotaDiagnostics } from "../shared/codebuddyQuotaTypes";
-import type { CursorDashboardDiagnostics } from "../shared/cursorDashboardTypes";
 import type { HistoryDiagnostics } from "../shared/historyTypes";
 import type { IntegrationAgentId, IntegrationDiagnostics } from "../shared/integrationTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
@@ -10,9 +7,6 @@ import type { UsageOverview } from "../shared/usageTypes";
 import type { ProviderGatewayStatus } from "../shared/providerGatewayTypes";
 import type { ProviderGatewayClientSetupTarget } from "../shared/providerGatewayTypes";
 import { DisplayPreferencesPanel } from "./components/DisplayPreferencesPanel";
-import { CursorDashboardPanel } from "./components/CursorDashboardPanel";
-import { CodeBuddyQuotaPanel } from "./components/CodeBuddyQuotaPanel";
-import { ClaudeQuotaPanel } from "./components/ClaudeQuotaPanel";
 import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
 import { AnalyticsPage } from "./components/AnalyticsPage";
@@ -34,13 +28,10 @@ import {
   type UsageAgentId,
 } from "./usageDisplaySettings";
 
-const CURSOR_DASHBOARD_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-const CODEBUDDY_QUOTA_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 type SettingsSectionId =
   | "overview"
   | "providerGateway"
   | "integrations"
-  | "usage"
   | "preferences"
   | "advanced";
 type SettingsSection = {
@@ -74,18 +65,6 @@ export function App() {
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("overview");
   const [usageOverview, setUsageOverview] = useState<UsageOverview | null>(null);
-  const [claudeQuotaDiagnostics, setClaudeQuotaDiagnostics] =
-    useState<ClaudeQuotaDiagnostics | null>(null);
-  const [claudeQuotaLoading, setClaudeQuotaLoading] = useState(false);
-  const [cursorDashboardDiagnostics, setCursorDashboardDiagnostics] =
-    useState<CursorDashboardDiagnostics | null>(null);
-  const [cursorDashboardLoading, setCursorDashboardLoading] = useState(false);
-  const [codeBuddyQuotaDiagnostics, setCodeBuddyQuotaDiagnostics] =
-    useState<CodeBuddyQuotaDiagnostics | null>(null);
-  const [codeBuddyQuotaLoading, setCodeBuddyQuotaLoading] = useState(false);
-  const [codeBuddyInternalQuotaDiagnostics, setCodeBuddyInternalQuotaDiagnostics] =
-    useState<CodeBuddyQuotaDiagnostics | null>(null);
-  const [codeBuddyInternalQuotaLoading, setCodeBuddyInternalQuotaLoading] = useState(false);
   const [providerGatewayStatus, setProviderGatewayStatus] =
     useState<ProviderGatewayStatus | null>(null);
   const [providerGatewayLoading, setProviderGatewayLoading] = useState(false);
@@ -118,10 +97,6 @@ export function App() {
     appSettingsPath,
     homeDir,
     integrationDiagnostics,
-    claudeQuotaDiagnostics,
-    cursorDashboardDiagnostics,
-    codeBuddyQuotaDiagnostics,
-    codeBuddyInternalQuotaDiagnostics,
     historyDiagnostics,
     updateState,
   });
@@ -143,12 +118,6 @@ export function App() {
       label: i18n.t("settings.integrations.title"),
       eyebrow: i18n.t("settings.integrations.eyebrow"),
       summary: i18n.t("settings.integrations.summary"),
-    },
-    {
-      id: "usage",
-      label: i18n.t("settings.usage.title"),
-      eyebrow: i18n.t("settings.usage.eyebrow"),
-      summary: i18n.t("settings.usage.summary"),
     },
     {
       id: "preferences",
@@ -176,78 +145,6 @@ export function App() {
       })
       .finally(() => {
         setSessionHistoryClearing(false);
-      });
-  }
-
-  function loadClaudeQuotaDiagnostics() {
-    return window.codepal
-      .getClaudeQuotaDiagnostics()
-      .then((diagnostics) => {
-        setClaudeQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          state: "error" as const,
-          message: (error as Error).message,
-        };
-        setClaudeQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      });
-  }
-
-  function loadCursorDashboardDiagnostics() {
-    return window.codepal
-      .getCursorDashboardDiagnostics()
-      .then((cursorDiagnostics) => {
-        setCursorDashboardDiagnostics(cursorDiagnostics);
-        return cursorDiagnostics;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          state: "error" as const,
-          message: (error as Error).message,
-        };
-        setCursorDashboardDiagnostics(diagnostics);
-        return diagnostics;
-      });
-  }
-
-  function loadCodeBuddyQuotaDiagnostics() {
-    return window.codepal
-      .getCodeBuddyQuotaDiagnostics()
-      .then((diagnostics) => {
-        setCodeBuddyQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          state: "error" as const,
-          message: (error as Error).message,
-          endpoint: "",
-        };
-        setCodeBuddyQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      });
-  }
-
-  function loadCodeBuddyInternalQuotaDiagnostics() {
-    return window.codepal
-      .getCodeBuddyInternalQuotaDiagnostics()
-      .then((diagnostics) => {
-        setCodeBuddyInternalQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          kind: "internal" as const,
-          label: "CodeBuddy Enterprise",
-          state: "error" as const,
-          message: (error as Error).message,
-          endpoint: "",
-        };
-        setCodeBuddyInternalQuotaDiagnostics(diagnostics);
-        return diagnostics;
       });
   }
 
@@ -280,182 +177,6 @@ export function App() {
         const diagnostics = buildFallbackHistoryDiagnostics(enabled);
         setHistoryDiagnostics(diagnostics);
         return diagnostics;
-      });
-  }
-
-  function runClaudeQuotaRefresh() {
-    setClaudeQuotaLoading(true);
-    return window.codepal
-      .refreshClaudeQuota()
-      .then((result) => {
-        setClaudeQuotaDiagnostics(result.diagnostics);
-        return result;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          state: "error" as const,
-          message: (error as Error).message,
-        };
-        setClaudeQuotaDiagnostics(diagnostics);
-        return {
-          diagnostics,
-          synced: false,
-        };
-      })
-      .finally(() => {
-        setClaudeQuotaLoading(false);
-      });
-  }
-
-  function runCursorDashboardSync(mode: "connect" | "refresh") {
-    setCursorDashboardLoading(true);
-    const action =
-      mode === "connect"
-        ? window.codepal.connectCursorDashboard()
-        : window.codepal.refreshCursorDashboardUsage();
-    return action
-      .then((result) => {
-        setCursorDashboardDiagnostics(result.diagnostics);
-        return result;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          state: "error" as const,
-          message: (error as Error).message,
-        };
-        setCursorDashboardDiagnostics(diagnostics);
-        return {
-          diagnostics,
-          synced: false,
-        };
-      })
-      .finally(() => {
-        setCursorDashboardLoading(false);
-      });
-  }
-
-  function clearCursorDashboardAuth() {
-    setCursorDashboardLoading(true);
-    return window.codepal
-      .clearCursorDashboardAuth()
-      .then((diagnostics) => {
-        setCursorDashboardDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          state: "error" as const,
-          message: (error as Error).message,
-        };
-        setCursorDashboardDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .finally(() => {
-        setCursorDashboardLoading(false);
-      });
-  }
-
-  function runCodeBuddyQuotaSync(mode: "connect" | "refresh") {
-    setCodeBuddyQuotaLoading(true);
-    const action =
-      mode === "connect"
-        ? window.codepal.connectCodeBuddyQuota()
-        : window.codepal.refreshCodeBuddyQuota();
-    return action
-      .then((result) => {
-        setCodeBuddyQuotaDiagnostics(result.diagnostics);
-        return result;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          state: "error" as const,
-          message: (error as Error).message,
-          endpoint: "",
-        };
-        setCodeBuddyQuotaDiagnostics(diagnostics);
-        return {
-          diagnostics,
-          synced: false,
-        };
-      })
-      .finally(() => {
-        setCodeBuddyQuotaLoading(false);
-      });
-  }
-
-  function clearCodeBuddyQuotaAuth() {
-    setCodeBuddyQuotaLoading(true);
-    return window.codepal
-      .clearCodeBuddyQuotaAuth()
-      .then((diagnostics) => {
-        setCodeBuddyQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          state: "error" as const,
-          message: (error as Error).message,
-          endpoint: "",
-        };
-        setCodeBuddyQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .finally(() => {
-        setCodeBuddyQuotaLoading(false);
-      });
-  }
-
-  function runCodeBuddyInternalQuotaSync(mode: "connect" | "refresh") {
-    setCodeBuddyInternalQuotaLoading(true);
-    const action =
-      mode === "connect"
-        ? window.codepal.connectCodeBuddyInternalQuota()
-        : window.codepal.refreshCodeBuddyInternalQuota();
-    return action
-      .then((result) => {
-        setCodeBuddyInternalQuotaDiagnostics(result.diagnostics);
-        return result;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          kind: "internal" as const,
-          label: "CodeBuddy Enterprise",
-          state: "error" as const,
-          message: (error as Error).message,
-          endpoint: "",
-        };
-        setCodeBuddyInternalQuotaDiagnostics(diagnostics);
-        return {
-          diagnostics,
-          synced: false,
-        };
-      })
-      .finally(() => {
-        setCodeBuddyInternalQuotaLoading(false);
-      });
-  }
-
-  function clearCodeBuddyInternalQuotaAuth() {
-    setCodeBuddyInternalQuotaLoading(true);
-    return window.codepal
-      .clearCodeBuddyInternalQuotaAuth()
-      .then((diagnostics) => {
-        setCodeBuddyInternalQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .catch((error: unknown) => {
-        const diagnostics = {
-          kind: "internal" as const,
-          label: "CodeBuddy Enterprise",
-          state: "error" as const,
-          message: (error as Error).message,
-          endpoint: "",
-        };
-        setCodeBuddyInternalQuotaDiagnostics(diagnostics);
-        return diagnostics;
-      })
-      .finally(() => {
-        setCodeBuddyInternalQuotaLoading(false);
       });
   }
 
@@ -532,11 +253,7 @@ export function App() {
         setIntegrationLoading(false);
       });
 
-    void loadClaudeQuotaDiagnostics();
     void loadProviderGatewayStatus();
-    void loadCursorDashboardDiagnostics();
-    void loadCodeBuddyQuotaDiagnostics();
-    void loadCodeBuddyInternalQuotaDiagnostics();
     void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
   }
 
@@ -612,10 +329,7 @@ export function App() {
         setAppSettingsPath(settingsPath);
         setHomeDir(nextHomeDir);
         return Promise.all([
-          loadClaudeQuotaDiagnostics(),
           loadProviderGatewayStatus(),
-          loadCodeBuddyQuotaDiagnostics(),
-          loadCodeBuddyInternalQuotaDiagnostics(),
           loadHistoryDiagnostics(settings.history.persistenceEnabled),
         ]).then(() => ({ settings, settingsPath }));
       },
@@ -644,22 +358,6 @@ export function App() {
       setRows(rowsFromSessions(sessions, resolvedLocale));
     });
   }, [resolvedLocale]);
-
-  useEffect(() => {
-    void loadClaudeQuotaDiagnostics();
-  }, []);
-
-  useEffect(() => {
-    void loadCursorDashboardDiagnostics();
-  }, []);
-
-  useEffect(() => {
-    void loadCodeBuddyQuotaDiagnostics();
-  }, []);
-
-  useEffect(() => {
-    void loadCodeBuddyInternalQuotaDiagnostics();
-  }, []);
 
   useEffect(() => {
     void loadProviderGatewayStatus();
@@ -714,75 +412,6 @@ export function App() {
     });
     return unsub;
   }, []);
-
-  useEffect(() => {
-    if (cursorDashboardLoading || cursorDashboardDiagnostics?.state !== "connected") {
-      return;
-    }
-
-    if (!cursorDashboardDiagnostics.lastSyncAt) {
-      void runCursorDashboardSync("refresh");
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      void runCursorDashboardSync("refresh");
-    }, CURSOR_DASHBOARD_REFRESH_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [
-    cursorDashboardDiagnostics?.lastSyncAt,
-    cursorDashboardDiagnostics?.state,
-    cursorDashboardLoading,
-  ]);
-
-  useEffect(() => {
-    if (codeBuddyQuotaLoading || codeBuddyQuotaDiagnostics?.state !== "connected") {
-      return;
-    }
-
-    if (!codeBuddyQuotaDiagnostics.lastSyncAt) {
-      void runCodeBuddyQuotaSync("refresh");
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      void runCodeBuddyQuotaSync("refresh");
-    }, CODEBUDDY_QUOTA_REFRESH_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [
-    codeBuddyQuotaDiagnostics?.lastSyncAt,
-    codeBuddyQuotaDiagnostics?.state,
-    codeBuddyQuotaLoading,
-  ]);
-
-  useEffect(() => {
-    if (codeBuddyInternalQuotaLoading || codeBuddyInternalQuotaDiagnostics?.state !== "connected") {
-      return;
-    }
-
-    if (!codeBuddyInternalQuotaDiagnostics.lastSyncAt) {
-      void runCodeBuddyInternalQuotaSync("refresh");
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      void runCodeBuddyInternalQuotaSync("refresh");
-    }, CODEBUDDY_QUOTA_REFRESH_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [
-    codeBuddyInternalQuotaDiagnostics?.lastSyncAt,
-    codeBuddyInternalQuotaDiagnostics?.state,
-    codeBuddyInternalQuotaLoading,
-  ]);
 
   function updateAppSettings(nextValue: AppSettingsPatch) {
     return window.codepal.updateAppSettings(nextValue).then((settings) => {
@@ -1075,59 +704,6 @@ export function App() {
                       });
                   }}
                 />
-              ) : null}
-              {activeSettingsSection === "usage" ? (
-                <div className="settings-stack settings-stack--usage">
-                  <ClaudeQuotaPanel
-                    overview={usageOverview}
-                    diagnostics={claudeQuotaDiagnostics}
-                    loading={claudeQuotaLoading}
-                    onRefresh={() => {
-                      void runClaudeQuotaRefresh();
-                    }}
-                  />
-                  <CodeBuddyQuotaPanel
-                    diagnostics={codeBuddyQuotaDiagnostics}
-                    loading={codeBuddyQuotaLoading}
-                    onConnect={() => {
-                      void runCodeBuddyQuotaSync("connect");
-                    }}
-                    onRefresh={() => {
-                      void runCodeBuddyQuotaSync("refresh");
-                    }}
-                    onClearAuth={() => {
-                      void clearCodeBuddyQuotaAuth();
-                    }}
-                  />
-                  {appSettings.codebuddy.enterprise.enabled ? (
-                    <CodeBuddyQuotaPanel
-                      diagnostics={codeBuddyInternalQuotaDiagnostics}
-                      loading={codeBuddyInternalQuotaLoading}
-                      onConnect={() => {
-                        void runCodeBuddyInternalQuotaSync("connect");
-                      }}
-                      onRefresh={() => {
-                        void runCodeBuddyInternalQuotaSync("refresh");
-                      }}
-                      onClearAuth={() => {
-                        void clearCodeBuddyInternalQuotaAuth();
-                      }}
-                    />
-                  ) : null}
-                  <CursorDashboardPanel
-                    diagnostics={cursorDashboardDiagnostics}
-                    loading={cursorDashboardLoading}
-                    onConnect={() => {
-                      void runCursorDashboardSync("connect");
-                    }}
-                    onRefresh={() => {
-                      void runCursorDashboardSync("refresh");
-                    }}
-                    onClearAuth={() => {
-                      void clearCursorDashboardAuth();
-                    }}
-                  />
-                </div>
               ) : null}
               {activeSettingsSection === "preferences" ? (
                 <div className="settings-stack">

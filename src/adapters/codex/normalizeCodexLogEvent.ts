@@ -131,8 +131,17 @@ function metaForEntry(
     if (typeof payload.model_provider === "string" && payload.model_provider.trim()) {
       meta.model_provider = payload.model_provider.trim();
     }
+    if (typeof payload.thread_source === "string" && payload.thread_source.trim()) {
+      meta.codex_thread_source = payload.thread_source.trim();
+    }
     if (typeof payload.source === "string" && payload.source.trim()) {
       meta.source = payload.source.trim();
+    } else if (payload.source && typeof payload.source === "object") {
+      const src = payload.source as Record<string, unknown>;
+      const subagent = src.subagent as Record<string, unknown> | undefined;
+      if (subagent && typeof subagent.other === "string") {
+        meta.source = `subagent:${subagent.other}`;
+      }
     }
     return meta;
   }

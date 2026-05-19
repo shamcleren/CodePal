@@ -24,17 +24,10 @@ describe("App", () => {
     expect(
       html.includes("Agent Integrations") || html.includes("Agent \u63a5\u5165"),
     ).toBe(true);
-    expect(
-      html.includes("Usage Accounts") || html.includes("\u7528\u91cf\u8d26\u6237"),
-    ).toBe(true);
     expect(html.includes("Preferences") || html.includes("\u504f\u597d\u8bbe\u7f6e")).toBe(true);
     expect(html.includes("Advanced") || html.includes("\u9ad8\u7ea7")).toBe(true);
     expect(html).not.toContain("Maintenance &amp; History");
-    expect(html).not.toContain("Usage &amp; Sign-ins");
     expect(html).not.toContain("Handle listener state, hook repairs, and login issues in one place.");
-    expect(html).not.toContain(
-      "Keep Claude, Cursor, and CodeBuddy sign-ins plus quota sync together.",
-    );
     expect(
       html.includes('aria-label="Open settings"') || html.includes('aria-label="\u6253\u5f00\u8bbe\u7f6e"'),
     ).toBe(true);

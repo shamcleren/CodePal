@@ -26,6 +26,7 @@ export const ERROR_SESSION_RETENTION_MS = 48 * 60 * 60 * 1000;
 export const MAX_HISTORY_SESSION_COUNT = 150;
 const MAX_ACTIVITY_ITEMS = 6;
 const CURSOR_SESSION_MERGE_WINDOW_MS = 30 * 60 * 1000;
+const CODEX_SUBAGENT_MERGE_WINDOW_MS = 30 * 60 * 1000;
 
 export type SessionEvent = {
   type?: string;
@@ -665,6 +666,52 @@ function resolveSessionTarget(
   sessions: Map<string, InternalSessionRecord>,
   event: SessionEvent,
 ): ResolvedSessionTarget {
+  // Merge Codex guardian subagent sessions into parent user sessions
+  if (event.tool === "codex") {
+    const isSubagent = firstMetaString(event.meta, "codex_thread_source") === "subagent";
+    const cwd = firstMetaString(event.meta, "cwd");
+    if (isSubagent && cwd) {
+      // Subagent event → find most recent user session with same cwd within window
+      const userCandidate = [...sessions.values()]
+        .filter(
+          (session) =>
+            session.tool === "codex" &&
+            session.id !== event.sessionId &&
+            firstMetaString(session.meta, "cwd") === cwd &&
+            firstMetaString(session.meta, "codex_thread_source") !== "subagent" &&
+            Math.abs(session.updatedAt - event.timestamp) <= CODEX_SUBAGENT_MERGE_WINDOW_MS,
+        )
+        .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+      if (userCandidate) {
+        return { sessionId: userCandidate.id, seed: userCandidate };
+      }
+      return { sessionId: event.sessionId };
+    }
+
+    // User event → absorb any existing subagent-only session from same cwd
+    if (!isSubagent && cwd && !sessions.has(event.sessionId)) {
+      const subagentCandidate = [...sessions.values()]
+        .filter(
+          (session) =>
+            session.tool === "codex" &&
+            session.id !== event.sessionId &&
+            firstMetaString(session.meta, "cwd") === cwd &&
+            firstMetaString(session.meta, "codex_thread_source") === "subagent" &&
+            Math.abs(session.updatedAt - event.timestamp) <= CODEX_SUBAGENT_MERGE_WINDOW_MS,
+        )
+        .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+      if (subagentCandidate) {
+        return {
+          sessionId: event.sessionId,
+          seed: subagentCandidate,
+          absorbedSessionId: subagentCandidate.id,
+        };
+      }
+    }
+
+    return { sessionId: event.sessionId };
+  }
+
   if (event.tool !== "cursor") {
     return { sessionId: event.sessionId };
   }

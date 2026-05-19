@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { createUsageSnapshotCache } from "./usageSnapshotCache";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createUsageSnapshotCache, hydrateUsageStoreFromCache } from "./usageSnapshotCache";
 
 describe("createUsageSnapshotCache", () => {
   let tmpDir: string | null = null;
@@ -136,5 +136,33 @@ describe("createUsageSnapshotCache", () => {
       agent: "claude",
       sessionId: "claude-session-1",
     });
+  });
+
+  it("hydrates usage overview state from a cached claude quota snapshot", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-usage-cache-"));
+    const filePath = path.join(tmpDir, "usage-cache.json");
+    const cache = createUsageSnapshotCache({
+      filePath,
+      now: () => 1_775_300_000_000,
+    });
+    const snapshot = {
+      agent: "claude",
+      sessionId: "claude-session-1",
+      source: "statusline-derived" as const,
+      updatedAt: 1_775_000_000_000,
+      title: "Claude quota",
+      rateLimit: {
+        windows: [
+          { key: "primary", label: "5h", usedPercent: 22, resetAt: 1_775_200_000 },
+          { key: "secondary", label: "7d", usedPercent: 61, resetAt: 1_775_600_000 },
+        ],
+      },
+    };
+    cache.saveClaudeRateLimitSnapshot(snapshot);
+
+    const applySnapshot = vi.fn();
+
+    expect(hydrateUsageStoreFromCache(cache, { applySnapshot })).toBe(true);
+    expect(applySnapshot).toHaveBeenCalledWith(snapshot);
   });
 });

@@ -648,6 +648,35 @@ describe("createIntegrationService", () => {
     });
   });
 
+  it("ignores incompatible legacy Codex hooks.json when session-log monitoring is healthy", () => {
+    const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const codexDir = join(homeDir, ".codex");
+    const codexSessionsRoot = join(codexDir, "sessions");
+    const hooksPath = join(codexDir, "hooks.json");
+    mkdirSync(codexSessionsRoot, { recursive: true });
+    writeFileSync(hooksPath, JSON.stringify({ hooks: [] }));
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: false,
+      execPath,
+      appPath,
+    });
+
+    const codex = service.getDiagnostics().agents.find((agent) => agent.id === "codex");
+    expect(codex).toMatchObject({
+      id: "codex",
+      health: "active",
+      hookInstalled: false,
+      statusMessage: "已接入 Codex 监控（基于 session 日志）",
+      statusMessageKey: "integration.message.codex.monitoring",
+      configPath: codexSessionsRoot,
+    });
+    expect(codex?.statusMessage).not.toContain("hooks.json");
+    expect(codex?.configPath).not.toBe(hooksPath);
+  });
+
   it("reports active Codex diagnostics when hooks.json is configured", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
     const hooksPath = join(homeDir, ".codex", "hooks.json");

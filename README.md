@@ -3,7 +3,7 @@
   <span valign="middle">CodePal</span>
 </h1>
 
-<p align="center"><strong>One floating panel for all your AI coding agents — sessions, activity, and quota always in view.</strong></p>
+<p align="center"><strong>One floating panel for all your AI coding agents — sessions, activity, and usage always in view.</strong></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-blue" alt="platform macOS" />
@@ -24,7 +24,7 @@ Running multiple AI coding agents means your attention is constantly split:
 
 - one session is running in Cursor
 - another is waiting for approval in a terminal
-- quota lives in a browser tab
+- usage data is scattered across different tools
 - recent activity is buried inside different tools
 
 CodePal pulls it all into one floating panel that stays visible while you work.
@@ -45,7 +45,7 @@ CodePal is a dashboard, not a middleman. The agents you already use stay in char
 
 - **Unified session view**: active, waiting, completed, and errored sessions across all agents in one list
 - **Focused activity timeline**: see what each agent is doing — replies, tool calls, and status changes — without the noise
-- **Quota and usage awareness**: token usage and available rate-limit signals stay visible, with compact and detailed density modes
+- **Token usage analytics**: per-model token usage, cache hit rates, and estimated costs across all agents, with daily trends and HTML reports
 - **Session history persistence**: full activity history stored locally and restored across app restarts
 - **One-click integration repair**: fix supported local agent configurations from inside the app
 - **Local provider gateway**: connect Claude Desktop and Codex Desktop to third-party models through CodePal while keeping provider tokens out of client configs and preserving existing default models

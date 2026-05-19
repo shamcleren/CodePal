@@ -443,23 +443,6 @@ function normalizeProviderConfig(
   };
 }
 
-function mergeDefaultMimoModelMappings(
-  providerId: string,
-  provider: ProviderGatewayConfig,
-): ProviderGatewayConfig {
-  if (providerId !== "mimo") {
-    return provider;
-  }
-  const defaultMappings = defaultProviderGatewaySettings.providers.mimo.modelMappings;
-  return {
-    ...provider,
-    modelMappings: {
-      ...defaultMappings,
-      ...provider.modelMappings,
-    },
-  };
-}
-
 function normalizeProviderGatewaySettings(value: unknown): ProviderGatewaySettings {
   const candidate = asRecord(value);
   if (!candidate) {
@@ -486,10 +469,7 @@ function normalizeProviderGatewaySettings(value: unknown): ProviderGatewaySettin
           const providerId = id.trim();
           return [
             providerId,
-            mergeDefaultMimoModelMappings(
-              providerId,
-              normalizeProviderConfig(provider, defaultProvider),
-            ),
+            normalizeProviderConfig(provider, defaultProvider),
           ] as const;
         })
     : [];

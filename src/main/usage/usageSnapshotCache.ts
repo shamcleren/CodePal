@@ -98,3 +98,19 @@ export function createUsageSnapshotCache(options: UsageSnapshotCacheOptions) {
     saveClaudeRateLimitSnapshot,
   };
 }
+
+type UsageStoreLike = {
+  applySnapshot(snapshot: UsageSnapshot): void;
+};
+
+export function hydrateUsageStoreFromCache(
+  cache: Pick<ReturnType<typeof createUsageSnapshotCache>, "loadClaudeRateLimitSnapshot">,
+  usageStore: UsageStoreLike,
+): boolean {
+  const snapshot = cache.loadClaudeRateLimitSnapshot();
+  if (!snapshot) {
+    return false;
+  }
+  usageStore.applySnapshot(snapshot);
+  return true;
+}

@@ -202,6 +202,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     ON CONFLICT(model_id) DO NOTHING
   `);
   const DEFAULT_PRICING: Array<[string, string, string, string, string, string]> = [
+    // Claude (Anthropic)
     ["claude-opus-4-7", "Claude Opus 4.7", "5", "25", "0.50", "6.25"],
     ["claude-opus-4-6-20260206", "Claude Opus 4.6", "5", "25", "0.50", "6.25"],
     ["claude-sonnet-4-6-20260217", "Claude Sonnet 4.6", "3", "15", "0.30", "3.75"],
@@ -212,11 +213,22 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     ["claude-sonnet-4-20250514", "Claude Sonnet 4", "3", "15", "0.30", "3.75"],
     ["claude-3-5-haiku-20241022", "Claude 3.5 Haiku", "0.80", "4", "0.08", "1"],
     ["claude-3-5-sonnet-20241022", "Claude 3.5 Sonnet", "3", "15", "0.30", "3.75"],
-    ["codex-default", "Codex (default)", "3", "15", "0.30", "0"],
+    // Codex / OpenAI
+    ["codex-default", "Codex (default)", "1.50", "6", "0.375", "0"],
+    ["codex-mini-latest", "Codex Mini", "1.50", "6", "0.375", "0"],
+    ["gpt-5.5", "GPT-5.5", "5", "30", "0.50", "0"],
+    ["gpt-5", "GPT-5", "1.25", "10", "0.125", "0"],
+    ["gpt-4.1", "GPT-4.1", "2", "8", "0.50", "0"],
+    // DeepSeek
+    ["deepseek-v4-flash", "DeepSeek V4 Flash", "0.14", "0.28", "0.0028", "0"],
+    ["deepseek-v4-pro", "DeepSeek V4 Pro", "0.435", "0.87", "0.003625", "0"],
   ];
   for (const row of DEFAULT_PRICING) {
     seedPricing.run(...row);
   }
+
+  // Backfill: codex rows that predate model tracking have NULL or "unknown" model
+  db.exec(`UPDATE token_usage SET model = 'gpt-5.5' WHERE agent = 'codex' AND (model IS NULL OR model = '' OR model = 'unknown')`);
 
   function assertOpen() {
     if (isClosed) {

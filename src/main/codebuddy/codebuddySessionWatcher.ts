@@ -6,6 +6,7 @@ import {
   normalizeCodeBuddyUiMessage,
 } from "../../adapters/codebuddy/normalizeCodeBuddyUiMessage";
 import { isSessionStatus, type ActivityItem } from "../../shared/sessionTypes";
+import type { TokenUsageWrite } from "../../shared/usageTypes";
 import { ACTIVE_SESSION_STALENESS_MS, type SessionEvent } from "../session/sessionStore";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
 
@@ -14,6 +15,7 @@ type CodeBuddySessionWatcherOptions = {
   appTasksRoot?: string;
   appHistoryRoot?: string;
   onEvent: (event: SessionEvent) => void;
+  onTokenUsage?: (entry: TokenUsageWrite) => void;
   pollIntervalMs?: number;
   initialBootstrapLookbackMs?: number;
 };
@@ -332,6 +334,38 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
           ? { activityItems: rewritten.activityItems }
           : {}),
       });
+
+      // Extract token usage from function_call entries
+      if (options.onTokenUsage) {
+        const rawEntry = parseLine(trimmed);
+        if (rawEntry?.type === "function_call") {
+          const providerData = rawEntry.providerData as Record<string, unknown> | undefined;
+          const rawUsage = providerData?.rawUsage as Record<string, unknown> | undefined;
+          if (rawUsage && typeof rawUsage === "object") {
+            const promptTokens = typeof rawUsage.prompt_tokens === "number" ? rawUsage.prompt_tokens : 0;
+            const completionTokens = typeof rawUsage.completion_tokens === "number" ? rawUsage.completion_tokens : 0;
+            const cacheReadTokens = typeof rawUsage.prompt_cache_hit_tokens === "number" ? rawUsage.prompt_cache_hit_tokens : 0;
+            const cacheCreationTokens = typeof rawUsage.cache_creation_input_tokens === "number"
+              ? rawUsage.cache_creation_input_tokens
+              : typeof rawUsage.prompt_cache_write_tokens === "number"
+                ? rawUsage.prompt_cache_write_tokens : 0;
+            const reasoningTokens = typeof rawUsage.completion_thinking_tokens === "number" ? rawUsage.completion_thinking_tokens : 0;
+
+            if (promptTokens > 0 || completionTokens > 0) {
+              options.onTokenUsage({
+                sessionId: normalized.sessionId,
+                agent: "codebuddy",
+                timestamp: normalized.timestamp,
+                inputTokens: promptTokens,
+                outputTokens: completionTokens,
+                cacheReadTokens,
+                cacheCreationTokens,
+                reasoningTokens,
+              });
+            }
+          }
+        }
+      }
     }
 
     if (remainder) {

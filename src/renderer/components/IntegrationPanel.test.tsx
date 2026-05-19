@@ -201,6 +201,7 @@ describe("IntegrationPanel", () => {
 
     expect(html).toContain("接入与诊断");
     expect(html).toContain("integration-panel__status-grid");
+    expect(html).toContain("integration-panel__metric-card");
     expect(html).toContain("integration-panel__details");
     expect(html).toContain("接入详情");
     expect(html).toContain("接收入口：本机端口 17371");
@@ -223,6 +224,7 @@ describe("IntegrationPanel", () => {
     expect(html).toContain("Codex");
     expect(html).toContain("Claude");
     expect(html).toContain("integration-grid");
+    expect(html).toContain("integration-card--with-checks");
     expect(html).not.toContain("integration-panel__healthy-item");
   });
 

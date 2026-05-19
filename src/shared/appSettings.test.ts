@@ -244,7 +244,7 @@ describe("appSettings", () => {
     });
   });
 
-  it("adds new Claude-safe MiMo aliases to older default provider configs", () => {
+  it("preserves user-customized MiMo model mappings without re-adding defaults", () => {
     const settings = normalizeAppSettings({
       version: 1,
       providerGateway: {
@@ -266,11 +266,8 @@ describe("appSettings", () => {
       },
     });
 
-    expect(settings.providerGateway.providers.mimo.modelMappings).toMatchObject({
+    expect(settings.providerGateway.providers.mimo.modelMappings).toEqual({
       "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
-      "claude-sonnet-4-6": "mimo-v2.5",
-      "claude-opus-4-7": "mimo-v2.5-pro",
-      "claude-haiku-4-5": "mimo-v2",
     });
   });
 });
