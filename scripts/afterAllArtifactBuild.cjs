@@ -7,7 +7,7 @@ const { appBuilderPath } = require("app-builder-bin");
 const YAML = require("yaml");
 
 function run(command, args) {
-  const rendered = [command, ...args].join(" ");
+  const rendered = [command, ...redactArgs(args)].join(" ");
   console.log(`[release] ${rendered}`);
 
   const result = spawnSync(command, args, {
@@ -21,6 +21,13 @@ function run(command, args) {
   if (result.status !== 0) {
     throw new Error(`Command failed (${result.status}): ${rendered}`);
   }
+}
+
+function redactArgs(args) {
+  const secretValueFlags = new Set(["--password", "--key"]);
+  return args.map((arg, index) =>
+    index > 0 && secretValueFlags.has(args[index - 1]) ? "<redacted>" : arg
+  );
 }
 
 function sha512Base64(filePath) {
@@ -165,15 +172,50 @@ function refreshBlockmap(artifactPath) {
   ]);
 }
 
-function refreshLatestMacYml(outDir, artifactPaths) {
-  const latestMacPath = path.join(outDir, "latest-mac.yml");
-  if (!fs.existsSync(latestMacPath)) {
+function buildLatestMacYml(version, artifactPaths) {
+  const publishArtifacts = artifactPaths.filter(
+    (artifactPath) => artifactPath.endsWith(".zip") || artifactPath.endsWith(".dmg")
+  );
+  const primaryArtifact = publishArtifacts.find((artifactPath) => artifactPath.endsWith(".zip")) || publishArtifacts[0];
+  if (!primaryArtifact) {
     return null;
   }
 
-  const updateInfo = YAML.parse(fs.readFileSync(latestMacPath, "utf8"));
-  if (!updateInfo || !Array.isArray(updateInfo.files)) {
+  return {
+    version,
+    files: publishArtifacts.map((artifactPath) => ({
+      url: path.basename(artifactPath),
+      sha512: sha512Base64(artifactPath),
+      size: fs.statSync(artifactPath).size,
+    })),
+    path: path.basename(primaryArtifact),
+    sha512: sha512Base64(primaryArtifact),
+    releaseDate: new Date().toISOString(),
+  };
+}
+
+function refreshLatestMacYml(outDir, artifactPaths, version) {
+  const latestMacPath = path.join(outDir, "latest-mac.yml");
+  const generated = buildLatestMacYml(version, artifactPaths);
+  if (!generated) {
     return null;
+  }
+
+  let updateInfo = fs.existsSync(latestMacPath)
+    ? YAML.parse(fs.readFileSync(latestMacPath, "utf8"))
+    : null;
+  const artifactNames = generated.files.map((fileInfo) => fileInfo.url);
+  const hasCurrentArtifactSet =
+    updateInfo &&
+    Array.isArray(updateInfo.files) &&
+    updateInfo.version === version &&
+    artifactNames.every((fileName) =>
+      updateInfo.files.some((fileInfo) => fileInfo.url === fileName)
+    );
+
+  if (!hasCurrentArtifactSet) {
+    fs.writeFileSync(latestMacPath, YAML.stringify(generated));
+    return latestMacPath;
   }
 
   const artifactsByName = new Map(
@@ -241,6 +283,7 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   }
 
   const artifactPaths = buildResult.artifactPaths || [];
+  const version = buildResult.configuration.buildVersion || require("../package.json").version;
   const dmgPaths = artifactPaths.filter((artifactPath) => artifactPath.endsWith(".dmg"));
   const zipPaths = artifactPaths.filter((artifactPath) => artifactPath.endsWith(".zip"));
   const appPath = findFirstApp(buildResult.outDir);
@@ -267,7 +310,7 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   for (const dmgPath of dmgPaths) {
     refreshBlockmap(dmgPath);
   }
-  const latestMacPath = refreshLatestMacYml(buildResult.outDir, artifactPaths);
+  const latestMacPath = refreshLatestMacYml(buildResult.outDir, artifactPaths, version);
   validateLatestMacYml(latestMacPath, artifactPaths);
 
   for (const zipPath of zipPaths) {
@@ -289,9 +332,7 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   // electron-builder uploads artifacts to the draft release BEFORE this hook
   // runs. Re-upload the stapled dmg plus refreshed metadata so GitHub matches
   // what we just verified locally.
-  const tagForUpload = `v${
-    buildResult.configuration.buildVersion || require("../package.json").version
-  }`;
+  const tagForUpload = `v${version}`;
   for (const dmgPath of dmgPaths) {
     run("gh", ["release", "upload", tagForUpload, dmgPath, "--clobber"]);
   }
@@ -309,7 +350,6 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   // only exists on `gh release create`). Prefer the project's release-notes
   // markdown when present; otherwise publish without notes and let the
   // author edit the release on GitHub.
-  const version = buildResult.configuration.buildVersion || require("../package.json").version;
   const tag = `v${version}`;
   const notesFile = path.join(__dirname, "..", "docs", `release-notes-${tag}.md`);
   const editArgs = ["release", "edit", tag, "--draft=false", "--latest"];

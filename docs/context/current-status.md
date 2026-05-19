@@ -58,6 +58,7 @@
   - `npm run release:mac`
   - release hook verifies the build app, zip-extracted app, and dmg-mounted app with `codesign --verify`; zip/dmg app surfaces are also assessed with `spctl`.
   - release hook validates stapled DMG, refreshes dmg blockmap / `latest-mac.yml`, and rejects updater metadata whose size/hash no longer matches final artifacts.
+  - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.0.3 through v1.1.8 are all shipped. Current shipped baseline is **v1.1.8**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch

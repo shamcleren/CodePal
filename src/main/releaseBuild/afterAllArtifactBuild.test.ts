@@ -138,6 +138,76 @@ test("does not publish to GitHub from the build hook unless release publishing i
   expect(spawnCalls.map((call) => call.command)).not.toContain("gh");
 });
 
+test("redacts notary credentials in release logs while passing them to notarytool", async () => {
+  const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  let releaseLog = "";
+
+  try {
+    await runHookWithFakeArtifacts();
+    releaseLog = logSpy.mock.calls.map((call) => call.join(" ")).join("\n");
+  } finally {
+    logSpy.mockRestore();
+  }
+
+  expect(releaseLog).toContain("--password <redacted>");
+  expect(releaseLog).not.toContain("app-specific-password");
+  expect(spawnCalls).toEqual(
+    expect.arrayContaining([
+      {
+        command: "xcrun",
+        args: expect.arrayContaining(["--password", "app-specific-password"]),
+      },
+    ]),
+  );
+});
+
+test("regenerates stale latest-mac metadata for the current version artifacts", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "codepal-after-artifact-stale-"));
+  const appPath = path.join(tempDir, "mac-arm64", "CodePal.app");
+  const releaseVersion = require(path.resolve(process.cwd(), "package.json")).version;
+  const dmgPath = path.join(tempDir, `CodePal-${releaseVersion}-arm64.dmg`);
+  const zipPath = path.join(tempDir, `CodePal-${releaseVersion}-arm64.zip`);
+  const latestMacPath = path.join(tempDir, "latest-mac.yml");
+
+  await fs.mkdir(appPath, { recursive: true });
+  await fs.writeFile(dmgPath, "current-dmg");
+  await fs.writeFile(zipPath, "current-zip");
+  await fs.writeFile(
+    latestMacPath,
+    YAML.stringify({
+      version: "1.1.7",
+      files: [
+        { url: "CodePal-1.1.7-arm64.zip", sha512: "old-zip", size: 1 },
+        { url: "CodePal-1.1.7-arm64.dmg", sha512: "old-dmg", size: 1 },
+      ],
+      path: "CodePal-1.1.7-arm64.zip",
+      sha512: "old-zip",
+      releaseDate: "2026-05-19T00:00:00.000Z",
+    }),
+  );
+
+  try {
+    const afterAllArtifactBuild = loadAfterAllArtifactBuild();
+    await afterAllArtifactBuild({
+      artifactPaths: [zipPath, dmgPath],
+      outDir: tempDir,
+      configuration: { buildVersion: releaseVersion },
+    });
+
+    const latestMac = YAML.parse(await fs.readFile(latestMacPath, "utf8"));
+    expect(latestMac.version).toBe(releaseVersion);
+    expect(latestMac.path).toBe(path.basename(zipPath));
+    expect(latestMac.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ url: path.basename(zipPath), size: "current-zip".length }),
+        expect.objectContaining({ url: path.basename(dmgPath), size: "current-dmg".length }),
+      ]),
+    );
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("notarizes zip and dmg, staples only dmg, and publishes refreshed updater metadata", async () => {
   process.env.CODEPAL_PUBLISH_RELEASE = "1";
 
