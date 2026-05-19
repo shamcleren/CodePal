@@ -15,7 +15,7 @@ import { CodeBuddyQuotaPanel } from "./components/CodeBuddyQuotaPanel";
 import { ClaudeQuotaPanel } from "./components/ClaudeQuotaPanel";
 import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
-import { TokenStatsPanel } from "./components/TokenStatsPanel";
+import { AnalyticsPage } from "./components/AnalyticsPage";
 import { MainUpdateButton } from "./components/MainUpdateButton";
 import { NotificationPreferencesPanel } from "./components/NotificationPreferencesPanel";
 import { ProviderGatewayPanel } from "./components/ProviderGatewayPanel";
@@ -69,6 +69,7 @@ export function App() {
   const [installingAgentId, setInstallingAgentId] = useState<IntegrationAgentId | null>(null);
   const [integrationFeedback, setIntegrationFeedback] = useState<string | null>(null);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<"sessions" | "analytics">("sessions");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("overview");
@@ -882,19 +883,43 @@ export function App() {
           </button>
         </div>
       </div>
-      <StatusBar
-        usage={<UsageStatusStrip overview={usageOverview} settings={appSettings.display} />}
-      />
-      {rows.length === 0 ? (
-        <p className="app-hint" style={{ padding: "0 12px", opacity: 0.75 }}>
-          {i18n.t("app.waitingForSessions")}
-        </p>
+      <div className="app-view-tabs">
+        <button
+          type="button"
+          className={`app-view-tab ${activeView === "sessions" ? "app-view-tab--active" : ""}`}
+          onClick={() => setActiveView("sessions")}
+        >
+          {i18n.t("nav.sessions")}
+        </button>
+        <button
+          type="button"
+          className={`app-view-tab ${activeView === "analytics" ? "app-view-tab--active" : ""}`}
+          onClick={() => setActiveView("analytics")}
+        >
+          {i18n.t("nav.analytics")}
+        </button>
+      </div>
+      {activeView === "sessions" ? (
+        <StatusBar
+          usage={<UsageStatusStrip overview={usageOverview} settings={appSettings.display} />}
+        />
       ) : null}
-      <SessionList
-        sessions={rows}
-        historyVersion={historyStoreVersion}
-        onRespond={handleRespond}
-      />
+      {activeView === "sessions" ? (
+        <>
+          {rows.length === 0 ? (
+            <p className="app-hint" style={{ padding: "0 12px", opacity: 0.75 }}>
+              {i18n.t("app.waitingForSessions")}
+            </p>
+          ) : null}
+          <SessionList
+            sessions={rows}
+            historyVersion={historyStoreVersion}
+            onRespond={handleRespond}
+          />
+        </>
+      ) : (
+        <AnalyticsPage />
+      )}
       {settingsOpen ? (
         <button
           type="button"
@@ -1053,7 +1078,6 @@ export function App() {
               ) : null}
               {activeSettingsSection === "usage" ? (
                 <div className="settings-stack settings-stack--usage">
-                  <TokenStatsPanel />
                   <ClaudeQuotaPanel
                     overview={usageOverview}
                     diagnostics={claudeQuotaDiagnostics}

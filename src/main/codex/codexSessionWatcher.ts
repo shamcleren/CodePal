@@ -108,7 +108,7 @@ function pickRateLimit(snapshot: Record<string, unknown>): UsageSnapshot["rateLi
   };
 }
 
-function usageSnapshotFromLine(line: string, sourcePath: string): { snapshot: UsageSnapshot; tokenWrite: TokenUsageWrite } | null {
+function usageSnapshotFromLine(line: string, sourcePath: string, model?: string): { snapshot: UsageSnapshot; tokenWrite: TokenUsageWrite } | null {
   const entry = parseLine(line);
   if (!entry || entry.type !== "event_msg") {
     return null;
@@ -180,6 +180,7 @@ function usageSnapshotFromLine(line: string, sourcePath: string): { snapshot: Us
     tokenWrite: {
       sessionId,
       agent: "codex",
+      model,
       timestamp,
       inputTokens,
       outputTokens,
@@ -200,6 +201,7 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
   const initialBootstrapLookbackMs =
     options.initialBootstrapLookbackMs ?? ACTIVE_SESSION_STALENESS_MS;
   const cursors = new Map<string, FileCursor>();
+  const sessionModelMap = new Map<string, string>();
   const debug = process.env.CODEPAL_DEBUG_CODEX === "1";
   const scheduler = createAdaptivePollScheduler({
     poll: () => api.pollOnce(),
@@ -233,7 +235,19 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
           continue;
         }
       }
-      const usageResult = usageSnapshotFromLine(trimmed, filePath);
+      const entry = parseLine(trimmed);
+      if (entry?.type === "turn_context") {
+        const payload =
+          entry.payload && typeof entry.payload === "object"
+            ? (entry.payload as Record<string, unknown>)
+            : null;
+        const model = typeof payload?.model === "string" ? payload.model : undefined;
+        const sid = sessionIdFromPath(filePath);
+        if (model && sid) {
+          sessionModelMap.set(sid, model);
+        }
+      }
+      const usageResult = usageSnapshotFromLine(trimmed, filePath, sessionModelMap.get(sessionIdFromPath(filePath) ?? ""));
       if (usageResult) {
         options.onUsageSnapshot?.(usageResult.snapshot);
         options.onTokenUsage?.(usageResult.tokenWrite);

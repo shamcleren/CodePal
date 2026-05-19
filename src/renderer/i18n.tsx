@@ -8,6 +8,8 @@ const ZH_CN_MESSAGES: MessageDictionary = {
   "app.openSettings": "打开设置",
   "app.settings": "设置",
   "app.waitingForSessions": "正在等待来自 Cursor、CodeBuddy 等接入源的会话更新。",
+  "nav.sessions": "会话",
+  "nav.analytics": "分析",
   "app.settings.title": "CodePal 设置",
   "app.settings.subtitle": "低频的接入、修复和诊断操作都放在这里。",
   "settings.nav.integrations.eyebrow": "接入",
@@ -418,12 +420,16 @@ const ZH_CN_MESSAGES: MessageDictionary = {
   "tokenStats.empty": "当前时间范围内无 token 使用数据。运行 Claude Code 或 Codex session 后数据将自动采集。",
   "tokenStats.generateReport": "生成报告",
   "tokenStats.reportCopied": "已复制！",
+  "tokenStats.openReport": "打开报告",
+  "tokenStats.range.custom": "自定义",
 };
 
 const EN_MESSAGES: MessageDictionary = {
   "app.openSettings": "Open settings",
   "app.settings": "Settings",
   "app.waitingForSessions": "Waiting for session updates from Cursor, CodeBuddy, and other integrations.",
+  "nav.sessions": "Sessions",
+  "nav.analytics": "Analytics",
   "app.settings.title": "CodePal Settings",
   "app.settings.subtitle": "Low-frequency integration, repair, and diagnostic controls live here.",
   "settings.nav.integrations.eyebrow": "Integrations",
@@ -834,6 +840,8 @@ const EN_MESSAGES: MessageDictionary = {
   "tokenStats.empty": "No token usage data in the selected range. Data is collected automatically when you run Claude Code or Codex sessions.",
   "tokenStats.generateReport": "Generate Report",
   "tokenStats.reportCopied": "Copied!",
+  "tokenStats.openReport": "Open Report",
+  "tokenStats.range.custom": "Custom",
 };
 
 const MESSAGES: Record<ResolvedLocale, MessageDictionary> = {

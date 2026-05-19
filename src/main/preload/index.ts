@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld("codepal", {
   getSessionStats(startMs: number, endMs: number) {
     return ipcRenderer.invoke("codepal:get-session-stats", startMs, endMs) as Promise<SessionStatsEntry[]>;
   },
+  generateHtmlReport(startMs: number, endMs: number) {
+    return ipcRenderer.invoke("codepal:generate-html-report", startMs, endMs) as Promise<string>;
+  },
   getAppSettings() {
     return ipcRenderer.invoke("codepal:get-app-settings") as Promise<AppSettings>;
   },

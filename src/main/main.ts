@@ -1,8 +1,10 @@
 import { BrowserWindow, Tray, app, clipboard, dialog, ipcMain, shell } from "electron";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { AppSettingsPatch } from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
+import { generateHtmlReport } from "./report/generateHtmlReport";
 import { dispatchActionResponse } from "./actionResponse/dispatchActionResponse";
 import type { ActionResponseResult } from "./actionResponse/dispatchActionResponse";
 import {
@@ -229,6 +231,22 @@ function wireActionResponseIpc(
   ipcMain.handle("codepal:get-session-stats", (_event, startMs: number, endMs: number) => {
     if (!currentHistoryStore) return [];
     return currentHistoryStore.getSessionStats(startMs, endMs);
+  });
+  ipcMain.handle("codepal:generate-html-report", (_event, startMs: number, endMs: number) => {
+    if (!currentHistoryStore) return "";
+    const startDate = new Date(startMs).toISOString().slice(0, 10);
+    const endDate = new Date(endMs).toISOString().slice(0, 10);
+    const html = generateHtmlReport({
+      startDate,
+      endDate,
+      sessionStats: currentHistoryStore.getSessionStats(startMs, endMs),
+      daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs),
+      byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs),
+      pricing: currentHistoryStore.getModelPricing(),
+    });
+    const filePath = path.join(os.tmpdir(), `codepal-report-${Date.now()}.html`);
+    fs.writeFileSync(filePath, html, "utf8");
+    return filePath;
   });
   ipcMain.handle("codepal:get-app-settings", () => settingsService.getSettings());
   ipcMain.handle("codepal:get-home-dir", () => app.getPath("home"));

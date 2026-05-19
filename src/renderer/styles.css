@@ -2545,3 +2545,338 @@ body {
   0%, 100% { border-color: var(--accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); }
   50% { border-color: color-mix(in srgb, var(--accent) 80%, white); box-shadow: 0 0 6px 0 color-mix(in srgb, var(--accent) 25%, transparent); }
 }
+
+/* ── Top-level view tabs ── */
+
+.app-view-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 2px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  width: fit-content;
+}
+
+.app-view-tab {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  background: transparent;
+  transition: color 0.15s, background 0.15s;
+}
+
+.app-view-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.app-view-tab--active {
+  color: var(--text);
+  background: rgba(121, 168, 255, 0.15);
+}
+
+/* ── Analytics page ── */
+
+.analytics-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 2px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.analytics-page__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.analytics-page__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.analytics-page__subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.analytics-page__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.analytics-page__range-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.analytics-page__range-btn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.analytics-page__range-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: color-mix(in srgb, var(--border) 60%, var(--accent));
+}
+
+.analytics-page__range-btn--active {
+  color: var(--text);
+  background: rgba(121, 168, 255, 0.15);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.analytics-page__refresh-btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  margin-left: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.analytics-page__refresh-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.analytics-page__refresh-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.analytics-page__report-btn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--accent);
+  background: rgba(121, 168, 255, 0.08);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.analytics-page__report-btn:hover {
+  background: rgba(121, 168, 255, 0.15);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.analytics-page__report-btn--copied {
+  color: var(--running);
+  border-color: color-mix(in srgb, var(--running) 40%, var(--border));
+  background: rgba(63, 224, 194, 0.08);
+}
+
+/* ── Custom date range ── */
+
+.analytics-page__date-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.analytics-page__date-input {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  color-scheme: dark;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.analytics-page__date-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.analytics-page__date-sep {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ── Hero stats grid ── */
+
+.analytics-page__hero-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.analytics-page__hero-card {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, white 4%);
+  background:
+    linear-gradient(180deg, rgba(18, 25, 35, 0.92), rgba(14, 21, 29, 0.92));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.analytics-page__hero-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.analytics-page__hero-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+/* ── Section ── */
+
+.analytics-page__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analytics-page__section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── Daily trend chart ── */
+
+.analytics-page__chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 100px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, white 4%);
+  background: linear-gradient(180deg, rgba(18, 25, 35, 0.92), rgba(14, 21, 29, 0.92));
+}
+
+.analytics-page__chart-col {
+  flex: 1;
+  min-width: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  cursor: default;
+}
+
+.analytics-page__chart-bar {
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--running)));
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+
+.analytics-page__chart-col:hover .analytics-page__chart-bar {
+  opacity: 1;
+}
+
+.analytics-page__chart-label {
+  font-size: 9px;
+  text-align: center;
+  color: var(--muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Model breakdown table ── */
+
+.analytics-page__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, white 4%);
+  background: linear-gradient(180deg, rgba(18, 25, 35, 0.92), rgba(14, 21, 29, 0.92));
+}
+
+.analytics-page__table thead {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.analytics-page__table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+}
+
+.analytics-page__table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.analytics-page__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.analytics-page__table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.analytics-page__table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-page__table-agent {
+  opacity: 0.5;
+  margin-right: 6px;
+  font-size: 11px;
+}
+
+/* ── Empty state ── */
+
+.analytics-page__empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 24px 0;
+  text-align: center;
+}

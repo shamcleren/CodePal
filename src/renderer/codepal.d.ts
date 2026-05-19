@@ -38,6 +38,7 @@ export type CodePalApi = {
   getUsageOverview: () => Promise<UsageOverview>;
   getTokenStats: (startMs: number, endMs: number, agent?: string) => Promise<TokenStatsResult>;
   getSessionStats: (startMs: number, endMs: number) => Promise<SessionStatsEntry[]>;
+  generateHtmlReport: (startMs: number, endMs: number) => Promise<string>;
   getModelPricing: () => Promise<ModelPricing[]>;
   upsertModelPricing: (pricing: ModelPricing) => Promise<void>;
   getAppSettings: () => Promise<AppSettings>;
