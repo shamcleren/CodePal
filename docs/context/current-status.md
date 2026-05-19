@@ -34,7 +34,20 @@
   - `release/CodePal-1.1.6-arm64.zip.blockmap`
   - `release/latest-mac.yml`
 - v1.1.6 notarization returned `Accepted`, and the `.app` / `.dmg` staple steps completed locally.
-- v1.0.3 through v1.1.6 are all shipped. Current shipped baseline is **v1.1.6**.
+- v1.1.7 release validation on 2026-05-19 covers the analytics-history follow-up patch:
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`
+  - `npm run test:e2e`
+  - `npm run release:mac`
+  - `git diff --check`
+- v1.1.7 macOS release artifacts:
+  - `release/CodePal-1.1.7-arm64.dmg`
+  - `release/CodePal-1.1.7-arm64.zip`
+  - `release/CodePal-1.1.7-arm64.dmg.blockmap`
+  - `release/CodePal-1.1.7-arm64.zip.blockmap`
+  - `release/latest-mac.yml`
+- v1.0.3 through v1.1.7 are all shipped. Current shipped baseline is **v1.1.7**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -42,6 +55,7 @@
 - v1.1.4 shipped: Qoder / Qwen / Factory agent support, dashboard polish from dogfood pass
 - v1.1.5 shipped: WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix, E2E stability
 - v1.1.6 shipped: standalone Analytics page and HTML reports, clearer Provider Gateway settings, Phase 1 dashboard polish, Codex subexecution merge/noise reduction
+- v1.1.7 shipped: Claude / Codex usage backfill, longer analytics retention, readable Top Sessions, and clearer compact Analytics cards
 
 ## What Already Exists
 
@@ -148,7 +162,7 @@
 - Release artifacts include dmg, zip, blockmap files, and `latest-mac.yml`
 - Signed / notarized distribution is the expected public release path when Apple credentials are configured
 - v1.0.3 release assets are treated as shipped; future release work should preserve updater metadata and signing / notarization verification rather than re-describing v1.0.3 as pending
-- Current v1.1.6 local unit / lint / build / E2E / macOS packaging verification is green on 2026-05-19.
+- Current v1.1.7 local unit / lint / build / E2E / macOS packaging verification is green on 2026-05-19.
 
 ### Pending Action Loop
 
@@ -253,9 +267,9 @@ npm run dist:mac
 - freeform `text_input`
 - moving control-loop UX back onto the main dashboard path
 
-### v1.1.0–v1.1.6 Release Track
+### v1.1.0–v1.1.7 Release Track
 
-v1.1.0 through v1.1.6 are shipped. See individual release notes for details:
+v1.1.0 through v1.1.7 are shipped. See individual release notes for details:
 
 - `docs/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -264,12 +278,13 @@ v1.1.0 through v1.1.6 are shipped. See individual release notes for details:
 - `docs/release-notes-v1.1.4.md` — Qoder / Qwen / Factory agent support, dashboard polish
 - `docs/release-notes-v1.1.5.md` — WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix
 - `docs/release-notes-v1.1.6.md` — Analytics page, Provider Gateway settings, dashboard polish, Codex subexecution merge
+- `docs/release-notes-v1.1.7.md` — Claude / Codex usage backfill, analytics retention, readable Top Sessions
 
 ## Next-Step Pointer
 
 For release-facing and forward-looking work, use:
 
 - `docs/context/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
-- `docs/release-notes-v1.1.6.md` for the v1.1.6 release
+- `docs/release-notes-v1.1.7.md` for the v1.1.7 release
 - `docs/roadmap-next.md` for forward-looking prioritization (Tier 2 agent/terminal expansion, monitoring depth, product polish)
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist

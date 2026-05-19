@@ -9,10 +9,14 @@
 
 ## 如果你要看发版材料
 
+- `docs/release-notes-v1.1.7.md`
+  当前 v1.1.7 patch candidate 的英文 release notes。内容要足够短，可以直接放进应用内更新面板。
+- `docs/release-notes-v1.1.7.zh-CN.md`
+  当前 v1.1.7 patch candidate 的中文 release notes。内容要足够短，可以直接放进应用内更新面板。
 - `docs/release-notes-v1.1.6.md`
-  当前 v1.1.6 patch candidate 的英文 release notes。内容要足够短，可以直接放进应用内更新面板。
+  v1.1.6 release 的英文 release notes。
 - `docs/release-notes-v1.1.6.zh-CN.md`
-  当前 v1.1.6 patch candidate 的中文 release notes。内容要足够短，可以直接放进应用内更新面板。
+  v1.1.6 release 的中文 release notes。
 - `docs/release-notes-v1.1.5.md`
   v1.1.5 release 的英文 release notes。
 - `docs/release-notes-v1.1.5.zh-CN.md`
@@ -55,7 +59,7 @@
 建议你按这个顺序使用：
 
 1. 先看 `release-checklist.zh-CN.md`
-2. 再看当前目标版本对应的 release notes；本轮 patch 测试优先看 `release-notes-v1.1.6.zh-CN.md`
+2. 再看当前目标版本对应的 release notes；本轮 patch 测试优先看 `release-notes-v1.1.7.zh-CN.md`
 3. 如果卡在签名、公证或 DMG 收尾校验，再看 `macos-signing-runbook.zh-CN.md`
 
 ## 如果你要看未来规划

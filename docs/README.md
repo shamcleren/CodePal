@@ -9,10 +9,14 @@ Use this directory by purpose rather than trying to read everything in one pass.
 
 ## If You Need Release-Facing Material
 
+- `docs/release-notes-v1.1.7.md`
+  English release notes for the current v1.1.7 patch candidate. Keep this short enough for the in-app update panel.
+- `docs/release-notes-v1.1.7.zh-CN.md`
+  Chinese release notes for the current v1.1.7 patch candidate. Keep this short enough for the in-app update panel.
 - `docs/release-notes-v1.1.6.md`
-  English release notes for the current v1.1.6 patch candidate. Keep this short enough for the in-app update panel.
+  English release notes for the v1.1.6 release.
 - `docs/release-notes-v1.1.6.zh-CN.md`
-  Chinese release notes for the current v1.1.6 patch candidate. Keep this short enough for the in-app update panel.
+  Chinese release notes for the v1.1.6 release.
 - `docs/release-notes-v1.1.5.md`
   English release notes for the v1.1.5 release.
 - `docs/release-notes-v1.1.5.zh-CN.md`
