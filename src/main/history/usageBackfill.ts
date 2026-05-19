@@ -5,8 +5,15 @@ import type { createHistoryStore } from "./historyStore";
 
 type HistoryStoreForBackfill = Pick<
   ReturnType<typeof createHistoryStore>,
-  "writeTokenUsage" | "setUsageImportStatus"
+  "writeTokenUsage" | "writeUsageSessionSummary" | "setUsageImportStatus"
 >;
+
+type ParsedSessionSummary = {
+  sessionId: string;
+  agent: string;
+  title: string;
+  timestamp: number;
+};
 
 type RunUsageBackfillOptions = {
   historyStore: HistoryStoreForBackfill;
@@ -38,6 +45,49 @@ function timestampValue(value: unknown, fallback: number): number {
   }
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function firstTextLine(value: string | undefined): string | undefined {
+  const line = value
+    ?.split(/\r?\n/)
+    .map((item) => item.trim())
+    .find(Boolean);
+  if (!line || line.startsWith("<command-name>")) {
+    return undefined;
+  }
+  return line.length > 160 ? `${line.slice(0, 157)}...` : line;
+}
+
+function textFromContent(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const pieces = value
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+      const record = asRecord(item);
+      return typeof record?.text === "string" ? record.text : "";
+    })
+    .filter(Boolean);
+  return pieces.join("\n");
+}
+
+function keepFirstSummary(
+  summaries: Map<string, ParsedSessionSummary>,
+  summary: ParsedSessionSummary | null,
+) {
+  if (!summary) {
+    return;
+  }
+  const existing = summaries.get(summary.sessionId);
+  if (!existing || summary.timestamp < existing.timestamp) {
+    summaries.set(summary.sessionId, summary);
+  }
 }
 
 function listJsonlFiles(root: string): string[] {
@@ -123,6 +173,34 @@ function claudeUsageFromLine(
   };
 }
 
+function claudeSummaryFromLine(
+  line: string,
+  filePath: string,
+  fallbackNow: number,
+): ParsedSessionSummary | null {
+  const entry = parseJsonLine(line);
+  if (!entry || entry.type !== "user") {
+    return null;
+  }
+  const sessionId =
+    (typeof entry.sessionId === "string" && entry.sessionId.trim()) ||
+    path.basename(filePath, ".jsonl");
+  if (!sessionId) {
+    return null;
+  }
+  const message = asRecord(entry.message);
+  const title = firstTextLine(textFromContent(message?.content));
+  if (!title) {
+    return null;
+  }
+  return {
+    sessionId,
+    agent: "claude",
+    title,
+    timestamp: timestampValue(entry.timestamp, fallbackNow),
+  };
+}
+
 function codexUsageFromLine(
   line: string,
   filePath: string,
@@ -165,15 +243,43 @@ function codexUsageFromLine(
   };
 }
 
+function codexSummaryFromLine(
+  line: string,
+  filePath: string,
+  fallbackNow: number,
+): ParsedSessionSummary | null {
+  const entry = parseJsonLine(line);
+  if (!entry || entry.type !== "event_msg") {
+    return null;
+  }
+  const payload = asRecord(entry.payload) ?? asRecord(entry.msg);
+  if (!payload || payload.type !== "user_message") {
+    return null;
+  }
+  const title = firstTextLine(typeof payload.message === "string" ? payload.message : undefined);
+  if (!title) {
+    return null;
+  }
+  return {
+    sessionId: sessionIdFromCodexPath(filePath),
+    agent: "codex",
+    title,
+    timestamp: timestampValue(entry.timestamp, fallbackNow),
+  };
+}
+
 function importClaudeUsage(
-  historyStore: Pick<HistoryStoreForBackfill, "writeTokenUsage">,
+  historyStore: Pick<HistoryStoreForBackfill, "writeTokenUsage" | "writeUsageSessionSummary">,
   root: string,
   fallbackNow: number,
 ): number {
   let rows = 0;
+  const summaries = new Map<string, ParsedSessionSummary>();
   for (const filePath of listJsonlFiles(root)) {
     linesFromFile(filePath).forEach((line, index) => {
-      const entry = claudeUsageFromLine(line.trim(), filePath, index, fallbackNow);
+      const trimmed = line.trim();
+      keepFirstSummary(summaries, claudeSummaryFromLine(trimmed, filePath, fallbackNow));
+      const entry = claudeUsageFromLine(trimmed, filePath, index, fallbackNow);
       if (!entry) {
         return;
       }
@@ -181,15 +287,19 @@ function importClaudeUsage(
       rows += 1;
     });
   }
+  for (const summary of summaries.values()) {
+    historyStore.writeUsageSessionSummary(summary);
+  }
   return rows;
 }
 
 function importCodexUsage(
-  historyStore: Pick<HistoryStoreForBackfill, "writeTokenUsage">,
+  historyStore: Pick<HistoryStoreForBackfill, "writeTokenUsage" | "writeUsageSessionSummary">,
   root: string,
   fallbackNow: number,
 ): number {
   let rows = 0;
+  const summaries = new Map<string, ParsedSessionSummary>();
   for (const filePath of listJsonlFiles(root)) {
     let model: string | undefined;
     linesFromFile(filePath).forEach((line) => {
@@ -204,6 +314,7 @@ function importCodexUsage(
           model = payload.model.trim();
         }
       }
+      keepFirstSummary(summaries, codexSummaryFromLine(trimmed, filePath, fallbackNow));
       const entry = codexUsageFromLine(trimmed, filePath, model, fallbackNow);
       if (!entry) {
         return;
@@ -211,6 +322,9 @@ function importCodexUsage(
       historyStore.writeTokenUsage(entry);
       rows += 1;
     });
+  }
+  for (const summary of summaries.values()) {
+    historyStore.writeUsageSessionSummary(summary);
   }
   return rows;
 }

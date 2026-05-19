@@ -71,6 +71,13 @@ export type GetRecentSessionsOptions = {
   limit: number;
 };
 
+export type UsageSessionSummaryWrite = {
+  sessionId: string;
+  agent: string;
+  title: string;
+  timestamp: number;
+};
+
 function parseJsonObject(value: string | null): Record<string, unknown> | undefined {
   if (!value) return undefined;
   try {
@@ -389,6 +396,33 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     ON CONFLICT(id) DO UPDATE SET
       updated_at = MAX(sessions.updated_at, excluded.updated_at)
   `);
+  const upsertUsageSessionSummaryStmt = db.prepare(`
+    INSERT INTO sessions (id, tool, status, title, latest_task, updated_at, last_user_message_at, has_pending_actions)
+    VALUES (?, ?, 'usage-only', ?, ?, ?, ?, 0)
+    ON CONFLICT(id) DO UPDATE SET
+      tool = CASE
+        WHEN sessions.tool IS NULL OR sessions.tool = '' THEN excluded.tool
+        ELSE sessions.tool
+      END,
+      status = CASE
+        WHEN sessions.status = 'unknown' THEN excluded.status
+        ELSE sessions.status
+      END,
+      title = CASE
+        WHEN sessions.title IS NULL OR sessions.title = '' THEN excluded.title
+        ELSE sessions.title
+      END,
+      latest_task = CASE
+        WHEN sessions.latest_task IS NULL OR sessions.latest_task = '' THEN excluded.latest_task
+        ELSE sessions.latest_task
+      END,
+      updated_at = MAX(sessions.updated_at, excluded.updated_at),
+      last_user_message_at = CASE
+        WHEN sessions.last_user_message_at IS NULL THEN excluded.last_user_message_at
+        WHEN excluded.last_user_message_at IS NULL THEN sessions.last_user_message_at
+        ELSE MAX(sessions.last_user_message_at, excluded.last_user_message_at)
+      END
+  `);
   const insertTokenUsageStmt = db.prepare(`
     INSERT INTO token_usage (
       session_id, agent, model, timestamp, input_tokens, output_tokens,
@@ -468,21 +502,23 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
   const topSessionStatsStmt = db.prepare(`
     SELECT
-      session_id AS sessionId,
-      agent,
-      COALESCE(model, 'unknown') AS model,
-      SUM(input_tokens) AS inputTokens,
-      SUM(output_tokens) AS outputTokens,
-      SUM(cache_read_tokens) AS cacheReadTokens,
-      SUM(cache_creation_tokens) AS cacheCreationTokens,
-      SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) AS totalTokens,
+      token_usage.session_id AS sessionId,
+      COALESCE(NULLIF(sessions.latest_task, ''), NULLIF(sessions.title, '')) AS title,
+      token_usage.agent AS agent,
+      COALESCE(token_usage.model, 'unknown') AS model,
+      SUM(token_usage.input_tokens) AS inputTokens,
+      SUM(token_usage.output_tokens) AS outputTokens,
+      SUM(token_usage.cache_read_tokens) AS cacheReadTokens,
+      SUM(token_usage.cache_creation_tokens) AS cacheCreationTokens,
+      SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) AS totalTokens,
       COUNT(*) AS requestCount,
-      MIN(timestamp) AS firstSeenAt,
-      MAX(timestamp) AS lastSeenAt
+      MIN(token_usage.timestamp) AS firstSeenAt,
+      MAX(token_usage.timestamp) AS lastSeenAt
     FROM token_usage
-    WHERE timestamp >= ? AND timestamp < ?
-      AND (? IS NULL OR agent = ?)
-    GROUP BY session_id, agent, model
+    LEFT JOIN sessions ON sessions.id = token_usage.session_id
+    WHERE token_usage.timestamp >= ? AND token_usage.timestamp < ?
+      AND (? IS NULL OR token_usage.agent = ?)
+    GROUP BY token_usage.session_id, token_usage.agent, token_usage.model, sessions.latest_task, sessions.title
     ORDER BY totalTokens DESC
     LIMIT ?
   `);
@@ -701,6 +737,22 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }
   }
 
+  function writeUsageSessionSummary(summary: UsageSessionSummaryWrite) {
+    assertOpen();
+    const title = summary.title.trim();
+    if (!title) {
+      return;
+    }
+    upsertUsageSessionSummaryStmt.run(
+      summary.sessionId,
+      summary.agent,
+      title,
+      title,
+      summary.timestamp,
+      summary.timestamp,
+    );
+  }
+
   function getTokenUsageDailyStats(
     startMs: number,
     endMs: number,
@@ -816,6 +868,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       normalizedLimit,
     ) as Array<{
       sessionId: string;
+      title: string | null;
       agent: string;
       model: string;
       inputTokens: number;
@@ -829,6 +882,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }>;
     return rows.map((row) => ({
       sessionId: row.sessionId,
+      ...(row.title ? { title: row.title } : {}),
       agent: row.agent,
       model: row.model,
       inputTokens: row.inputTokens,
@@ -974,6 +1028,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     runCleanup,
     close,
     writeTokenUsage,
+    writeUsageSessionSummary,
     getTokenUsageDailyStats,
     getTokenUsageByModel,
     getTokenUsageByAgent,

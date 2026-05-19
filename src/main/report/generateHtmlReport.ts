@@ -38,6 +38,14 @@ function fmtDateTime(ms: number): string {
   return new Date(ms).toISOString().slice(0, 16).replace("T", " ");
 }
 
+function shortSessionId(sessionId: string): string {
+  return sessionId.length > 18 ? `${sessionId.slice(0, 8)}…${sessionId.slice(-4)}` : sessionId;
+}
+
+function statusLabel(status: string): string {
+  return status === "unknown" ? "usage-only" : status;
+}
+
 function estimateCost(
   stats: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number },
   pricingMap: Map<string, ModelPricing>,
@@ -89,7 +97,7 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   for (const [agent, statuses] of byAgent) {
     const total = statuses.reduce((s, x) => s + x.count, 0);
     const label = AGENT_LABELS[agent] ?? agent;
-    const parts = statuses.map((s) => `${s.count} ${s.status}`).join(", ");
+    const parts = statuses.map((s) => `${s.count} ${statusLabel(s.status)}`).join(", ");
     sessionRows += `<tr><td>${esc(label)}</td><td class="num">${total}</td><td>${esc(parts)}</td></tr>\n`;
   }
 
@@ -155,8 +163,13 @@ export function generateHtmlReport(input: HtmlReportInput): string {
 
   let topSessionRows = "";
   for (const session of input.topSessions ?? []) {
+    const sessionTitle = session.title?.trim() || session.sessionId;
+    const secondaryId = session.title?.trim() ? shortSessionId(session.sessionId) : "";
     topSessionRows += `<tr>
-      <td>${esc(session.sessionId)}</td>
+      <td>
+        <div class="session-title">${esc(sessionTitle)}</div>
+        ${secondaryId ? `<div class="session-id">${esc(secondaryId)}</div>` : ""}
+      </td>
       <td>${esc(AGENT_LABELS[session.agent] ?? session.agent)}</td>
       <td>${esc(session.model)}</td>
       <td class="num">${session.requestCount}</td>
@@ -273,6 +286,8 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   .num { text-align: right; font-variant-numeric: tabular-nums; }
   th.num { text-align: right; }
   .agent-tag { opacity: 0.5; margin-right: 6px; font-size: 11px; }
+  .session-title { font-weight: 600; overflow-wrap: anywhere; }
+  .session-id { margin-top: 3px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 
   .footer { margin-top: 48px; color: var(--muted); font-size: 11px; text-align: center; }
 </style>

@@ -125,6 +125,7 @@
 - Main process now also carries a dedicated usage aggregation path separate from session timeline state
 - Usage analytics now backfills local Claude / Codex token history from `~/.claude/projects/**/*.jsonl` and `~/.codex/sessions/**/*.jsonl`; imported rows are keyed by source so startup rescans are idempotent.
 - Analytics now has a standalone renderer page with `today` / `7d` / `30d` presets, custom date ranges, compact model / agent breakdowns, and self-contained detailed HTML report generation.
+- Usage reports show Top Sessions by readable first-user-message summaries with a shortened session id fallback instead of leading with opaque UUIDs.
 - Renderer top bar now uses a compact quota-first usage strip
 - Usage strip now supports `compact` / `detailed` density, with reset times either shown inline or exposed by hover title
 - Claude Code usage visibility is implemented through two sources:

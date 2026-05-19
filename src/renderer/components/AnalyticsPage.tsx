@@ -5,6 +5,15 @@ import { useI18n } from "../i18n";
 type RangePreset = "today" | "7d" | "30d" | "custom";
 type BreakdownMode = "model" | "agent";
 
+const AGENT_LABELS: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  codebuddy: "CodeBuddy",
+  cursor: "Cursor",
+  goland: "GoLand",
+  pycharm: "PyCharm",
+};
+
 function resolveRange(preset: RangePreset, customStart?: string, customEnd?: string): { start: number; end: number } {
   const now = Date.now();
   const startOfDay = new Date();
@@ -32,6 +41,10 @@ function formatTokens(n: number): string {
 
 function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
+}
+
+function agentLabel(agent: string): string {
+  return AGENT_LABELS[agent] ?? agent;
 }
 
 function estimateCost(
@@ -139,11 +152,15 @@ export function AnalyticsPage() {
     { label: i18n.t("tokenStats.output"), value: formatTokens(totalOutput) },
     {
       label: i18n.t("tokenStats.topAgent"),
-      value: topAgent ? `${topAgent.agent} · ${formatTokens(topAgent.totalTokens)}` : "—",
+      value: topAgent ? agentLabel(topAgent.agent) : "—",
+      detail: topAgent
+        ? i18n.t("tokenStats.tokensValue", { value: formatTokens(topAgent.totalTokens) })
+        : undefined,
     },
     {
       label: i18n.t("tokenStats.topModel"),
       value: topModel ? `${topModel.model}` : "—",
+      detail: topModel ? agentLabel(topModel.agent) : undefined,
     },
     { label: i18n.t("tokenStats.cacheHit"), value: `${Math.round(cacheHitRate * 100)}%` },
     { label: i18n.t("tokenStats.estimatedCost"), value: formatCost(totalCost) },
@@ -245,6 +262,7 @@ export function AnalyticsPage() {
           <div key={stat.label} className="analytics-page__hero-card">
             <div className="analytics-page__hero-label">{stat.label}</div>
             <div className="analytics-page__hero-value">{stat.value}</div>
+            {stat.detail ? <div className="analytics-page__hero-detail">{stat.detail}</div> : null}
           </div>
         ))}
       </div>

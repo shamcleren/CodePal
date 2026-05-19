@@ -30,6 +30,20 @@ describe("runUsageBackfill", () => {
       path.join(claudeRoot, "project-a", "claude-session.jsonl"),
       [
         JSON.stringify({
+          type: "user",
+          sessionId: "claude-session",
+          timestamp: "2026-05-12T09:59:00.000Z",
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "帮我优化 Analytics 的 session 展示\n第二行不用进标题",
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
           type: "assistant",
           sessionId: "claude-session",
           timestamp: "2026-05-12T10:00:00.000Z",
@@ -56,6 +70,14 @@ describe("runUsageBackfill", () => {
           type: "turn_context",
           timestamp: "2026-05-12T11:00:00.000Z",
           payload: { model: "gpt-5.5" },
+        }),
+        JSON.stringify({
+          type: "event_msg",
+          timestamp: "2026-05-12T11:00:30.000Z",
+          payload: {
+            type: "user_message",
+            message: "继续推进 Codex 历史用量补齐。",
+          },
         }),
         JSON.stringify({
           type: "event_msg",
@@ -123,6 +145,18 @@ describe("runUsageBackfill", () => {
           cacheCreationTokens: 5,
           totalTokens: 180,
           requestCount: 1,
+        }),
+      ]),
+    );
+    expect(store.getTopTokenUsageSessions(0, Date.parse("2026-05-13T00:00:00.000Z"))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sessionId: codexSessionId,
+          title: "继续推进 Codex 历史用量补齐。",
+        }),
+        expect.objectContaining({
+          sessionId: "claude-session",
+          title: "帮我优化 Analytics 的 session 展示",
         }),
       ]),
     );

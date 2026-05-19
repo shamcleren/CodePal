@@ -138,7 +138,8 @@ describe("generateHtmlReport", () => {
       ],
       topSessions: [
         {
-          sessionId: "session-1",
+          sessionId: "12345678-1234-1234-1234-123456789abc",
+          title: "继续推进 Codex 历史用量补齐",
           agent: "codex",
           model: "gpt-5.5",
           inputTokens: 1_000,
@@ -163,7 +164,9 @@ describe("generateHtmlReport", () => {
     expect(html).toContain("By Agent");
     expect(html).toContain("Top Sessions");
     expect(html).toContain("Backfill");
-    expect(html).toContain("session-1");
+    expect(html).toContain("继续推进 Codex 历史用量补齐");
+    expect(html).toContain("12345678…9abc");
+    expect(html).not.toContain("12345678-1234-1234-1234-123456789abc</td>");
     expect(html).toContain("Claude rows: 2");
     expect(html).toContain("Codex rows: 3");
   });

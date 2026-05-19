@@ -139,6 +139,7 @@ export interface AgentTokenStats {
 
 export interface SessionTokenStats {
   sessionId: string;
+  title?: string;
   agent: string;
   model: string;
   inputTokens: number;
