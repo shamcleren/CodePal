@@ -1,6 +1,10 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+const os = require("os");
 const { spawnSync } = require("child_process");
+const { appBuilderPath } = require("app-builder-bin");
+const YAML = require("yaml");
 
 function run(command, args) {
   const rendered = [command, ...args].join(" ");
@@ -17,6 +21,10 @@ function run(command, args) {
   if (result.status !== 0) {
     throw new Error(`Command failed (${result.status}): ${rendered}`);
   }
+}
+
+function sha512Base64(filePath) {
+  return crypto.createHash("sha512").update(fs.readFileSync(filePath)).digest("base64");
 }
 
 function hasNotarizationCredentials() {
@@ -90,6 +98,132 @@ function findFirstApp(outDir) {
   return null;
 }
 
+function findTopLevelApp(dir) {
+  const appEntry = fs
+    .readdirSync(dir, { withFileTypes: true })
+    .find((entry) => entry.isDirectory() && entry.name.endsWith(".app"));
+  return appEntry ? path.join(dir, appEntry.name) : null;
+}
+
+function assertNoTopLevelCodeResources(appPath) {
+  const invalidTicketPath = path.join(appPath, "Contents", "CodeResources");
+  if (fs.existsSync(invalidTicketPath)) {
+    throw new Error(
+      `Invalid app bundle: ${invalidTicketPath} exists. This usually means stapler wrote a ticket where codesign expects bundle resources, causing Gatekeeper to reject the app.`
+    );
+  }
+}
+
+function verifyAppCodeSignature(appPath) {
+  assertNoTopLevelCodeResources(appPath);
+  run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]);
+}
+
+function verifyAppGatekeeper(appPath) {
+  verifyAppCodeSignature(appPath);
+  run("spctl", ["--assess", "--type", "execute", "--verbose=4", appPath]);
+}
+
+function verifyZipApp(zipPath) {
+  const extractDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-zip-verify-"));
+  try {
+    run("ditto", ["-x", "-k", zipPath, extractDir]);
+    const appPath = findTopLevelApp(extractDir);
+    if (!appPath) {
+      throw new Error(`No .app bundle found after extracting ${zipPath}.`);
+    }
+    verifyAppGatekeeper(appPath);
+  } finally {
+    fs.rmSync(extractDir, { recursive: true, force: true });
+  }
+}
+
+function verifyDmgApp(dmgPath) {
+  const mountPoint = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-dmg-verify-"));
+  let attached = false;
+  try {
+    run("hdiutil", ["attach", dmgPath, "-nobrowse", "-readonly", "-mountpoint", mountPoint]);
+    attached = true;
+    const appPath = findTopLevelApp(mountPoint);
+    if (!appPath) {
+      throw new Error(`No .app bundle found after mounting ${dmgPath}.`);
+    }
+    verifyAppGatekeeper(appPath);
+  } finally {
+    if (attached) {
+      run("hdiutil", ["detach", mountPoint]);
+    }
+    fs.rmSync(mountPoint, { recursive: true, force: true });
+  }
+}
+
+function refreshBlockmap(artifactPath) {
+  run(appBuilderPath, [
+    "blockmap",
+    `--input=${artifactPath}`,
+    `--output=${artifactPath}.blockmap`,
+  ]);
+}
+
+function refreshLatestMacYml(outDir, artifactPaths) {
+  const latestMacPath = path.join(outDir, "latest-mac.yml");
+  if (!fs.existsSync(latestMacPath)) {
+    return null;
+  }
+
+  const updateInfo = YAML.parse(fs.readFileSync(latestMacPath, "utf8"));
+  if (!updateInfo || !Array.isArray(updateInfo.files)) {
+    return null;
+  }
+
+  const artifactsByName = new Map(
+    artifactPaths.map((artifactPath) => [path.basename(artifactPath), artifactPath])
+  );
+  for (const fileInfo of updateInfo.files) {
+    const artifactPath = artifactsByName.get(fileInfo.url);
+    if (!artifactPath) {
+      continue;
+    }
+    fileInfo.sha512 = sha512Base64(artifactPath);
+    fileInfo.size = fs.statSync(artifactPath).size;
+  }
+
+  const primaryArtifactPath = artifactsByName.get(updateInfo.path);
+  if (primaryArtifactPath) {
+    updateInfo.sha512 = sha512Base64(primaryArtifactPath);
+  }
+
+  fs.writeFileSync(latestMacPath, YAML.stringify(updateInfo));
+  return latestMacPath;
+}
+
+function validateLatestMacYml(latestMacPath, artifactPaths) {
+  if (!latestMacPath) {
+    return;
+  }
+
+  const updateInfo = YAML.parse(fs.readFileSync(latestMacPath, "utf8"));
+  if (!updateInfo || !Array.isArray(updateInfo.files)) {
+    throw new Error(`${latestMacPath} is missing a files array.`);
+  }
+
+  for (const artifactPath of artifactPaths) {
+    if (!artifactPath.endsWith(".zip") && !artifactPath.endsWith(".dmg")) {
+      continue;
+    }
+    const fileName = path.basename(artifactPath);
+    const fileInfo = updateInfo.files.find((candidate) => candidate.url === fileName);
+    if (!fileInfo) {
+      throw new Error(`${latestMacPath} is missing updater metadata for ${fileName}.`);
+    }
+    const actualSize = fs.statSync(artifactPath).size;
+    const actualSha512 = sha512Base64(artifactPath);
+    if (fileInfo.size !== actualSize || fileInfo.sha512 !== actualSha512) {
+      throw new Error(`${latestMacPath} metadata does not match ${fileName}.`);
+    }
+  }
+}
+
 exports.default = async function afterAllArtifactBuild(buildResult) {
   if (process.platform !== "darwin") {
     return [];
@@ -108,27 +242,40 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
 
   const artifactPaths = buildResult.artifactPaths || [];
   const dmgPaths = artifactPaths.filter((artifactPath) => artifactPath.endsWith(".dmg"));
+  const zipPaths = artifactPaths.filter((artifactPath) => artifactPath.endsWith(".zip"));
   const appPath = findFirstApp(buildResult.outDir);
 
   if (!appPath || !fs.existsSync(appPath)) {
     throw new Error(`Signed app bundle not found under ${buildResult.outDir}.`);
   }
 
-  run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]);
+  verifyAppCodeSignature(appPath);
 
-  for (const dmgPath of dmgPaths) {
-    run("xcrun", ["notarytool", "submit", dmgPath, ...getNotaryAuthArgs(), "--wait"]);
+  for (const artifactPath of [...zipPaths, ...dmgPaths]) {
+    run("xcrun", ["notarytool", "submit", artifactPath, ...getNotaryAuthArgs(), "--wait"]);
   }
 
-  // Staple the notary ticket onto the .app and the .dmg so Gatekeeper can
-  // verify them offline. Without this, downloads from GitHub still hit the
-  // "damaged / unidentified developer" prompt because macOS quarantines the
-  // file and there's no embedded ticket to short-circuit the online check.
-  run("xcrun", ["stapler", "staple", appPath]);
+  // Staple only the DMG. On this Electron bundle, app-level stapling writes a
+  // top-level Contents/CodeResources ticket that makes codesign read the wrong
+  // resource seal and reject the app as modified.
   for (const dmgPath of dmgPaths) {
     run("xcrun", ["stapler", "staple", dmgPath]);
+    run("xcrun", ["stapler", "validate", "-v", dmgPath]);
   }
-  run("xcrun", ["stapler", "validate", "-v", appPath]);
+  verifyAppCodeSignature(appPath);
+
+  for (const dmgPath of dmgPaths) {
+    refreshBlockmap(dmgPath);
+  }
+  const latestMacPath = refreshLatestMacYml(buildResult.outDir, artifactPaths);
+  validateLatestMacYml(latestMacPath, artifactPaths);
+
+  for (const zipPath of zipPaths) {
+    verifyZipApp(zipPath);
+  }
+  for (const dmgPath of dmgPaths) {
+    verifyDmgApp(dmgPath);
+  }
 
   console.log("[release] macOS release validation finished.");
 
@@ -140,15 +287,20 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   }
 
   // electron-builder uploads artifacts to the draft release BEFORE this hook
-  // runs, so those uploaded copies are pre-staple. Re-upload the stapled dmg
-  // (the user-facing download) so the GitHub release matches what we just
-  // verified locally. The .zip is regenerated below from the stapled .app
-  // and re-uploaded for the auto-updater.
+  // runs. Re-upload the stapled dmg plus refreshed metadata so GitHub matches
+  // what we just verified locally.
   const tagForUpload = `v${
     buildResult.configuration.buildVersion || require("../package.json").version
   }`;
   for (const dmgPath of dmgPaths) {
     run("gh", ["release", "upload", tagForUpload, dmgPath, "--clobber"]);
+  }
+  const refreshedArtifacts = [
+    ...dmgPaths.map((dmgPath) => `${dmgPath}.blockmap`).filter((blockmapPath) => fs.existsSync(blockmapPath)),
+    ...(latestMacPath ? [latestMacPath] : []),
+  ];
+  if (refreshedArtifacts.length > 0) {
+    run("gh", ["release", "upload", tagForUpload, ...refreshedArtifacts, "--clobber"]);
   }
 
   // electron-builder creates a draft release by default.

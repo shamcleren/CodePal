@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import readline from "node:readline";
 import type { TokenUsageWrite, UsageImportStatus } from "../../shared/usageTypes";
 import type { createHistoryStore } from "./historyStore";
 
@@ -20,6 +21,19 @@ type RunUsageBackfillOptions = {
   claudeProjectsPath: string;
   codexSessionsPath: string;
   now?: () => number;
+};
+
+type RunUsageBackfillAsyncOptions = RunUsageBackfillOptions & {
+  batchSize?: number;
+  signal?: AbortSignal;
+  yieldToEventLoop?: () => Promise<void>;
+};
+
+type AsyncBackfillContext = {
+  batchSize: number;
+  processed: number;
+  signal?: AbortSignal;
+  yieldToEventLoop: () => Promise<void>;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -117,6 +131,60 @@ function listJsonlFiles(root: string): string[] {
   return files.sort();
 }
 
+function defaultYieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function assertNotAborted(signal: AbortSignal | undefined) {
+  if (signal?.aborted) {
+    throw new Error("Usage history backfill aborted");
+  }
+}
+
+async function maybeYield(context: AsyncBackfillContext) {
+  context.processed += 1;
+  if (context.processed < context.batchSize) {
+    return;
+  }
+  context.processed = 0;
+  await context.yieldToEventLoop();
+  assertNotAborted(context.signal);
+}
+
+async function listJsonlFilesAsync(
+  root: string,
+  context: AsyncBackfillContext,
+): Promise<string[]> {
+  try {
+    await fs.promises.access(root);
+  } catch {
+    return [];
+  }
+  const files: string[] = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    assertNotAborted(context.signal);
+    const current = stack.pop();
+    if (!current) continue;
+    let entries: fs.Dirent[];
+    try {
+      entries = await fs.promises.readdir(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const pathname = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(pathname);
+      } else if (entry.isFile() && pathname.endsWith(".jsonl")) {
+        files.push(pathname);
+      }
+    }
+    await maybeYield(context);
+  }
+  return files.sort();
+}
+
 function sessionIdFromCodexPath(filePath: string): string {
   const basename = path.basename(filePath, ".jsonl");
   const match = basename.match(/([0-9a-f]{8,}(?:-[0-9a-f]{4,}){3,})$/i);
@@ -128,6 +196,36 @@ function linesFromFile(filePath: string): string[] {
     return fs.readFileSync(filePath, "utf8").split("\n");
   } catch {
     return [];
+  }
+}
+
+async function readLinesFromFileAsync(
+  filePath: string,
+  onLine: (line: string, lineIndex: number) => Promise<void> | void,
+) {
+  let streamError: unknown = null;
+  const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+  stream.once("error", (error) => {
+    streamError = error;
+  });
+  const reader = readline.createInterface({
+    input: stream,
+    crlfDelay: Infinity,
+  });
+  try {
+    let lineIndex = 0;
+    for await (const line of reader) {
+      await onLine(line, lineIndex);
+      lineIndex += 1;
+    }
+  } catch (error) {
+    if (streamError) {
+      return;
+    }
+    throw error;
+  } finally {
+    reader.close();
+    stream.destroy();
   }
 }
 
@@ -293,6 +391,36 @@ function importClaudeUsage(
   return rows;
 }
 
+async function importClaudeUsageAsync(
+  historyStore: Pick<HistoryStoreForBackfill, "writeTokenUsage" | "writeUsageSessionSummary">,
+  root: string,
+  fallbackNow: number,
+  context: AsyncBackfillContext,
+): Promise<number> {
+  let rows = 0;
+  const summaries = new Map<string, ParsedSessionSummary>();
+  for (const filePath of await listJsonlFilesAsync(root, context)) {
+    assertNotAborted(context.signal);
+    await readLinesFromFileAsync(filePath, async (line, index) => {
+      assertNotAborted(context.signal);
+      const trimmed = line.trim();
+      keepFirstSummary(summaries, claudeSummaryFromLine(trimmed, filePath, fallbackNow));
+      const entry = claudeUsageFromLine(trimmed, filePath, index, fallbackNow);
+      if (entry) {
+        historyStore.writeTokenUsage(entry);
+        rows += 1;
+      }
+      await maybeYield(context);
+    });
+  }
+  for (const summary of summaries.values()) {
+    assertNotAborted(context.signal);
+    historyStore.writeUsageSessionSummary(summary);
+    await maybeYield(context);
+  }
+  return rows;
+}
+
 function importCodexUsage(
   historyStore: Pick<HistoryStoreForBackfill, "writeTokenUsage" | "writeUsageSessionSummary">,
   root: string,
@@ -329,6 +457,48 @@ function importCodexUsage(
   return rows;
 }
 
+async function importCodexUsageAsync(
+  historyStore: Pick<HistoryStoreForBackfill, "writeTokenUsage" | "writeUsageSessionSummary">,
+  root: string,
+  fallbackNow: number,
+  context: AsyncBackfillContext,
+): Promise<number> {
+  let rows = 0;
+  const summaries = new Map<string, ParsedSessionSummary>();
+  for (const filePath of await listJsonlFilesAsync(root, context)) {
+    assertNotAborted(context.signal);
+    let model: string | undefined;
+    await readLinesFromFileAsync(filePath, async (line) => {
+      assertNotAborted(context.signal);
+      const trimmed = line.trim();
+      if (!trimmed) {
+        await maybeYield(context);
+        return;
+      }
+      const parsed = parseJsonLine(trimmed);
+      if (parsed?.type === "turn_context") {
+        const payload = asRecord(parsed.payload);
+        if (typeof payload?.model === "string" && payload.model.trim()) {
+          model = payload.model.trim();
+        }
+      }
+      keepFirstSummary(summaries, codexSummaryFromLine(trimmed, filePath, fallbackNow));
+      const entry = codexUsageFromLine(trimmed, filePath, model, fallbackNow);
+      if (entry) {
+        historyStore.writeTokenUsage(entry);
+        rows += 1;
+      }
+      await maybeYield(context);
+    });
+  }
+  for (const summary of summaries.values()) {
+    assertNotAborted(context.signal);
+    historyStore.writeUsageSessionSummary(summary);
+    await maybeYield(context);
+  }
+  return rows;
+}
+
 export function runUsageBackfill(options: RunUsageBackfillOptions): UsageImportStatus {
   const completedAt = options.now?.() ?? Date.now();
   try {
@@ -351,6 +521,54 @@ export function runUsageBackfill(options: RunUsageBackfillOptions): UsageImportS
     options.historyStore.setUsageImportStatus(status);
     return status;
   } catch (error) {
+    const status: UsageImportStatus = {
+      completedAt,
+      claudeRowsImported: 0,
+      codexRowsImported: 0,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+    options.historyStore.setUsageImportStatus(status);
+    return status;
+  }
+}
+
+export async function runUsageBackfillAsync(
+  options: RunUsageBackfillAsyncOptions,
+): Promise<UsageImportStatus> {
+  const completedAt = options.now?.() ?? Date.now();
+  const context: AsyncBackfillContext = {
+    batchSize: Math.max(1, Math.trunc(options.batchSize ?? 250)),
+    processed: 0,
+    signal: options.signal,
+    yieldToEventLoop: options.yieldToEventLoop ?? defaultYieldToEventLoop,
+  };
+  try {
+    assertNotAborted(options.signal);
+    const claudeRowsImported = await importClaudeUsageAsync(
+      options.historyStore,
+      options.claudeProjectsPath,
+      completedAt,
+      context,
+    );
+    const codexRowsImported = await importCodexUsageAsync(
+      options.historyStore,
+      options.codexSessionsPath,
+      completedAt,
+      context,
+    );
+    assertNotAborted(options.signal);
+    const status: UsageImportStatus = {
+      completedAt,
+      claudeRowsImported,
+      codexRowsImported,
+      lastError: null,
+    };
+    options.historyStore.setUsageImportStatus(status);
+    return status;
+  } catch (error) {
+    if (options.signal?.aborted) {
+      throw error;
+    }
     const status: UsageImportStatus = {
       completedAt,
       claudeRowsImported: 0,

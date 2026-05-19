@@ -51,7 +51,7 @@ import {
   queueAcceptedSessionEventWrite,
   registerHistoryIpcHandlers,
 } from "./history/historyRuntime";
-import { runUsageBackfill } from "./history/usageBackfill";
+import { runUsageBackfillAsync } from "./history/usageBackfill";
 import { installMainProcessFileLogger } from "./logging/appLogger";
 import { createNotificationService } from "./notification/notificationService";
 import type { NotificationService } from "./notification/notificationService";
@@ -84,6 +84,8 @@ let pendingExpirySweepTimer: ReturnType<typeof setInterval> | null = null;
 let sessionWatchers: ReturnType<typeof startSessionWatchers> | null = null;
 let historyStore: ReturnType<typeof createAppHistoryStore> | null = null;
 let historyWriter: ReturnType<typeof createDeferredHistoryWriter> | null = null;
+let usageBackfillAbortController: AbortController | null = null;
+let usageBackfillTimer: ReturnType<typeof setTimeout> | null = null;
 let providerGatewayServer: ReturnType<typeof createClaudeDesktopGatewayServer> | null = null;
 let providerGatewayListener: ProviderGatewayListenerInput = {
   state: "unavailable",
@@ -473,6 +475,60 @@ function getOrCreateMainWindow(): BrowserWindow {
   return win;
 }
 
+function resolveUsageBackfillDelayMs() {
+  const raw = process.env.CODEPAL_USAGE_BACKFILL_DELAY_MS?.trim();
+  if (!raw) {
+    return 750;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 750;
+}
+
+function scheduleUsageBackfillAfterStartup(options: {
+  currentHistoryStore: ReturnType<typeof createAppHistoryStore>;
+  homeDir: string;
+}) {
+  if (usageBackfillAbortController || usageBackfillTimer !== null) {
+    return;
+  }
+  const controller = new AbortController();
+  usageBackfillAbortController = controller;
+  usageBackfillTimer = setTimeout(() => {
+    usageBackfillTimer = null;
+    if (controller.signal.aborted || historyStore !== options.currentHistoryStore) {
+      if (usageBackfillAbortController === controller) {
+        usageBackfillAbortController = null;
+      }
+      return;
+    }
+    void runUsageBackfillAsync({
+      historyStore: options.currentHistoryStore,
+      claudeProjectsPath: path.join(options.homeDir, ".claude", "projects"),
+      codexSessionsPath: path.join(options.homeDir, ".codex", "sessions"),
+      signal: controller.signal,
+    })
+      .then((status) => {
+        if (status.lastError) {
+          console.error("[CodePal Usage] history backfill failed:", status.lastError);
+        } else if (status.claudeRowsImported > 0 || status.codexRowsImported > 0) {
+          console.log(
+            `[CodePal Usage] Backfilled ${status.claudeRowsImported} Claude row(s) and ${status.codexRowsImported} Codex row(s)`,
+          );
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          console.error("[CodePal Usage] history backfill failed:", error);
+        }
+      })
+      .finally(() => {
+        if (usageBackfillAbortController === controller) {
+          usageBackfillAbortController = null;
+        }
+      });
+  }, resolveUsageBackfillDelayMs());
+}
+
 async function wireIpcHub(
   integrationService: ReturnType<typeof createIntegrationService>,
   settingsService: ReturnType<typeof createSettingsService>,
@@ -684,6 +740,12 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
     });
 
     app.on("before-quit", () => {
+      usageBackfillAbortController?.abort();
+      usageBackfillAbortController = null;
+      if (usageBackfillTimer !== null) {
+        clearTimeout(usageBackfillTimer);
+        usageBackfillTimer = null;
+      }
       if (pendingExpirySweepTimer !== null) {
         clearInterval(pendingExpirySweepTimer);
         pendingExpirySweepTimer = null;
@@ -739,23 +801,6 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       });
       applyHistorySettingsAtRuntime(historyStore, appSettings);
       if (appSettings.history.persistenceEnabled && historyStore) {
-        setImmediate(() => {
-          if (!historyStore) {
-            return;
-          }
-          const status = runUsageBackfill({
-            historyStore,
-            claudeProjectsPath: path.join(homeDir, ".claude", "projects"),
-            codexSessionsPath: path.join(homeDir, ".codex", "sessions"),
-          });
-          if (status.lastError) {
-            console.error("[CodePal Usage] history backfill failed:", status.lastError);
-          } else if (status.claudeRowsImported > 0 || status.codexRowsImported > 0) {
-            console.log(
-              `[CodePal Usage] Backfilled ${status.claudeRowsImported} Claude row(s) and ${status.codexRowsImported} Codex row(s)`,
-            );
-          }
-        });
         const RESTORE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
         const MAX_RESTORE_COUNT = 150;
         try {
@@ -878,6 +923,12 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         sessionBroadcastScheduler.flushNow();
         broadcastUsageOverview();
         broadcastUpdateState(updateService.getState());
+        if (appSettings.history.persistenceEnabled && historyStore) {
+          scheduleUsageBackfillAfterStartup({
+            currentHistoryStore: historyStore,
+            homeDir,
+          });
+        }
       });
       updateService.initialize();
       tray = createTray({

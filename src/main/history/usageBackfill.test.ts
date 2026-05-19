@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHistoryStore } from "./historyStore";
-import { runUsageBackfill } from "./usageBackfill";
+import { runUsageBackfill, runUsageBackfillAsync } from "./usageBackfill";
 
 describe("runUsageBackfill", () => {
   let tmpDir: string | null = null;
@@ -160,5 +160,69 @@ describe("runUsageBackfill", () => {
         }),
       ]),
     );
+  });
+
+  it("imports history cooperatively so large backfills can yield after startup", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-usage-backfill-async-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    const claudeRoot = path.join(tmpDir, ".claude", "projects", "project-a");
+    const codexRoot = path.join(tmpDir, ".codex", "sessions");
+    fs.mkdirSync(claudeRoot, { recursive: true });
+    fs.mkdirSync(codexRoot, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(claudeRoot, "claude-session.jsonl"),
+      [
+        JSON.stringify({
+          type: "user",
+          sessionId: "claude-async-session",
+          timestamp: "2026-05-12T09:59:00.000Z",
+          message: { content: "先保证 app running，再异步导入历史。" },
+        }),
+        JSON.stringify({
+          type: "assistant",
+          sessionId: "claude-async-session",
+          timestamp: "2026-05-12T10:00:00.000Z",
+          message: {
+            id: "msg_async_1",
+            model: "claude-sonnet-4-5-20250929",
+            usage: {
+              input_tokens: 80,
+              output_tokens: 20,
+            },
+          },
+        }),
+        "",
+      ].join("\n"),
+    );
+
+    store = createHistoryStore({ dbPath, now: () => Date.parse("2026-05-19T00:00:00.000Z") });
+    let yields = 0;
+
+    const status = await runUsageBackfillAsync({
+      historyStore: store,
+      claudeProjectsPath: path.join(tmpDir, ".claude", "projects"),
+      codexSessionsPath: codexRoot,
+      now: () => Date.parse("2026-05-19T00:00:00.000Z"),
+      batchSize: 1,
+      yieldToEventLoop: async () => {
+        yields += 1;
+      },
+    });
+
+    expect(yields).toBeGreaterThan(0);
+    expect(status).toMatchObject({
+      completedAt: Date.parse("2026-05-19T00:00:00.000Z"),
+      claudeRowsImported: 1,
+      codexRowsImported: 0,
+      lastError: null,
+    });
+    expect(store.getUsageImportStatus()).toEqual(status);
+    expect(store.getTopTokenUsageSessions(0, Date.parse("2026-05-13T00:00:00.000Z"))).toEqual([
+      expect.objectContaining({
+        sessionId: "claude-async-session",
+        title: "先保证 app running，再异步导入历史。",
+      }),
+    ]);
   });
 });

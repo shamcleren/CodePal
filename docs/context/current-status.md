@@ -47,7 +47,18 @@
   - `release/CodePal-1.1.7-arm64.dmg.blockmap`
   - `release/CodePal-1.1.7-arm64.zip.blockmap`
   - `release/latest-mac.yml`
-- v1.0.3 through v1.1.7 are all shipped. Current shipped baseline is **v1.1.7**.
+- v1.1.7 was pulled back to draft after release validation found the packaged app bundle could fail `codesign --verify` / Gatekeeper after app-level stapling wrote an invalid top-level `Contents/CodeResources` ticket.
+- v1.1.8 hotfix validation on 2026-05-19 adds strict packaged-artifact gates:
+  - `npm test -- src/main/history/usageBackfill.test.ts`
+  - `npm run test:e2e -- tests/e2e/codepal-analytics.e2e.ts`
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`
+  - `npm run test:e2e`
+  - `npm run release:mac`
+  - release hook verifies the build app, zip-extracted app, and dmg-mounted app with `codesign --verify`; zip/dmg app surfaces are also assessed with `spctl`.
+  - release hook validates stapled DMG, refreshes dmg blockmap / `latest-mac.yml`, and rejects updater metadata whose size/hash no longer matches final artifacts.
+- v1.0.3 through v1.1.8 are all shipped. Current shipped baseline is **v1.1.8**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -56,6 +67,7 @@
 - v1.1.5 shipped: WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix, E2E stability
 - v1.1.6 shipped: standalone Analytics page and HTML reports, clearer Provider Gateway settings, Phase 1 dashboard polish, Codex subexecution merge/noise reduction
 - v1.1.7 shipped: Claude / Codex usage backfill, longer analytics retention, readable Top Sessions, and clearer compact Analytics cards
+- v1.1.8 shipped: macOS release hotfix for the v1.1.7 app bundle signature failure, plus stricter packaged-artifact validation
 
 ## What Already Exists
 
@@ -137,7 +149,7 @@
 - Invalid or incompatible existing config structures are reported back to the UI instead of being force-overwritten
 - Codex diagnostics treat healthy session-log monitoring as the active path and suppress stale legacy `~/.codex/hooks.json` incompatibility warnings, because current Codex monitoring no longer depends on that legacy file
 - Main process now also carries a dedicated usage aggregation path separate from session timeline state
-- Usage analytics now backfills local Claude / Codex token history from `~/.claude/projects/**/*.jsonl` and `~/.codex/sessions/**/*.jsonl`; imported rows are keyed by source so startup rescans are idempotent.
+- Usage analytics now backfills local Claude / Codex token history from `~/.claude/projects/**/*.jsonl` and `~/.codex/sessions/**/*.jsonl`; imported rows are keyed by source so startup rescans are idempotent. The backfill starts only after the renderer is ready and uses a cooperative async scanner so large local histories do not block app launch.
 - Analytics now has a standalone renderer page with `today` / `7d` / `30d` presets, custom date ranges, compact model / agent breakdowns, and self-contained detailed HTML report generation.
 - Usage reports show Top Sessions by readable first-user-message summaries with a shortened session id fallback instead of leading with opaque UUIDs.
 - Renderer top bar now uses a compact quota-first usage strip
@@ -162,7 +174,7 @@
 - Release artifacts include dmg, zip, blockmap files, and `latest-mac.yml`
 - Signed / notarized distribution is the expected public release path when Apple credentials are configured
 - v1.0.3 release assets are treated as shipped; future release work should preserve updater metadata and signing / notarization verification rather than re-describing v1.0.3 as pending
-- Current v1.1.7 local unit / lint / build / E2E / macOS packaging verification is green on 2026-05-19.
+- Current v1.1.8 local unit / lint / build / E2E / macOS packaging verification is green on 2026-05-19.
 
 ### Pending Action Loop
 
@@ -267,9 +279,9 @@ npm run dist:mac
 - freeform `text_input`
 - moving control-loop UX back onto the main dashboard path
 
-### v1.1.0–v1.1.7 Release Track
+### v1.1.0–v1.1.8 Release Track
 
-v1.1.0 through v1.1.7 are shipped. See individual release notes for details:
+v1.1.0 through v1.1.8 are shipped. See individual release notes for details:
 
 - `docs/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -279,12 +291,13 @@ v1.1.0 through v1.1.7 are shipped. See individual release notes for details:
 - `docs/release-notes-v1.1.5.md` — WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix
 - `docs/release-notes-v1.1.6.md` — Analytics page, Provider Gateway settings, dashboard polish, Codex subexecution merge
 - `docs/release-notes-v1.1.7.md` — Claude / Codex usage backfill, analytics retention, readable Top Sessions
+- `docs/release-notes-v1.1.8.md` — macOS launch hotfix and stricter release artifact validation
 
 ## Next-Step Pointer
 
 For release-facing and forward-looking work, use:
 
 - `docs/context/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
-- `docs/release-notes-v1.1.7.md` for the v1.1.7 release
+- `docs/release-notes-v1.1.8.md` for the v1.1.8 release
 - `docs/roadmap-next.md` for forward-looking prioritization (Tier 2 agent/terminal expansion, monitoring depth, product polish)
 - `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
