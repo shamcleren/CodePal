@@ -46,7 +46,7 @@ On startup, recent user-initiated sessions (last 24 hours, up to 150) are restor
 
 ## What's Next
 
-With v1.1.0–v1.1.5 shipped and v1.1.6 prepared as the current patch candidate, the near-term focus shifts to:
+With v1.1.0–v1.1.10 shipped, the near-term focus shifts to:
 
 ### Tier 2 Agent / Terminal Expansion
 
@@ -54,43 +54,12 @@ With v1.1.0–v1.1.5 shipped and v1.1.6 prepared as the current patch candidate,
 - **Kimi CLI**: payload is nearly identical to Claude but config lives in `~/.kimi/config.toml` `[[hooks]]`, needs a TOML installer
 - **Warp**: env var (`$WARP_IS_LOCAL_SHELL_SESSION`) is captured at hook time, but jump and send-message are not implemented; the Open Island approach (SQLite pane table + AX menu cycling) is complex and needs separate evaluation
 
-### Monitoring Depth
+### Monitoring Depth — Done (v1.1.10+)
 
-- broader Claude quota calibration beyond the current token usage and statusLine-derived `rate_limits` snapshots
-- broader Cursor real-world payload calibration
-- broader CodeBuddy payload and transcript-shape calibration
-- continued signal-to-noise improvements in the activity timeline, following the v1.1.6 Codex subexecution merge work
-
-### Distribution And Release Ergonomics
-
-- smoother installation and first-run onboarding on macOS
-- consistent release artifacts, release notes, and updater metadata across patch releases
-- continued verification of signed and notarized macOS distribution
-- more predictable in-app update discovery and recovery when a release is unavailable or malformed
-
-### Product Polish
-
-- more predictable settings and diagnostics UX
-- stronger empty / degraded / expired state messaging
-- better resilience around last-known usage and login-state handling
-- keep release notes concise enough for the in-app update panel; full changelog detail belongs in status / handoff docs
-
-## Distribution And Updates
-
-Built-in macOS updates are now part of the release story, but they should stay tied to release trust and artifact validation rather than growing as an isolated feature.
-
-The recommended order from here is:
-
-1. keep the signed / notarized release loop working reliably
-2. keep updater metadata and blockmap validation in every patch release
-3. improve first-run and update-state messaging around missing, expired, or malformed releases
-4. expand update UX only after the current release cadence stays stable
-
-Why this order:
-
-- auto-update trust depends on the binary and metadata staying correct
-- release validation catches distribution failures before they become user-facing update failures
-- update UX work is easier to justify once release cadence remains predictable
+- Claude statusLine enrichment: model id captured in quota diagnostics
+- Codex lifecycle timeline noise filtered (Working, Context compacted, Turn aborted)
+- Estimated cost per agent shown in usage status strip via model pricing
+- Remaining monitoring improvements will be addressed as issues arise rather than planned in advance
 
 ## Potential Team / Pro Features
 
@@ -172,7 +141,6 @@ The following are attractive, but should not jump ahead of the current baseline 
 
 - adding agent control or approval interception — CodePal is monitoring-only by design; control belongs to each agent's CLI
 - JetBrains IDE workspace activation — JetBrains sessions are monitored through the shared CodeBuddy plugin watcher, but CodePal will not attempt to focus JetBrains windows
-- expanding updater complexity before release trust and validation stay reliable
 - implementing billing before user-value retention is validated
 - overloading README or release messaging with speculative roadmap promises
 
@@ -181,7 +149,5 @@ The following are attractive, but should not jump ahead of the current baseline 
 If planning effort is limited, the recommended decision order is:
 
 1. expand Tier 2 agent / terminal coverage (Gemini, Kimi, Warp evaluation)
-2. strengthen monitoring depth
-3. keep macOS distribution trust and release ergonomics reliable
-4. validate sustained usage patterns
-5. design paid / team expansion from real usage evidence
+2. validate sustained usage patterns
+3. design paid / team expansion from real usage evidence
