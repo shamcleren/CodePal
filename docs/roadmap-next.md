@@ -46,13 +46,7 @@ On startup, recent user-initiated sessions (last 24 hours, up to 150) are restor
 
 ## What's Next
 
-With v1.1.0–v1.1.10 shipped, the near-term focus shifts to:
-
-### Tier 2 Agent / Terminal Expansion
-
-- **Gemini CLI**: hook event shape differs (`SessionStart` / `BeforeAgent` / `AfterAgent` / `Notification`), needs a dedicated `geminiHook.ts`
-- **Kimi CLI**: payload is nearly identical to Claude but config lives in `~/.kimi/config.toml` `[[hooks]]`, needs a TOML installer
-- **Warp**: env var (`$WARP_IS_LOCAL_SHELL_SESSION`) is captured at hook time, but jump and send-message are not implemented; the Open Island approach (SQLite pane table + AX menu cycling) is complex and needs separate evaluation
+With v1.1.0–v1.1.10 shipped, near-term monitoring work is complete.
 
 ### Monitoring Depth — Done (v1.1.10+)
 
@@ -90,7 +84,7 @@ These are direction candidates, not committed SKUs.
 
 ## Longer-Term Expansion
 
-These directions are worth recording now, but they should remain explicitly behind the current Tier 2 expansion and monitoring-baseline work.
+These directions are worth recording now, but they should remain explicitly behind validating sustained usage value.
 
 ### Dynamic Island / Ambient Surface
 
@@ -148,6 +142,5 @@ The following are attractive, but should not jump ahead of the current baseline 
 
 If planning effort is limited, the recommended decision order is:
 
-1. expand Tier 2 agent / terminal coverage (Gemini, Kimi, Warp evaluation)
-2. validate sustained usage patterns
-3. design paid / team expansion from real usage evidence
+1. validate sustained usage patterns
+2. design paid / team expansion from real usage evidence
