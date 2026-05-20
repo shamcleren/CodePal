@@ -10,7 +10,7 @@ function isClaudeCliRateLimitSnapshot(snapshot: UsageSnapshot | null | undefined
     snapshot &&
       snapshot.agent === "claude" &&
       snapshot.source === "statusline-derived" &&
-      snapshot.rateLimit,
+      (snapshot.rateLimit || (typeof snapshot.meta?.model === "string" && snapshot.meta.model)),
   );
 }
 
@@ -22,6 +22,7 @@ export function buildClaudeQuotaDiagnostics(snapshot: UsageSnapshot | null): Cla
       messageKey: "claudeQuota.message.connected",
       source: "statusline-derived",
       lastSyncAt: snapshot.updatedAt,
+      ...(typeof snapshot.meta?.model === "string" ? { modelName: snapshot.meta.model } : {}),
     };
   }
 

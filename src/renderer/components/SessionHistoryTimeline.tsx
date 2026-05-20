@@ -20,6 +20,9 @@ const LOW_VALUE_LIFECYCLE_BODIES = new Set([
   "Claude session ended",
   "CodeBuddy request started",
   "CodeBuddy request finished",
+  "Working",
+  "Context compacted",
+  "Turn aborted",
 ]);
 const DUPLICATE_HISTORY_TIME_WINDOW_MS = 5_000;
 

@@ -68,4 +68,43 @@ describe("claudeQuotaService", () => {
       synced: false,
     });
   });
+
+  it("reports connected with modelName when snapshot has model info but no rate limits", () => {
+    expect(
+      buildClaudeQuotaDiagnostics({
+        agent: "claude",
+        sessionId: "claude-3",
+        source: "statusline-derived",
+        updatedAt: 1_776_000_200_000,
+        meta: { statusline_source: "claude", model: "claude-opus-4-7" },
+      }),
+    ).toEqual({
+      state: "connected",
+      message: "已接收 Claude Code CLI quota",
+      messageKey: "claudeQuota.message.connected",
+      source: "statusline-derived",
+      lastSyncAt: 1_776_000_200_000,
+      modelName: "claude-opus-4-7",
+    });
+  });
+
+  it("includes modelName when snapshot has both rate limits and model info", () => {
+    expect(
+      buildClaudeQuotaDiagnostics({
+        agent: "claude",
+        sessionId: "claude-4",
+        source: "statusline-derived",
+        updatedAt: 1_776_000_300_000,
+        rateLimit: { usedPercent: 45 },
+        meta: { statusline_source: "claude", model: "claude-sonnet-4-6-20260217" },
+      }),
+    ).toEqual({
+      state: "connected",
+      message: "已接收 Claude Code CLI quota",
+      messageKey: "claudeQuota.message.connected",
+      source: "statusline-derived",
+      lastSyncAt: 1_776_000_300_000,
+      modelName: "claude-sonnet-4-6-20260217",
+    });
+  });
 });

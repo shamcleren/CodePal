@@ -158,8 +158,12 @@ export function buildClaudeStatusLineUsageLine(
     return null;
   }
 
+  const modelRecord = asRecord(payload.model);
+  const modelId = modelRecord
+    ? firstString(modelRecord, ["id", "name"])
+    : undefined;
   const rateLimit = buildRateLimit(asRecord(payload.rate_limits));
-  if (!rateLimit) {
+  if (!rateLimit && !modelId) {
     return null;
   }
 
@@ -170,11 +174,12 @@ export function buildClaudeStatusLineUsageLine(
     updatedAt: Date.now(),
     title:
       firstString(payload, ["title"]) ??
-      firstString(asRecord(payload.model) ?? {}, ["display_name", "name"]) ??
+      (modelRecord ? firstString(modelRecord, ["display_name", "name"]) : undefined) ??
       "Claude quota",
-    rateLimit,
+    ...(rateLimit ? { rateLimit } : {}),
     meta: {
       statusline_source: "claude",
+      ...(modelId ? { model: modelId } : {}),
     },
   };
 

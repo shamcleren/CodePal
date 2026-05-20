@@ -58,6 +58,7 @@ export interface SessionUsage {
   agent: string;
   sessionId: string;
   title?: string;
+  model?: string;
   updatedAt: number;
   sources: UsageSource[];
   completeness: UsageCompleteness;
@@ -88,6 +89,7 @@ export interface UsageOverview {
   updatedAt?: number;
   summary: UsageOverviewSummary;
   sessions: SessionUsage[];
+  pricing?: ModelPricing[];
 }
 
 export interface TokenUsageWrite {

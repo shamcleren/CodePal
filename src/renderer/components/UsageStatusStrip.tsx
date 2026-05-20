@@ -2,7 +2,7 @@ import claudeAppIcon from "../assets/claude-app-icon.png";
 import codebuddyAppIcon from "../assets/codebuddy-app-icon.png";
 import codexAppIcon from "../assets/codex-app-icon.png";
 import cursorAppIcon from "../assets/cursor-app-icon.png";
-import type { UsageOverview } from "../../shared/usageTypes";
+import type { ModelPricing, UsageOverview } from "../../shared/usageTypes";
 import type { UsageAgentId, UsageDisplaySettings } from "../usageDisplaySettings";
 import { useI18n, translateWindowLabel } from "../i18n";
 
@@ -259,6 +259,34 @@ function formatCompactUsdCents(value: number): string {
   return `$${formatCompactAmount(value)}`;
 }
 
+function estimateCostForAgent(
+  overview: UsageOverview,
+  agent: string,
+  pricingMap: Map<string, ModelPricing>,
+): number | null {
+  const agentSessions = overview.sessions.filter((session) => session.agent === agent);
+  if (agentSessions.length === 0) return null;
+
+  let totalCost = 0;
+  let hasPricing = false;
+  for (const session of agentSessions) {
+    if (!session.tokens) continue;
+    const pricing = session.model ? pricingMap.get(session.model) : null;
+    if (!pricing) continue;
+    hasPricing = true;
+    totalCost +=
+      ((session.tokens.input ?? 0) / 1_000_000) * Number(pricing.inputPerMillion) +
+      ((session.tokens.output ?? 0) / 1_000_000) * Number(pricing.outputPerMillion) +
+      ((session.tokens.cachedInput ?? 0) / 1_000_000) * Number(pricing.cacheReadPerMillion);
+  }
+  return hasPricing && totalCost > 0 ? totalCost : null;
+}
+
+function formatCost(value: number): string {
+  if (value < 0.01) return "<$0.01";
+  return `$${value.toFixed(2)}`;
+}
+
 function formatCompactAmount(value: number): string {
   const dollars = value / 100;
   const integer = Math.round(dollars);
@@ -277,12 +305,30 @@ function buildSummaries(
     return [];
   }
 
-  return [
+  const pricingMap = new Map<string, ModelPricing>();
+  for (const p of overview.pricing ?? []) {
+    pricingMap.set(p.modelId, p);
+  }
+
+  const summaries = [
     summarizeClaude(overview, settings, i18n),
     summarizeCodex(overview, settings, i18n),
     summarizeCodeBuddy(overview, settings, i18n),
     summarizeCursor(overview, settings, i18n),
   ].filter((item): item is UsageAgentSummary => item !== null);
+
+  if (pricingMap.size === 0) {
+    return summaries;
+  }
+
+  for (const summary of summaries) {
+    const cost = estimateCostForAgent(overview, summary.agent, pricingMap);
+    if (cost !== null) {
+      summary.segments.push({ text: formatCost(cost), tone: "secondary" });
+    }
+  }
+
+  return summaries;
 }
 
 export function hasVisibleUsageStatus(

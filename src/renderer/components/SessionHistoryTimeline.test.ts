@@ -212,6 +212,59 @@ describe("mergeSessionTimelineItems", () => {
 
     expect(merged.map((item) => item.id)).toEqual(["assistant-1"]);
   });
+
+  it("filters low-value Codex lifecycle notes from expanded history", () => {
+    const merged = mergeSessionTimelineItems(
+      [
+        timelineItem({
+          id: "assistant-1",
+          title: "Assistant",
+          label: "Assistant",
+          body: "Done, all tests pass.",
+          timestamp: 400,
+        }),
+      ],
+      [
+        activityItem({
+          id: "codex-task-started",
+          kind: "note",
+          source: "system",
+          title: "Running",
+          body: "Working",
+          timestamp: 350,
+          tone: "running",
+        }),
+        activityItem({
+          id: "codex-context-compacted",
+          kind: "system",
+          source: "system",
+          title: "Context compacted",
+          body: "Context compacted",
+          timestamp: 300,
+          tone: "idle",
+        }),
+        activityItem({
+          id: "codex-turn-aborted",
+          kind: "system",
+          source: "system",
+          title: "Turn aborted",
+          body: "Turn aborted",
+          timestamp: 250,
+          tone: "idle",
+        }),
+        activityItem({
+          id: "user-1",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "Fix the failing test",
+          timestamp: 200,
+        }),
+      ],
+    );
+
+    expect(merged.map((item) => item.id)).toEqual(["assistant-1", "user-1"]);
+  });
 });
 
 describe("shouldLoadNextHistoryPage", () => {

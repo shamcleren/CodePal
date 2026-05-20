@@ -60,4 +60,61 @@ describe("buildClaudeStatusLineUsageLine", () => {
       buildClaudeStatusLineUsageLine(JSON.stringify({ session_id: "claude-1" }), {}),
     ).toBeNull();
   });
+
+  it("captures model id in meta when present alongside rate limits", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-07T09:00:00.000Z"));
+
+    const line = buildClaudeStatusLineUsageLine(
+      JSON.stringify({
+        session_id: "claude-session-2",
+        model: {
+          id: "claude-opus-4-7",
+          display_name: "Claude Opus 4.7",
+        },
+        rate_limits: {
+          five_hour: {
+            used_percentage: 10,
+            resets_at: "2026-04-07T12:00:00Z",
+          },
+        },
+      }),
+      {},
+    );
+
+    expect(line).not.toBeNull();
+    const parsed = JSON.parse(line ?? "{}");
+    expect(parsed.meta.model).toBe("claude-opus-4-7");
+    expect(parsed.title).toBe("Claude Opus 4.7");
+  });
+
+  it("emits snapshot with model info even without rate limits", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-07T09:00:00.000Z"));
+
+    const line = buildClaudeStatusLineUsageLine(
+      JSON.stringify({
+        session_id: "claude-session-3",
+        model: {
+          id: "claude-sonnet-4-6-20260217",
+          display_name: "Claude Sonnet 4.6",
+        },
+      }),
+      {},
+    );
+
+    expect(line).not.toBeNull();
+    const parsed = JSON.parse(line ?? "{}");
+    expect(parsed.meta.model).toBe("claude-sonnet-4-6-20260217");
+    expect(parsed.rateLimit).toBeUndefined();
+  });
+
+  it("returns null when neither model info nor rate limits are present", () => {
+    expect(
+      buildClaudeStatusLineUsageLine(
+        JSON.stringify({ session_id: "claude-1", title: "test" }),
+        {},
+      ),
+    ).toBeNull();
+  });
 });

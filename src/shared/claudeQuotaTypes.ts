@@ -14,6 +14,7 @@ export interface ClaudeQuotaDiagnostics {
   billingType?: string;
   source?: "statusline-derived";
   lastSyncAt?: number;
+  modelName?: string;
   debugDetail?: string;
 }
 

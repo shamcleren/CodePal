@@ -162,4 +162,122 @@ describe("UsageStatusStrip", () => {
 
     expect(html).toBe("");
   });
+
+  it("renders estimated cost when pricing and model data are available", () => {
+    const withPricing: UsageOverview = {
+      updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+      summary: {
+        updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+        rateLimits: [
+          { agent: "claude", usedPercent: 22, resetAt: 1775200500, windowLabel: "5h" },
+        ],
+        contextMode: "single-session",
+      },
+      sessions: [
+        {
+          agent: "claude",
+          sessionId: "claude-1",
+          model: "claude-opus-4-7",
+          updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+          sources: ["session-derived"],
+          completeness: "partial",
+          tokens: { input: 1_000_000, output: 500_000, cachedInput: 100_000 },
+        },
+      ],
+      pricing: [
+        {
+          modelId: "claude-opus-4-7",
+          displayName: "Claude Opus 4.7",
+          inputPerMillion: "5",
+          outputPerMillion: "25",
+          cacheReadPerMillion: "0.50",
+          cacheCreationPerMillion: "6.25",
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="en">
+        <UsageStatusStrip overview={withPricing} settings={defaultSettings} />
+      </I18nProvider>,
+    );
+
+    // input: 1M * $5/M = $5, output: 0.5M * $25/M = $12.50, cached: 0.1M * $0.50/M = $0.05 → $17.55
+    expect(html).toContain("$17.55");
+  });
+
+  it("omits cost segment when no pricing data is provided", () => {
+    const noPricing: UsageOverview = {
+      updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+      summary: {
+        updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+        rateLimits: [
+          { agent: "claude", usedPercent: 10, resetAt: 1775200500, windowLabel: "5h" },
+        ],
+        contextMode: "single-session",
+      },
+      sessions: [
+        {
+          agent: "claude",
+          sessionId: "claude-1",
+          model: "claude-opus-4-7",
+          updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+          sources: ["session-derived"],
+          completeness: "partial",
+          tokens: { input: 1_000_000, output: 500_000 },
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="en">
+        <UsageStatusStrip overview={noPricing} settings={defaultSettings} />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain("Claude");
+    expect(html).not.toContain("$");
+  });
+
+  it("omits cost segment when sessions have no model field", () => {
+    const noModel: UsageOverview = {
+      updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+      summary: {
+        updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+        rateLimits: [
+          { agent: "claude", usedPercent: 10, resetAt: 1775200500, windowLabel: "5h" },
+        ],
+        contextMode: "single-session",
+      },
+      sessions: [
+        {
+          agent: "claude",
+          sessionId: "claude-1",
+          updatedAt: Date.parse("2026-04-03T12:35:00.000Z"),
+          sources: ["session-derived"],
+          completeness: "partial",
+          tokens: { input: 1_000_000, output: 500_000 },
+        },
+      ],
+      pricing: [
+        {
+          modelId: "claude-opus-4-7",
+          displayName: "Claude Opus 4.7",
+          inputPerMillion: "5",
+          outputPerMillion: "25",
+          cacheReadPerMillion: "0.50",
+          cacheCreationPerMillion: "6.25",
+        },
+      ],
+    };
+
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="en">
+        <UsageStatusStrip overview={noModel} settings={defaultSettings} />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain("Claude");
+    expect(html).not.toContain("$");
+  });
 });

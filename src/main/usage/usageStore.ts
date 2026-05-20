@@ -160,10 +160,12 @@ export function createUsageStore() {
     }
     const key = `${snapshot.agent}:${snapshot.sessionId}`;
     const previous = sessions.get(key);
+    const snapshotModel = typeof snapshot.meta?.model === "string" ? snapshot.meta.model : undefined;
     const next: SessionUsage = {
       agent: snapshot.agent,
       sessionId: snapshot.sessionId,
       title: snapshot.title ?? previous?.title,
+      model: snapshotModel ?? previous?.model,
       updatedAt: Math.max(previous?.updatedAt ?? 0, snapshot.updatedAt),
       sources: Array.from(new Set([...(previous?.sources ?? []), snapshot.source])),
       tokens: mergeTokens(previous?.tokens, snapshot.tokens),
