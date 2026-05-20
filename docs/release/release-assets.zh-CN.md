@@ -6,15 +6,15 @@
 
 ## 优先顺序
 
-1. `docs/hero-main.png`
-2. `docs/settings-focus.png`（可选）
-3. `docs/codepal-demo.gif`（可选）
+1. `docs/assets/hero-main.png`
+2. `docs/assets/settings-focus.png`（可选）
+3. `docs/assets/codepal-demo.gif`（可选）
 
 不要一开始就做 GIF。先把 dashboard 主图收干净。
 
 ## 1. 主图
 
-目标文件：`docs/hero-main.png`
+目标文件：`docs/assets/hero-main.png`
 
 用途：
 
@@ -44,7 +44,7 @@
 
 ## 2. 设置页聚焦图
 
-目标文件：`docs/settings-focus.png`
+目标文件：`docs/assets/settings-focus.png`
 
 用途：
 
@@ -76,7 +76,7 @@
 
 ## 3. 演示 GIF
 
-目标文件：`docs/codepal-demo.gif`
+目标文件：`docs/assets/codepal-demo.gif`
 
 状态：
 
@@ -122,11 +122,10 @@
 
 当前已有文件：
 
-- `docs/icon.png`
-- `docs/index.png`
-- `docs/setting.png`
+- `docs/assets/icon.png`
+- `docs/assets/hero-main.png`
 
-`docs/icon.png` 已经使用新版 CodePal 应用图标。源稿和菜单栏 glyph 放在 `design/codepal-icon-redesign/`。
+`docs/assets/icon.png` 已经使用新版 CodePal 应用图标。源稿和菜单栏 glyph 放在 `design/codepal-icon-redesign/`。
 
 截图可以作为参考，但现在还更像工程截图，而不是打磨过的发版资产。
 

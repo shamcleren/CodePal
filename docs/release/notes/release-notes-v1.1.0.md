@@ -1,6 +1,6 @@
 ## CodePal v1.1.0 Candidate
 
-This is the first minor release after the v1.0.x monitoring baseline. It pushes CodePal from pure monitoring into lightweight interaction and proactive awareness, following the four-track plan in `docs/roadmap-next.md`.
+This is the first minor release after the v1.0.x monitoring baseline. It pushes CodePal from pure monitoring into lightweight interaction and proactive awareness, following the four-track plan in `docs/planning/roadmap-next.md`.
 
 ### Added
 

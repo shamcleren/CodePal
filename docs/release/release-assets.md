@@ -6,15 +6,15 @@ The goal is to make README and GitHub Releases feel product-facing rather than l
 
 ## Priority Order
 
-1. `docs/hero-main.png`
-2. `docs/settings-focus.png` (optional)
-3. `docs/codepal-demo.gif` (optional)
+1. `docs/assets/hero-main.png`
+2. `docs/assets/settings-focus.png` (optional)
+3. `docs/assets/codepal-demo.gif` (optional)
 
 Do not start with the GIF. Get the main dashboard asset clean first.
 
 ## 1. Hero Main
 
-Target file: `docs/hero-main.png`
+Target file: `docs/assets/hero-main.png`
 
 Purpose:
 
@@ -44,7 +44,7 @@ Recommended capture style:
 
 ## 2. Settings Focus
 
-Target file: `docs/settings-focus.png`
+Target file: `docs/assets/settings-focus.png`
 
 Purpose:
 
@@ -76,7 +76,7 @@ Recommended capture style:
 
 ## 3. Demo GIF
 
-Target file: `docs/codepal-demo.gif`
+Target file: `docs/assets/codepal-demo.gif`
 
 Status:
 
@@ -122,11 +122,10 @@ If the GIF exists, place it after the static screenshots or only on the Release 
 
 Current files:
 
-- `docs/icon.png`
-- `docs/index.png`
-- `docs/setting.png`
+- `docs/assets/icon.png`
+- `docs/assets/hero-main.png`
 
-`docs/icon.png` now uses the refreshed CodePal app icon. The source artwork and menu bar glyph live under `design/codepal-icon-redesign/`.
+`docs/assets/icon.png` now uses the refreshed CodePal app icon. The source artwork and menu bar glyph live under `design/codepal-icon-redesign/`.
 
 The screenshots are useful references, but they are still closer to engineering screenshots than polished release assets.
 

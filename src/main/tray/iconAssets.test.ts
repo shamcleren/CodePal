@@ -56,7 +56,7 @@ describe("icon assets", () => {
     const iconPaths = [
       "build/icon.png",
       "build/tray-template.png",
-      "docs/icon.png",
+      "docs/assets/icon.png",
       "src/renderer/assets/claude-app-icon.png",
       "src/renderer/assets/codebuddy-app-icon.png",
       "src/renderer/assets/codex-app-icon.png",

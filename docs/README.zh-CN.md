@@ -1,121 +1,65 @@
 # 文档索引
 
-这个目录里的文档，建议按“你现在要解决什么问题”来读，而不是一次性全看。
+这个目录按用途阅读，不建议一次性全翻。
 
-## 如果你要看当前项目基线
+## 当前基线
 
 - `docs/context/current-status.md`
-  当前已经实现的行为、验证状态、已知缺口，以及实现基线。
+  当前已交付行为、验证状态、已知缺口和下一步 handoff。
+- `docs/architecture/design-overview.md`
+  产品定位、架构分层、已交付能力边界，以及下一阶段设计方向。
 
-## 如果你要看发版材料
+## 规划
 
-- `docs/release-notes-v1.1.10.md`
-  当前 v1.1.10 patch candidate 的英文 release notes。内容要足够短，可以直接放进应用内更新面板。
-- `docs/release-notes-v1.1.10.zh-CN.md`
-  当前 v1.1.10 patch candidate 的中文 release notes。内容要足够短，可以直接放进应用内更新面板。
-- `docs/release-notes-v1.1.9.md`
-  v1.1.9 release 的英文 release notes。
-- `docs/release-notes-v1.1.9.zh-CN.md`
-  v1.1.9 release 的中文 release notes。
-- `docs/release-notes-v1.1.8.md`
-  v1.1.8 release 的英文 release notes。
-- `docs/release-notes-v1.1.8.zh-CN.md`
-  v1.1.8 release 的中文 release notes。
-- `docs/release-notes-v1.1.7.md`
-  v1.1.7 release 的英文 release notes。
-- `docs/release-notes-v1.1.7.zh-CN.md`
-  v1.1.7 release 的中文 release notes。
-- `docs/release-notes-v1.1.6.md`
-  v1.1.6 release 的英文 release notes。
-- `docs/release-notes-v1.1.6.zh-CN.md`
-  v1.1.6 release 的中文 release notes。
-- `docs/release-notes-v1.1.5.md`
-  v1.1.5 release 的英文 release notes。
-- `docs/release-notes-v1.1.5.zh-CN.md`
-  v1.1.5 release 的中文 release notes。
-- `docs/release-notes-v1.0.3.md`
-  v1.0.3 release 的历史英文 release notes。
-- `docs/release-notes-v1.0.3.zh-CN.md`
-  v1.0.3 release 的历史中文 release notes。
-- `docs/release-notes-v1.0.4.md`
-  v1.0.4 patch candidate 的英文 release notes 草稿。
-- `docs/release-notes-v1.0.4.zh-CN.md`
-  v1.0.4 patch candidate 的中文 release notes 草稿。
-- `docs/release-notes-v1.0.5.md`
-  v1.0.5 patch candidate 的历史英文 release notes 草稿。
-- `docs/release-notes-v1.0.5.zh-CN.md`
-  v1.0.5 patch candidate 的历史中文 release notes 草稿。
-- `docs/release-assets.md`
-  README 和 GitHub Release 所需截图 / 媒体资产的英文清单。
-- `docs/release-assets.zh-CN.md`
-  同一份视觉资产清单的中文版本。
-- `docs/macos-signing-runbook.zh-CN.md`
-  给当前维护者执行 macOS 签名、notarization、DMG `staple + validate` 的中文操作清单。
-- `docs/release-checklist.zh-CN.md`
-  最终发版前使用的中文检查清单。
-- `docs/operational-readiness-v1.0.0.zh-CN.md`
-  原始 v1.0.0 readiness 阶段留下的历史检查清单。
-- `docs/privacy-and-data.md`
-  当前 monitoring-first 发布基线的英文隐私与数据边界说明。
-- `docs/privacy-and-data.zh-CN.md`
-  同一份隐私与数据边界说明的中文版本。
-- `docs/support-scope.md`
-  当前正式运营 v1 基线的英文支持范围说明。
-- `docs/support-scope.zh-CN.md`
-  当前支持范围说明的中文版本。
-- `docs/troubleshooting.md`
-  面向 release 用户的英文排查与诊断来源说明。
-- `docs/troubleshooting.zh-CN.md`
-  同一份排查文档的中文版本。
+- `docs/planning/roadmap-next.md`
+  v1.1.11 基线之后的英文路线图。
+- `docs/planning/roadmap-next.zh-CN.md`
+  同一份路线图的中文版本。
+- `docs/planning/research/deep-research-report.md`
+  下一阶段方向的研究来源：本地 AI coding operations memory、workflow health、个人优先付费价值，以及团队扩展边界。
 
-建议你按这个顺序使用：
+## 发版
 
-1. 先看 `release-checklist.zh-CN.md`
-2. 再看当前目标版本对应的 release notes；本轮 patch 测试优先看 `release-notes-v1.1.10.zh-CN.md`
-3. 如果卡在签名、公证或 DMG 收尾校验，再看 `macos-signing-runbook.zh-CN.md`
+- `docs/release/notes/`
+  GitHub Release 和应用内更新面板使用的 release notes。新版本按 `release-notes-vX.Y.Z.md` 放这里；release workflow 读取这个目录。
+- `docs/release/release-checklist.zh-CN.md`
+  正式发布前给维护者使用的操作检查清单。
+- `docs/release/macos-signing-runbook.zh-CN.md`
+  macOS 签名、公证、DMG 校验和 updater metadata 操作手册。
+- `docs/release/macos-developer-id-setup.zh-CN.md`
+  Developer ID 证书准备说明。
+- `docs/release/release-assets.md`
+  README 和 GitHub Release 截图 / 媒体资产清单。
+- `docs/release/release-assets.zh-CN.md`
+  同一份资产清单的中文版本。
 
-## 如果你要看未来规划
+## 支持
 
-- `docs/roadmap-next.md`
-  当前 V1 发布基线之后的英文规划文档。
-- `docs/roadmap-next.zh-CN.md`
-  同一份规划的中文版本。
+- `docs/support/privacy-and-data.md`
+- `docs/support/privacy-and-data.zh-CN.md`
+- `docs/support/support-scope.md`
+- `docs/support/support-scope.zh-CN.md`
+- `docs/support/troubleshooting.md`
+- `docs/support/troubleshooting.zh-CN.md`
 
-如果你只是判断“下一步该投什么”，优先看 `roadmap-next.zh-CN.md`，不要回头翻历史 handoff。
+这些是面向发布用户的文档。只要改动 telemetry、cloud sync、team sharing、outbound control 或数据保留策略，就要先同步这里。
 
-## 如果你要看上下文备注
+## 上下文与归档
 
-- `docs/context/*.md`
-  某些具体工作阶段留下的短期 handoff、blocker 和实现上下文。
+- `docs/context/handoffs/`
+  历史 handoff 和局部实现上下文。只有 `current-status.md` 指过去，或要继续某个旧线程时再读。
+- `docs/archive/`
+  不再作为主入口的历史审计和 readiness 清单。
+- `docs/superpowers/specs/` 与 `docs/superpowers/plans/`
+  早期实现过程留下的工作产物。可用于追溯意图，但不是当前产品契约。
 
-适合在这些情况下再看：
+## 资源
 
-- `current-status.md` 里明确提到了某个文件名
-- 你在继续一个没有完全做完的线程
-- 你需要追溯某个局部决策为什么这么做
-
-除非 `current-status.md` 明确指过去，否则不要把这些文件当成主要产品契约。
-
-## Superpowers 工作文档
-
-- `docs/superpowers/specs/`
-  早期设计阶段留下的 spec
-- `docs/superpowers/plans/`
-  从这些 spec 拆出来的执行计划
-
-这些更像本地工作痕迹，不是当前仓库对外的正式基线。
-
-## 视觉资源
-
-- `docs/icon.png`
-  README 使用的应用图标
+- `docs/assets/icon.png`
+  README 使用的应用图标。
+- `docs/assets/hero-main.png`
+  README 和发版材料优先使用的主 dashboard 截图。
 - `design/codepal-icon-redesign/`
-  新版 CodePal 应用图标和 macOS 菜单栏图标的源稿、预览和导出说明
-- `docs/hero-main.png`
-  README 和 Release 材料优先使用的主 dashboard 截图
-- `docs/index.png`
-  较早的主面板参考截图
-- `docs/setting.png`
-  设置页参考截图
+  新版应用图标和 macOS 菜单栏图标的源稿、预览和导出说明。
 
-如果后面继续往 `docs/` 里放图片，尽量保持命名清晰，避免混进临时草稿文件。
+避免继续往 `docs/` 顶层新增普通文档。稳定入口才放顶层，其余优先进入 `architecture/`、`planning/`、`release/`、`support/`、`context/` 或 `archive/`。

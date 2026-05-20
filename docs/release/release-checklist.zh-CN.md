@@ -40,14 +40,14 @@
 
 建议至少确认：
 
-- [ ] `docs/hero-main.png` 已更新为当前推荐截图
-- [ ] README 中主图已指向 `docs/hero-main.png`
+- [ ] `docs/assets/hero-main.png` 已更新为当前推荐截图
+- [ ] README 中主图已指向 `docs/assets/hero-main.png`
 - [ ] 截图没有敏感账号信息、路径或不该暴露的内容
 
 可选项：
 
-- [ ] `docs/settings-focus.png` 已准备好，并且它确实提供额外价值
-- [ ] `docs/codepal-demo.gif` 已准备好，并且时长控制在 10 到 15 秒
+- [ ] `docs/assets/settings-focus.png` 已准备好，并且它确实提供额外价值
+- [ ] `docs/assets/codepal-demo.gif` 已准备好，并且时长控制在 10 到 15 秒
 
 ## C. README 与 Release 页面
 
@@ -55,7 +55,7 @@
 
 - [ ] `README.md` 已对齐当前产品状态
 - [ ] `README.zh-CN.md` 已对齐当前产品状态
-- [ ] 本次版本的 `docs/release-notes-vX.Y.Z.md` 可直接用于 GitHub Release
+- [ ] 本次版本的 `docs/release/notes/release-notes-vX.Y.Z.md` 可直接用于 GitHub Release
 - [ ] release notes 足够短，可放进应用内更新面板：只写 3 到 5 个重点变化，不写完整 commit 清单或长篇背景
 - [ ] release notes 使用 Markdown 正文，不要把 HTML 片段直接暴露给应用内更新面板
 - [ ] release notes 中的下载文件名与实际版本号一致
@@ -121,9 +121,10 @@
 
 在今天这个项目状态下：
 
-- v1.1.5 是当前已发基线，v1.1.6 是当前 patch candidate；后续不要再把 v1.0.x 文档写成当前发版目标
+- v1.1.11 是当前已发基线；后续不要再把 v1.0.x 或早期 v1.1.x 文档写成当前发版目标
 - 工程验证、README、Release 文案、CI / E2E 入口、updater metadata 校验，已经是当前发布基线的一部分
 - 正式分发仍然依赖 Developer ID 与 notary 凭据保持可用，并且每次 release 都应重新验证 `Accepted`
+- 新版本 release notes 应放在 `docs/release/notes/`，不要再放回 `docs/` 顶层
 
 所以如果你正在判断“下一个最值得投入的发布工作是什么”，答案是：
 

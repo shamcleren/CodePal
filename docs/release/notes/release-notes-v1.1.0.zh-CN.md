@@ -1,6 +1,6 @@
 ## CodePal v1.1.0 Candidate
 
-这是 v1.0.x 监控基线之后的第一个 minor 版本。它按 `docs/roadmap-next.zh-CN.md` 的四条主线，把 CodePal 从纯监控推向轻量交互和主动感知。
+这是 v1.0.x 监控基线之后的第一个 minor 版本。它按 `docs/planning/roadmap-next.zh-CN.md` 的四条主线，把 CodePal 从纯监控推向轻量交互和主动感知。
 
 ### 新增
 

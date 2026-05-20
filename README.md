@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="docs/icon.png" width="56" alt="CodePal icon" valign="middle" />
+  <img src="docs/assets/icon.png" width="56" alt="CodePal icon" valign="middle" />
   <span valign="middle">CodePal</span>
 </h1>
 
@@ -39,7 +39,7 @@ CodePal is a dashboard, not a middleman. The agents you already use stay in char
 
 ## Preview
 
-![CodePal Dashboard](docs/hero-main.png)
+![CodePal Dashboard](docs/assets/hero-main.png)
 
 ## What You Get
 
@@ -74,11 +74,11 @@ Release builds are signed and notarized by Apple. No security prompt on open.
 
 ## What's Next
 
-- **Monitoring depth**: broader real-world payload calibration for Cursor, CodeBuddy, Claude Code, and JetBrains-backed flows
-- **Release reliability**: keep signed / notarized macOS releases and in-app update discovery predictable across versions
-- **Product polish**: clearer degraded states, quieter timelines, and better notifications for important task transitions
+- **Personal AI work memory**: session reviews, daily digests, and local reports that explain what happened across agents
+- **Workflow health**: waiting time, error recovery, quota pressure, context pressure, and observability-confidence signals
+- **Sustained value before scale**: prove the individual local-first workflow before adding team sharing, billing, or cloud sync
 
-See [docs/roadmap-next.md](docs/roadmap-next.md) for the full planning direction.
+See [docs/planning/roadmap-next.md](docs/planning/roadmap-next.md) for the full planning direction.
 
 ## Quick Start (Development)
 
@@ -100,9 +100,9 @@ Make sure the corresponding agent (Cursor / Claude Code / Codex / CodeBuddy) is 
 
 ## Privacy and Support
 
-- [Privacy and Data Boundaries](docs/privacy-and-data.md)
-- [Support Scope](docs/support-scope.md)
-- [Troubleshooting](docs/troubleshooting.md)
+- [Privacy and Data Boundaries](docs/support/privacy-and-data.md)
+- [Support Scope](docs/support/support-scope.md)
+- [Troubleshooting](docs/support/troubleshooting.md)
 - [Report an Issue](https://github.com/shamcleren/CodePal/issues/new/choose)
 
 ## Development
@@ -111,7 +111,7 @@ Make sure the corresponding agent (Cursor / Claude Code / Codex / CodeBuddy) is 
 <summary>Internal docs</summary>
 
 - [AGENTS.md](AGENTS.md) — agent coding conventions
-- [docs/design-overview.md](docs/design-overview.md) — architecture overview
+- [docs/architecture/design-overview.md](docs/architecture/design-overview.md) — architecture overview
 - [docs/context/current-status.md](docs/context/current-status.md) — current status
 - [docs/README.md](docs/README.md) — doc map
 - [design/codepal-icon-redesign](design/codepal-icon-redesign) — refreshed app and macOS menu bar icon source artwork

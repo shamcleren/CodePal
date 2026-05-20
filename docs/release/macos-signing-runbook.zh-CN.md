@@ -357,8 +357,8 @@ xcrun notarytool submit "release/CodePal-1.0.0.dmg" \
 
 - `README.md`
 - `README.zh-CN.md`
-- `docs/release-notes-vX.Y.Z.md`
-- `docs/release-notes-vX.Y.Z.zh-CN.md`（如果本次维护中文 release notes）
+- `docs/release/notes/release-notes-vX.Y.Z.md`
+- `docs/release/notes/release-notes-vX.Y.Z.zh-CN.md`（如果本次维护中文 release notes）
 - `docs/context/current-status.md`
 
 届时要把待签名、待公证或测试分发相关表述改掉，避免文档落后于实际发布状态。

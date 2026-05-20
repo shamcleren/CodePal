@@ -2,15 +2,17 @@
 
 ## What CodePal Is
 
-CodePal is a floating desktop monitoring panel for AI coding agents and IDE-integrated agent workflows.
+CodePal is a floating local operations panel for AI coding agents and IDE-integrated agent workflows.
 
-Its Phase 1 job is simple:
+Its shipped V1 foundation is simple:
 
 - collect session and activity signals from multiple tools
 - normalize them into one shared model
 - render them in a compact dashboard that stays readable during active work
 
 CodePal is intentionally stronger on visibility than on control.
+
+As of the v1.1.11 baseline, CodePal also has enough local history, usage, analytics, reporting, notification, terminal-navigation, and Provider Gateway infrastructure to support a second product layer: personal AI coding operations memory.
 
 ## Product Goal
 
@@ -23,6 +25,7 @@ CodePal reduces that fragmentation by providing:
 - one place to keep usage and quota context visible
 - one settings surface for integration diagnostics and local repair
 - one local provider gateway that can bridge supported desktop clients to third-party model providers without leaking provider tokens into those clients
+- one local memory layer that can turn observed sessions into reviews, daily digests, workflow-health signals, and redacted reports
 
 ## Phase 1 Boundary
 
@@ -32,7 +35,7 @@ The product focus is:
 
 - unified monitoring
 - clear session state visibility
-- bounded approval / structured-choice handling already present in the app
+- bounded structured actions already present in the app
 - low-noise timeline rendering
 
 Phase 1 is explicitly not trying to deliver:
@@ -48,18 +51,21 @@ Phase 1 now also includes:
 - native macOS notifications and sounds (v1.1.0)
 - session restore from SQLite history on app restart (v1.1.0)
 
-## Product Direction Beyond Phase 1
+## Product Direction Beyond V1
 
-Phase 1 defines the monitoring-first baseline, not the full product ceiling.
+The V1 monitoring-first baseline is not the product ceiling.
 
-The longer-term direction expands CodePal from a shared monitoring surface into a broader multi-agent operations layer with four major tracks:
+The next stage should expand CodePal from a live monitoring surface into a local AI coding operations memory layer:
 
-- stronger cross-agent control flows
-- outbound message delivery into agent surfaces where that becomes safely supportable
-- deeper observability across events, health, and reliability
-- shared capability abstractions that reduce one-off integration logic
+- session reviews that explain what happened during a run
+- daily digests that summarize agent work across tools
+- workflow-health signals such as waiting time, error recovery, context pressure, quota pressure, and session churn
+- observability-confidence labels that distinguish live, backfilled, estimated, inferred, degraded, and unsupported data
+- local report export with redaction controls
 
-These tracks are intentionally described separately from Phase 1 so the document can capture future direction without overstating current delivery.
+This direction keeps CodePal local-first and monitoring-first while giving users a reason to return after work finishes, not only when something is actively running or stuck.
+
+Team, billing, cloud sync, and broader control-loop expansion should remain behind proof of sustained individual value and an updated privacy model.
 
 ## Core User Experience
 
@@ -69,6 +75,13 @@ The main panel should answer four questions quickly:
 2. Which ones are running, waiting, completed, or broken?
 3. What just happened inside a session?
 4. Am I about to hit usage or quota limits?
+
+The next review / digest surfaces should answer:
+
+1. What happened across my AI coding work today?
+2. Which sessions completed, stalled, errored, or need follow-up?
+3. Where did I spend waiting time, quota, and context?
+4. How confident is CodePal in the data it is showing?
 
 The settings window should answer:
 
@@ -109,7 +122,20 @@ This is the current foundation:
 - usage and quota visibility
 - integration diagnostics
 
-### 2. Action Layer
+### 2. Work Memory And Workflow Health Layer
+
+This is the next product layer on top of the monitoring foundation:
+
+- session review
+- day digest
+- project / repository grouping where source paths are reliable
+- local report export with redaction controls
+- workflow-health signals for waiting time, error recovery, quota pressure, context pressure, and session churn
+- observability-confidence labels for live, backfilled, estimated, inferred, degraded, and unsupported signals
+
+This layer must not become developer scoring. Its purpose is to help an individual understand tool friction and workflow quality.
+
+### 3. Action Layer
 
 This layer covers structured actions that can safely round-trip through existing agent or hook semantics.
 
@@ -119,9 +145,9 @@ Current examples already present in bounded form:
 - `single_choice`
 - `multi_choice`
 
-Longer-term growth here means better cross-agent control-loop coverage, not renderer-only exceptions.
+Longer-term growth here should remain capability-gated and upstream-driven. CodePal should not restore Claude approval interception or pretend every agent exposes a reliable control loop.
 
-### 3. Messaging Layer
+### 4. Messaging Layer
 
 This layer is now partially delivered. Outbound CodePal -> agent message delivery works for terminals that expose a reliable text-injection channel:
 
@@ -133,7 +159,7 @@ This layer is now partially delivered. Outbound CodePal -> agent message deliver
 
 Delivery is capability-gated via `canReply(session)` — the composer is hidden for environments without a known channel. This is not freeform `text_input`; it is structured message delivery into a known terminal pane.
 
-### 4. Capability Unification Layer
+### 5. Capability Unification Layer
 
 This is where future shared abstractions such as ACP / `acpx` belong.
 
@@ -141,7 +167,7 @@ The purpose of this layer would be to unify common agent capabilities behind cle
 
 This layer is explicitly deferred from the current product baseline, but it remains part of the architectural direction.
 
-### 5. Provider Gateway Layer
+### 6. Provider Gateway Layer
 
 This layer lets CodePal act as a local provider gateway for desktop AI clients.
 
@@ -288,7 +314,9 @@ Invalid existing config should be reported, not silently overwritten.
 Use these documents in this order:
 
 1. `README.md` for repository-facing overview
-2. `docs/design-overview.md` for product and architecture framing
+2. `docs/architecture/design-overview.md` for product and architecture framing
 3. `docs/context/current-status.md` for implementation baseline, shipped behavior, and active gaps
+4. `docs/planning/roadmap-next.md` for forward-looking prioritization
+5. `docs/planning/research/deep-research-report.md` for the research source behind the next-stage roadmap
 
-Historical handoff notes under `docs/context/` are supporting context, not the primary design contract.
+Historical handoff notes under `docs/context/handoffs/` are supporting context, not the primary design contract.

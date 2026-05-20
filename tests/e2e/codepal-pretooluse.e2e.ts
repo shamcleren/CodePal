@@ -89,7 +89,7 @@ function startClaudeHookCli(
 //      stdout, never registers a pending approval card.
 //   2. Unreachable CodePal: same — exit 0, no stdout. CodePal-down must never
 //      block Claude with a non-zero exit.
-// See docs/release-notes-v1.1.3.zh-CN.md for the design rationale.
+// See docs/release/notes/release-notes-v1.1.3.zh-CN.md for the design rationale.
 
 test("PreToolUse: hook is a no-op against a reachable CodePal — exit 0, no stdout, no pending card", async () => {
   const collector = await startActionResponseCollector();

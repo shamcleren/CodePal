@@ -61,7 +61,7 @@
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
 - v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
-- v1.0.3 through v1.1.10 are all shipped. Current shipped baseline is **v1.1.10**.
+- v1.0.3 through v1.1.11 are all shipped. Current shipped baseline is **v1.1.11**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -73,6 +73,7 @@
 - v1.1.8 shipped: macOS release hotfix for the v1.1.7 app bundle signature failure, plus stricter packaged-artifact validation
 - v1.1.9 shipped: legacy analytics history migration startup fix, history-disabled startup fallback, and explicit startup failure logging
 - v1.1.10 shipped: analytics duplicate cleanup, Codex token snapshot dedupe, and Codex cached-input accounting fix
+- v1.1.11 shipped: Claude statusLine model-id enrichment, Codex timeline noise filtering, estimated cost per agent in usage strip, background hook startup fix
 
 ## What Already Exists
 
@@ -179,7 +180,8 @@
 - Release artifacts include dmg, zip, blockmap files, and `latest-mac.yml`
 - Signed / notarized distribution is the expected public release path when Apple credentials are configured
 - v1.0.3 release assets are treated as shipped; future release work should preserve updater metadata and signing / notarization verification rather than re-describing v1.0.3 as pending
-- Current v1.1.10 local unit / lint / build verification is green on 2026-05-19.
+- v1.1.10 local unit / lint / build verification was green on 2026-05-19.
+- v1.1.11 local unit / lint / build verification is green on 2026-05-20.
 
 ### Pending Action Loop
 
@@ -211,11 +213,18 @@ Same `sessionId` may have multiple pending actions at once; each keeps its own o
 - Tool identity should use logo-like markers or letter badges
 - `text_input` belongs to Phase 2, not Phase 1
 - “Do everything in the current window” is not a Phase 1 hard promise
+- Next-stage product work should prioritize personal AI work memory and workflow-health diagnostics over team analytics or new control loops
+- CodePal should not frame workflow-health data as individual developer productivity scoring
 
 ## Important Files
 
 - `README.md`: current repo-level overview and commands
 - `AGENTS.md`: session startup expectations and guardrails
+- `docs/architecture/design-overview.md`: product framing, architecture layers, and capability boundaries
+- `docs/planning/roadmap-next.md`: current next-stage roadmap
+- `docs/planning/research/deep-research-report.md`: research source for the roadmap update
+- `docs/release/notes/`: release notes consumed by release automation and GitHub releases
+- `docs/support/`: release-facing privacy, support-scope, and troubleshooting docs
 - `src/main/`: CodePal desktop main process, ingress, IPC Hub, session store
 - `src/main/gateway/`: local provider gateway, token store, health checks, Codex Responses adapter, and desktop client setup writers
 - `src/renderer/`: monitoring UI
@@ -283,28 +292,59 @@ npm run dist:mac
 - ACP / `acpx` common capability extraction
 - freeform `text_input`
 - moving control-loop UX back onto the main dashboard path
+- team sharing, cloud sync, billing, and broader control surfaces until the individual local workflow has proven sustained value
+- any productivity-scoring or team-ranking surface
 
-### v1.1.0–v1.1.10 Release Track
+### v1.1.0–v1.1.11 Release Track
 
-v1.1.0 through v1.1.10 are shipped. See individual release notes for details:
+v1.1.0 through v1.1.11 are shipped. See individual release notes for details:
 
-- `docs/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
-- `docs/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
-- `docs/release-notes-v1.1.2.md` — blocking-hook TTL fix, sendEventLine handshake
-- `docs/release-notes-v1.1.3.md` — removed Claude PreToolUse blocking hook, dashboard-only for Claude approval
-- `docs/release-notes-v1.1.4.md` — Qoder / Qwen / Factory agent support, dashboard polish
-- `docs/release-notes-v1.1.5.md` — WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix
-- `docs/release-notes-v1.1.6.md` — Analytics page, Provider Gateway settings, dashboard polish, Codex subexecution merge
-- `docs/release-notes-v1.1.7.md` — Claude / Codex usage backfill, analytics retention, readable Top Sessions
-- `docs/release-notes-v1.1.8.md` — macOS launch hotfix and stricter release artifact validation
-- `docs/release-notes-v1.1.9.md` — legacy analytics history migration startup fix and history-disabled startup fallback
-- `docs/release-notes-v1.1.10.md` — analytics duplicate cleanup, Codex token snapshot dedupe, and cached-input accounting fix
+- `docs/release/notes/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
+- `docs/release/notes/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
+- `docs/release/notes/release-notes-v1.1.2.md` — blocking-hook TTL fix, sendEventLine handshake
+- `docs/release/notes/release-notes-v1.1.3.md` — removed Claude PreToolUse blocking hook, dashboard-only for Claude approval
+- `docs/release/notes/release-notes-v1.1.4.md` — Qoder / Qwen / Factory agent support, dashboard polish
+- `docs/release/notes/release-notes-v1.1.5.md` — WezTerm / kitty / iTerm2 send-message and jump, updater double-spawn fix, notarization fix
+- `docs/release/notes/release-notes-v1.1.6.md` — Analytics page, Provider Gateway settings, dashboard polish, Codex subexecution merge
+- `docs/release/notes/release-notes-v1.1.7.md` — Claude / Codex usage backfill, analytics retention, readable Top Sessions
+- `docs/release/notes/release-notes-v1.1.8.md` — macOS launch hotfix and stricter release artifact validation
+- `docs/release/notes/release-notes-v1.1.9.md` — legacy analytics history migration startup fix and history-disabled startup fallback
+- `docs/release/notes/release-notes-v1.1.10.md` — analytics duplicate cleanup, Codex token snapshot dedupe, and cached-input accounting fix
+- `docs/release/notes/release-notes-v1.1.11.md` — Claude statusLine model-id enrichment, Codex timeline noise filtering, estimated cost per agent, background hook fix
+
+## Next Product Direction Handoff
+
+The next planning baseline comes from `docs/planning/research/deep-research-report.md` and is now captured in `docs/planning/roadmap-next.md`.
+
+The main product shift is:
+
+- from "more monitoring signals" to **personal AI coding operations memory**
+- from generic analytics to **workflow health** and **tool-friction diagnostics**
+- from hidden confidence assumptions to visible **observability-confidence labels**
+- from early team/billing work to proving sustained **individual local-first value**
+
+Recommended next implementation sequence:
+
+1. Design a session review surface that can summarize one completed run using existing history and usage data.
+2. Extend that into a day digest across agents, with clear follow-up and stalled-session signals.
+3. Add workflow-health metrics: waiting time, error recovery, session churn, context pressure, quota pressure, and observability coverage.
+4. Add report export with redaction controls before treating reviews or digests as shareable.
+5. Revisit ambient presence only after there are review / digest signals worth compressing into a smaller surface.
+6. Revisit team, billing, cloud sync, or remote analytics only after the privacy and support contracts are redesigned.
+
+Documentation handoff for future edits:
+
+- keep `docs/architecture/design-overview.md` focused on product and architecture boundaries
+- keep `docs/context/current-status.md` focused on shipped implementation state, validation, known gaps, and next handoff
+- keep `docs/planning/roadmap-next.md` focused on priorities and sequencing
+- put release notes in `docs/release/notes/`
+- put historical one-off notes under `docs/context/handoffs/` or `docs/archive/`, not at `docs/` root
 
 ## Next-Step Pointer
 
 For release-facing and forward-looking work, use:
 
-- `docs/context/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
-- `docs/release-notes-v1.1.10.md` for the v1.1.10 release
-- `docs/roadmap-next.md` for forward-looking prioritization (Tier 2 agent/terminal expansion, monitoring depth, product polish)
-- `docs/release-checklist.zh-CN.md` for the final operator-facing release checklist
+- `docs/context/handoffs/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
+- `docs/release/notes/release-notes-v1.1.11.md` for the v1.1.11 release
+- `docs/planning/roadmap-next.md` for personal AI work memory, workflow health, observability confidence, individual Pro sequencing, and team/cloud deferral
+- `docs/release/release-checklist.zh-CN.md` for the final operator-facing release checklist

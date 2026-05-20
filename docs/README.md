@@ -2,115 +2,64 @@
 
 Use this directory by purpose rather than trying to read everything in one pass.
 
-## If You Need The Current Baseline
+## Current Baseline
 
 - `docs/context/current-status.md`
-  Current shipped behavior, validation status, known gaps, and implementation baseline.
+  Current shipped behavior, validation status, known gaps, and next handoff.
+- `docs/architecture/design-overview.md`
+  Product framing, architecture layers, shipped capability boundaries, and next-stage design direction.
 
-## If You Need Release-Facing Material
+## Planning
 
-- `docs/release-notes-v1.1.10.md`
-  English release notes for the current v1.1.10 patch candidate. Keep this short enough for the in-app update panel.
-- `docs/release-notes-v1.1.10.zh-CN.md`
-  Chinese release notes for the current v1.1.10 patch candidate. Keep this short enough for the in-app update panel.
-- `docs/release-notes-v1.1.9.md`
-  English release notes for the v1.1.9 release.
-- `docs/release-notes-v1.1.9.zh-CN.md`
-  Chinese release notes for the v1.1.9 release.
-- `docs/release-notes-v1.1.8.md`
-  English release notes for the v1.1.8 release.
-- `docs/release-notes-v1.1.8.zh-CN.md`
-  Chinese release notes for the v1.1.8 release.
-- `docs/release-notes-v1.1.7.md`
-  English release notes for the v1.1.7 release.
-- `docs/release-notes-v1.1.7.zh-CN.md`
-  Chinese release notes for the v1.1.7 release.
-- `docs/release-notes-v1.1.6.md`
-  English release notes for the v1.1.6 release.
-- `docs/release-notes-v1.1.6.zh-CN.md`
-  Chinese release notes for the v1.1.6 release.
-- `docs/release-notes-v1.1.5.md`
-  English release notes for the v1.1.5 release.
-- `docs/release-notes-v1.1.5.zh-CN.md`
-  Chinese release notes for the v1.1.5 release.
-- `docs/release-notes-v1.0.3.md`
-  Historical English release notes for the v1.0.3 release.
-- `docs/release-notes-v1.0.3.zh-CN.md`
-  Historical Chinese release notes for the v1.0.3 release.
-- `docs/release-notes-v1.0.4.md`
-  English release notes draft for the v1.0.4 patch candidate.
-- `docs/release-notes-v1.0.4.zh-CN.md`
-  Chinese release notes draft for the v1.0.4 patch candidate.
-- `docs/release-notes-v1.0.5.md`
-  Historical English release notes draft for the v1.0.5 patch candidate.
-- `docs/release-notes-v1.0.5.zh-CN.md`
-  Historical Chinese release notes draft for the v1.0.5 patch candidate.
-- `docs/release-assets.md`
-  Asset checklist for README and GitHub Release screenshots / media.
-- `docs/release-assets.zh-CN.md`
-  Chinese version of the same asset checklist.
-- `docs/macos-signing-runbook.zh-CN.md`
-  Chinese maintainer runbook for macOS signing, notarization, and DMG `staple + validate`.
-- `docs/operational-readiness-v1.0.0.zh-CN.md`
-  Historical Chinese checklist from the original v1.0.0 readiness pass.
-- `docs/privacy-and-data.md`
-  English privacy and local data-boundary statement for the current monitoring-first release.
-- `docs/privacy-and-data.zh-CN.md`
-  Chinese version of the same privacy and data-boundary statement.
-- `docs/support-scope.md`
-  English support scope for the current operated v1 baseline.
-- `docs/support-scope.zh-CN.md`
-  Chinese version of the current support scope.
-- `docs/troubleshooting.md`
-  English troubleshooting and diagnostic-source guide for release users.
-- `docs/troubleshooting.zh-CN.md`
-  Chinese version of the troubleshooting guide.
+- `docs/planning/roadmap-next.md`
+  Current roadmap after the v1.1.11 baseline.
+- `docs/planning/roadmap-next.zh-CN.md`
+  Chinese version of the roadmap.
+- `docs/planning/research/deep-research-report.md`
+  Research source for the next-stage direction: local AI coding operations memory, workflow health, personal-first paid value, and team expansion boundaries.
 
-## If You Need Future Planning
+## Release
 
-- `docs/roadmap-next.md`
-  English planning notes for what should come after the current V1 release baseline.
-- `docs/roadmap-next.zh-CN.md`
-  Chinese planning notes for the same roadmap direction.
+- `docs/release/notes/`
+  GitHub Release and in-app update notes. Keep new version notes here as `release-notes-vX.Y.Z.md`; the release workflow reads this path.
+- `docs/release/release-checklist.zh-CN.md`
+  Operator checklist before publishing a release.
+- `docs/release/macos-signing-runbook.zh-CN.md`
+  macOS signing, notarization, DMG validation, and updater metadata runbook.
+- `docs/release/macos-developer-id-setup.zh-CN.md`
+  Developer ID certificate setup notes.
+- `docs/release/release-assets.md`
+  Screenshot and media checklist for README and GitHub Release material.
+- `docs/release/release-assets.zh-CN.md`
+  Chinese version of the release asset checklist.
 
-## If You Need This Guide In Chinese
+## Support
 
-- `docs/README.zh-CN.md`
-  Chinese version of this document map.
+- `docs/support/privacy-and-data.md`
+- `docs/support/privacy-and-data.zh-CN.md`
+- `docs/support/support-scope.md`
+- `docs/support/support-scope.zh-CN.md`
+- `docs/support/troubleshooting.md`
+- `docs/support/troubleshooting.zh-CN.md`
 
-## Context Notes
+These are release-facing user documents. Keep them aligned before changing telemetry, cloud sync, team sharing, outbound control, or data retention behavior.
 
-- `docs/context/*.md`
-  Short-lived handoff notes, blockers, and implementation context from specific work windows.
+## Context And Archive
 
-Use these when:
+- `docs/context/handoffs/`
+  Historical handoffs and narrow implementation notes. Read only when `current-status.md` points there or when continuing a specific old thread.
+- `docs/archive/`
+  Historical audits and readiness checklists that are no longer primary operating docs.
+- `docs/superpowers/specs/` and `docs/superpowers/plans/`
+  Working artifacts from previous implementation passes. Useful for intent recovery, but not the current product contract.
 
-- a filename is referenced from `current-status.md`
-- you are continuing a partially finished thread
-- you need the rationale behind a narrow decision
+## Assets
 
-Do not treat these files as the primary product spec unless `current-status.md` points you there.
-
-## Superpowers Working Docs
-
-- `docs/superpowers/specs/`
-  Design docs created during earlier design passes
-- `docs/superpowers/plans/`
-  Execution plans created from those design docs
-
-These are local working artifacts, not the current product contract. They can be useful for tracing why a change happened or recovering implementation intent, but they should not be treated as repository-facing baseline docs.
-
-## Visual Assets
-
-- `docs/icon.png`
-  App icon used in the repository README
+- `docs/assets/icon.png`
+  App icon used by the repository README.
+- `docs/assets/hero-main.png`
+  Primary dashboard screenshot for README and release-facing material.
 - `design/codepal-icon-redesign/`
-  Source artwork, previews, and export notes for the refreshed CodePal app and macOS menu bar icons
-- `docs/hero-main.png`
-  Primary dashboard screenshot for README and release-facing material
-- `docs/index.png`
-  Older main panel reference screenshot
-- `docs/setting.png`
-  Settings reference screenshot
+  Source artwork, previews, and export notes for the refreshed app and macOS menu bar icons.
 
-If you add more images, keep README-facing assets easy to identify and avoid leaving unnamed scratch files here.
+Avoid adding new top-level docs unless they are stable entry points. Prefer `architecture/`, `planning/`, `release/`, `support/`, `context/`, or `archive/`.

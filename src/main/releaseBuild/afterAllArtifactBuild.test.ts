@@ -217,7 +217,13 @@ test("notarizes zip and dmg, staples only dmg, and publishes refreshed updater m
   const appPath = expect.stringContaining(path.join("mac-arm64", "CodePal.app"));
   const dmgPath = expect.stringContaining(`CodePal-${releaseVersion}-arm64.dmg`);
   const zipPath = expect.stringContaining(`CodePal-${releaseVersion}-arm64.zip`);
-  const latestMacPath = path.resolve(process.cwd(), "docs", `release-notes-v${releaseVersion}.md`);
+  const latestMacPath = path.resolve(
+    process.cwd(),
+    "docs",
+    "release",
+    "notes",
+    `release-notes-v${releaseVersion}.md`,
+  );
   const xcrunCalls = spawnCalls.filter((call) => call.command === "xcrun").map((call) => call.args);
   expect(xcrunCalls).toEqual(
     expect.arrayContaining([

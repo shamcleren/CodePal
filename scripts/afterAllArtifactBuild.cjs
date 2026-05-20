@@ -351,7 +351,7 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   // markdown when present; otherwise publish without notes and let the
   // author edit the release on GitHub.
   const tag = `v${version}`;
-  const notesFile = path.join(__dirname, "..", "docs", `release-notes-${tag}.md`);
+  const notesFile = path.join(__dirname, "..", "docs", "release", "notes", `release-notes-${tag}.md`);
   const editArgs = ["release", "edit", tag, "--draft=false", "--latest"];
   if (fs.existsSync(notesFile)) {
     editArgs.push("--notes-file", notesFile);
