@@ -1383,6 +1383,32 @@ describe("createSessionStore", () => {
     expect(store.getSessions()[0]).not.toHaveProperty("externalApproval");
   });
 
+  it("clears externalApproval when a later non-waiting event omits externalApproval", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "s-external",
+      tool: "claude",
+      status: "waiting",
+      timestamp: 10,
+      externalApproval: {
+        kind: "approval_required",
+        title: "Claude permission required",
+        message: "Approve in Terminal",
+        sourceTool: "claude",
+        updatedAt: 10,
+      },
+    });
+    store.applyEvent({
+      sessionId: "s-external",
+      tool: "claude",
+      status: "running",
+      timestamp: 11,
+    });
+
+    expect(store.getSessions()[0]).not.toHaveProperty("externalApproval");
+  });
+
   it("accumulates two different actionIds on the same session in pendingActions", () => {
     const store = createSessionStore();
     const a1 = {

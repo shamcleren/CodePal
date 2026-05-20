@@ -40,7 +40,7 @@ export type SessionEvent = {
   activityItems?: ActivityItem[];
   /** 未出现则保留原值；null 表示清除 */
   pendingAction?: PendingAction | null;
-  /** 未出现则保留原值；null 表示清除 */
+  /** 未出现时仅在会话仍保持 waiting 时保留；null 表示清除 */
   externalApproval?: ExternalApprovalState | null;
   /** 与 pendingAction 同条事件可选携带；按 action upsert 时写入该 action 的运行时路由 */
   responseTarget?: ResponseTarget;
@@ -509,6 +509,22 @@ function shouldPreservePreviousStatus(
   }
 
   return false;
+}
+
+function resolveNextExternalApproval(
+  prev: InternalSessionRecord | undefined,
+  event: SessionEvent,
+  preservePreviousStatus: boolean,
+): ExternalApprovalState | undefined {
+  if (event.externalApproval !== undefined) {
+    return event.externalApproval === null ? undefined : event.externalApproval;
+  }
+
+  if (preservePreviousStatus) {
+    return prev?.externalApproval;
+  }
+
+  return event.status === "waiting" ? prev?.externalApproval : undefined;
 }
 
 function isJetBrainsTool(tool: string): boolean {
@@ -1153,13 +1169,6 @@ export function createSessionStore(options?: SessionStoreOptions) {
         nextClosedLedger.set(actionId, reason);
       }
 
-      const nextExternalApproval =
-        event.externalApproval === undefined
-          ? prev?.externalApproval
-          : event.externalApproval === null
-            ? undefined
-            : event.externalApproval;
-
       const nextActivityItems = mergeActivityItems(
         prev?.activityItems,
         event.tool === "codex"
@@ -1173,6 +1182,11 @@ export function createSessionStore(options?: SessionStoreOptions) {
         ? Math.max(prev?.lastUserMessageAt ?? Number.NEGATIVE_INFINITY, event.timestamp)
         : prev?.lastUserMessageAt;
       const preservePreviousStatus = shouldPreservePreviousStatus(prev, event);
+      const nextExternalApproval = resolveNextExternalApproval(
+        prev,
+        event,
+        preservePreviousStatus,
+      );
       const nextUpdatedAt = Math.max(prev?.updatedAt ?? Number.NEGATIVE_INFINITY, event.timestamp);
 
       const prevPendingSize = prev?.pendingById.size ?? 0;
