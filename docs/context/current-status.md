@@ -96,6 +96,8 @@
 - Existing pending-action/control code remains in-repo, but is no longer the primary user-facing path
 - Cursor remains available in-repo and continues to calibrate usage plus dashboard connection flow
 - GoLand and PyCharm now feed the shared monitoring/dashboard path through the shared CodeBuddy JetBrains plugin watcher/framework, including usage visibility; other JetBrains IDEs may reuse the same framework later, but they are outside the current V1 calibrated / accepted scope
+- Next-stage planning now treats CodePal as a free local AI coding control tower and operations memory for heavy AI-coding users, with Session Operations, personal work memory, workflow health, observability confidence, Attention Queue, community ecosystem, and optional shared ops visibility as additive roadmap tracks.
+- The near-term action layer should be user-triggered, capability-gated, preflighted, locally logged, and explicitly not an autonomous agent scheduler.
 
 ### Current Adapters
 
@@ -215,6 +217,12 @@ Same `sessionId` may have multiple pending actions at once; each keeps its own o
 - “Do everything in the current window” is not a Phase 1 hard promise
 - Next-stage product work should prioritize personal AI work memory and workflow-health diagnostics over team analytics or new control loops
 - CodePal should not frame workflow-health data as individual developer productivity scoring
+- The roadmap should be additive, not a replacement of existing valuable tracks: Personal AI Work Memory, Workflow Health, Observability Confidence, Ambient Presence, and Team Later remain in scope with updated boundaries.
+- CodePal's next positioning is "free local AI coding control tower and operations memory" rather than a paid dashboard, team admin surface, bossware product, or execution platform replacement.
+- Session Operations should cover user-triggered actions such as jump, structured message, resume, repair, export, mark outcome, close, and archive, but must stay capability-gated and locally logged.
+- Capability Manifest and local Action Broker are the preferred primitives for adding operations without renderer-side guessing or agent-scheduler framing.
+- Attention Queue should route user attention to waiting, idle, errored, expensive, quota-pressured, or repair-needed work; it should not automatically assign, execute, approve, merge, or switch agents.
+- The current product strategy is free user gathering and daily habit formation first; billing, cloud sync, and Pro / Team / Enterprise packaging should not drive near-term roadmap decisions.
 
 ## Important Files
 

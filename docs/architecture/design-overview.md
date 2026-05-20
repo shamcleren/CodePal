@@ -4,6 +4,8 @@
 
 CodePal is a floating local operations panel for AI coding agents and IDE-integrated agent workflows.
 
+The next product positioning is a free local AI coding control tower and operations memory for heavy AI-coding users. It should stay personal-first, local-first, and low-intrusion: a place to observe, review, diagnose, and trigger bounded user-confirmed actions, not a bossware dashboard, autonomous scheduler, or replacement execution platform.
+
 Its shipped V1 foundation is simple:
 
 - collect session and activity signals from multiple tools
@@ -12,7 +14,7 @@ Its shipped V1 foundation is simple:
 
 CodePal is intentionally stronger on visibility than on control.
 
-As of the v1.1.11 baseline, CodePal also has enough local history, usage, analytics, reporting, notification, terminal-navigation, and Provider Gateway infrastructure to support a second product layer: personal AI coding operations memory.
+As of the v1.1.11 baseline, CodePal also has enough local history, usage, analytics, reporting, notification, terminal-navigation, capability-gated message delivery, integration repair, and Provider Gateway infrastructure to support the next product layer: personal AI coding operations memory plus a bounded Session Operations Layer.
 
 ## Product Goal
 
@@ -26,6 +28,7 @@ CodePal reduces that fragmentation by providing:
 - one settings surface for integration diagnostics and local repair
 - one local provider gateway that can bridge supported desktop clients to third-party model providers without leaking provider tokens into those clients
 - one local memory layer that can turn observed sessions into reviews, daily digests, workflow-health signals, and redacted reports
+- one capability-gated local operations surface for user-triggered actions such as jump, structured message, resume, repair, export, and outcome marking
 
 ## Phase 1 Boundary
 
@@ -55,17 +58,20 @@ Phase 1 now also includes:
 
 The V1 monitoring-first baseline is not the product ceiling.
 
-The next stage should expand CodePal from a live monitoring surface into a local AI coding operations memory layer:
+The next stage should expand CodePal from a live monitoring surface into a free local AI coding control tower and operations memory layer:
 
+- a Session Operations Layer for user-triggered, capability-gated actions
 - session reviews that explain what happened during a run
 - daily digests that summarize agent work across tools
 - workflow-health signals such as waiting time, error recovery, context pressure, quota pressure, and session churn
+- an Attention Queue that routes the user's attention to sessions and integrations needing follow-up
 - observability-confidence labels that distinguish live, backfilled, estimated, inferred, degraded, and unsupported data
 - local report export with redaction controls
+- community-facing templates, schemas, adapter guidance, and sanitized examples that strengthen the free local ecosystem
 
 This direction keeps CodePal local-first and monitoring-first while giving users a reason to return after work finishes, not only when something is actively running or stuck.
 
-Team, billing, cloud sync, and broader control-loop expansion should remain behind proof of sustained individual value and an updated privacy model.
+Team sharing, billing, cloud sync, and broader control-loop expansion should remain behind proof of sustained free individual value and an updated privacy model. CodePal should not become a team productivity scoring surface or an autonomous agent scheduler.
 
 ## Core User Experience
 
@@ -82,6 +88,13 @@ The next review / digest surfaces should answer:
 2. Which sessions completed, stalled, errored, or need follow-up?
 3. Where did I spend waiting time, quota, and context?
 4. How confident is CodePal in the data it is showing?
+
+The next operations / attention surfaces should answer:
+
+1. Which sessions need my attention now?
+2. Which actions are available for this agent and terminal path?
+3. How confident is CodePal that this action will reach the intended target?
+4. What happened when I triggered this local action?
 
 The settings window should answer:
 
@@ -135,7 +148,33 @@ This is the next product layer on top of the monitoring foundation:
 
 This layer must not become developer scoring. Its purpose is to help an individual understand tool friction and workflow quality.
 
-### 3. Action Layer
+### 3. Session Operations Layer
+
+This is the next bounded action layer on top of monitoring and memory.
+
+It should cover user-triggered operations such as:
+
+- jump to terminal / IDE
+- open repository
+- send a structured follow-up message when a reliable terminal channel exists
+- resume a session when the adapter exposes a reliable path
+- repair an integration
+- export a review
+- mark a session outcome
+- close or archive a session
+
+Design constraints:
+
+- every action must be explicitly user-triggered
+- every action must run a preflight
+- every action must check adapter capability
+- every action must write a local action log
+- every best-effort action must show confidence and caveats
+- no action should be sent to a cloud service by default
+
+This layer may be called Session Operations Layer, Agent Operator, Local Agent Control Surface, or Attention Queue. It should not be framed as an agent scheduler.
+
+### 4. Existing Structured Action Layer
 
 This layer covers structured actions that can safely round-trip through existing agent or hook semantics.
 
@@ -147,7 +186,7 @@ Current examples already present in bounded form:
 
 Longer-term growth here should remain capability-gated and upstream-driven. CodePal should not restore Claude approval interception or pretend every agent exposes a reliable control loop.
 
-### 4. Messaging Layer
+### 5. Messaging Layer
 
 This layer is now partially delivered. Outbound CodePal -> agent message delivery works for terminals that expose a reliable text-injection channel:
 
@@ -159,7 +198,30 @@ This layer is now partially delivered. Outbound CodePal -> agent message deliver
 
 Delivery is capability-gated via `canReply(session)` — the composer is hidden for environments without a known channel. This is not freeform `text_input`; it is structured message delivery into a known terminal pane.
 
-### 5. Capability Unification Layer
+### 6. Capability Manifest And Action Broker
+
+Each adapter should expose a capability manifest so the renderer can show supported actions and confidence instead of hard-coding one UI for every agent.
+
+Candidate capabilities include:
+
+- `observeSession`
+- `observeUsage`
+- `jumpToSession`
+- `sendStructuredMessage`
+- `resumeSession`
+- `startSession`
+- `stopSession`
+- `repairIntegration`
+- `exportTranscript`
+- `estimateCost`
+- `observeQuota`
+- `observeContextPressure`
+
+Each capability should distinguish `supported`, `partial`, `best_effort`, and `unsupported`; include source and confidence metadata; and provide user-readable caveats and failure reasons.
+
+The local Action Broker should own preflight, execution, action logging, result reporting, and confidence display for operations such as `jump`, `send_message`, `resume`, `open_repo`, `repair_integration`, `export_review`, `mark_outcome`, `close_session`, and `archive_session`.
+
+### 7. Capability Unification Layer
 
 This is where future shared abstractions such as ACP / `acpx` belong.
 
@@ -167,7 +229,7 @@ The purpose of this layer would be to unify common agent capabilities behind cle
 
 This layer is explicitly deferred from the current product baseline, but it remains part of the architectural direction.
 
-### 6. Provider Gateway Layer
+### 8. Provider Gateway Layer
 
 This layer lets CodePal act as a local provider gateway for desktop AI clients.
 

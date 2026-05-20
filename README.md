@@ -74,9 +74,10 @@ Release builds are signed and notarized by Apple. No security prompt on open.
 
 ## What's Next
 
-- **Personal AI work memory**: session reviews, daily digests, and local reports that explain what happened across agents
-- **Workflow health**: waiting time, error recovery, quota pressure, context pressure, and observability-confidence signals
-- **Sustained value before scale**: prove the individual local-first workflow before adding team sharing, billing, or cloud sync
+- **Session Operations Layer**: capability-gated jump, message, resume, repair, export, outcome marking, and local action logs; always user-triggered, never an autonomous scheduler
+- **Personal AI work memory**: session review cards, daily digests, and local reports that explain what happened across agents
+- **Workflow health and confidence**: waiting time, error recovery, quota pressure, context pressure, abnormal cost, attention queue, and observability-confidence signals
+- **Free local control tower first**: make the individual local-first workflow valuable enough for daily use before revisiting shared ops visibility, billing, or cloud sync
 
 See [docs/planning/roadmap-next.md](docs/planning/roadmap-next.md) for the full planning direction.
 
