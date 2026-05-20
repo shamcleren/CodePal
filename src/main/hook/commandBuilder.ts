@@ -32,12 +32,14 @@ function quoteArg(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+export function resolveHookCliPath(context: HookCommandContext): string {
+  return path.join(context.appPath, "out", "main", "hook-cli.js");
+}
+
 function wrapElectronShellCommand(command: string): string {
-  // NODE_NO_WARNINGS=1 suppresses Node's ExperimentalWarning for node:sqlite
-  // (loaded by historyStore during main-process startup). Without it, the
-  // warning prints to stderr every hook invocation, which Claude Code
-  // surfaces as "Stop hook error: Failed with non-blocking status code".
-  return `/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 ${command}`;
+  // Run hook commands through Electron's Node mode so high-frequency agent
+  // hooks do not launch a GUI app process or flash the macOS Dock.
+  return `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 ${command}`;
 }
 
 function buildCodePalHookArgs(subcommand: string, eventSuffix?: string): string {
@@ -49,71 +51,48 @@ function buildCodePalHookArgs(subcommand: string, eventSuffix?: string): string 
 }
 
 function buildCodePalHookArgv(subcommand: string, context: HookCommandContext): string[] {
-  const executableArgs = context.packaged ? [context.execPath] : [context.execPath, context.appPath];
+  const executableArgs = [context.execPath, resolveHookCliPath(context)];
   return [...executableArgs, "--codepal-hook", subcommand];
 }
 
-export function buildCursorHookCommand(context: HookCommandContext): string {
-  const hookArgs = buildCodePalHookArgs("cursor");
-  if (context.packaged) {
-    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
-  }
+function buildCodePalHookCommand(
+  subcommand: string,
+  context: HookCommandContext,
+  eventSuffix?: string,
+): string {
   return wrapElectronShellCommand(
-    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
+    `${quoteArg(context.execPath)} ${quoteArg(resolveHookCliPath(context))} ${buildCodePalHookArgs(
+      subcommand,
+      eventSuffix,
+    )}`,
   );
+}
+
+export function buildCursorHookCommand(context: HookCommandContext): string {
+  return buildCodePalHookCommand("cursor", context);
 }
 
 export function buildCursorLifecycleHookCommand(
   eventName: string,
   context: HookCommandContext,
 ): string {
-  const hookArgs = buildCodePalHookArgs("cursor-lifecycle", eventName);
-  if (context.packaged) {
-    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
-  }
-  return wrapElectronShellCommand(
-    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
-  );
+  return buildCodePalHookCommand("cursor-lifecycle", context, eventName);
 }
 
 export function buildCodeBuddyHookCommand(context: HookCommandContext): string {
-  const hookArgs = buildCodePalHookArgs("codebuddy");
-  if (context.packaged) {
-    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
-  }
-  return wrapElectronShellCommand(
-    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
-  );
+  return buildCodePalHookCommand("codebuddy", context);
 }
 
 export function buildClaudeHookCommand(context: HookCommandContext): string {
-  const hookArgs = buildCodePalHookArgs("claude");
-  if (context.packaged) {
-    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
-  }
-  return wrapElectronShellCommand(
-    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
-  );
+  return buildCodePalHookCommand("claude", context);
 }
 
 export function buildClaudeStatusLineCommand(context: HookCommandContext): string {
-  const hookArgs = buildCodePalHookArgs("claude-statusline");
-  if (context.packaged) {
-    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
-  }
-  return wrapElectronShellCommand(
-    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
-  );
+  return buildCodePalHookCommand("claude-statusline", context);
 }
 
 export function buildCodexHookCommand(context: HookCommandContext): string {
-  const hookArgs = buildCodePalHookArgs("codex");
-  if (context.packaged) {
-    return wrapElectronShellCommand(`${quoteArg(context.execPath)} ${hookArgs}`);
-  }
-  return wrapElectronShellCommand(
-    `${quoteArg(context.execPath)} ${quoteArg(context.appPath)} ${hookArgs}`,
-  );
+  return buildCodePalHookCommand("codex", context);
 }
 
 export function buildCodexHookArgv(context: HookCommandContext): string[] {

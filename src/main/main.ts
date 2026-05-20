@@ -57,6 +57,10 @@ import { createNotificationService } from "./notification/notificationService";
 import type { NotificationService } from "./notification/notificationService";
 import { createSessionJumpService } from "./jump/sessionJumpService";
 import { createTerminalTextSender } from "./terminal/terminalTextSender";
+import {
+  applyAccessoryActivationPolicy,
+  shouldUseAccessoryActivationPolicy,
+} from "./window/nonInteractiveWindowPolicy";
 
 let notificationServiceRef: NotificationService | null = null;
 const sessionJumpService = createSessionJumpService();
@@ -95,6 +99,12 @@ let providerGatewayListener: ProviderGatewayListenerInput = {
 };
 let providerGatewayHealthCheck: ProviderGatewayHealthCheckSummary | null = null;
 const debugCodex = process.env.CODEPAL_DEBUG_CODEX === "1";
+const silentE2E = process.env.CODEPAL_E2E_SILENT === "1";
+const useAccessoryActivationPolicy = shouldUseAccessoryActivationPolicy({
+  argv: process.argv,
+  env: process.env,
+  platform: process.platform,
+});
 
 // Hook 入口已并入应用可执行文件；这里只保留一个可推导 legacy 路径形态的根目录。
 function resolveHookScriptsRoot() {
@@ -121,6 +131,9 @@ function broadcastUsageOverview() {
   const win = mainWindow;
   if (!win || win.isDestroyed()) return;
   const payload: UsageOverview = usageStore.getOverview();
+  if (historyStore) {
+    payload.pricing = historyStore.getModelPricing();
+  }
   win.webContents.send("codepal:usage-overview", payload);
 }
 
@@ -475,8 +488,16 @@ function getOrCreateMainWindow(): BrowserWindow {
   win.on("closed", () => {
     mainWindow = null;
   });
-  win.once("ready-to-show", () => win.show());
+  if (silentE2E) {
+    win.setSkipTaskbar(true);
+  } else {
+    win.once("ready-to-show", () => win.show());
+  }
   return win;
+}
+
+function applySilentE2EWindowPolicy() {
+  applyAccessoryActivationPolicy(app, useAccessoryActivationPolicy);
 }
 
 function resolveUsageBackfillDelayMs() {
@@ -713,6 +734,8 @@ async function startClaudeDesktopProviderGateway(
   console.error("[CodePal Gateway] server error:", result.error.message);
 }
 
+applyAccessoryActivationPolicy(app, useAccessoryActivationPolicy);
+
 void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, process.env)
   .then((hookExitCode) => {
     if (hookExitCode !== HOOK_CLI_NOT_HOOK_MODE) {
@@ -775,7 +798,10 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       }
     });
 
+    applySilentE2EWindowPolicy();
+
     void app.whenReady().then(async () => {
+      applySilentE2EWindowPolicy();
       const homeDir = process.env.CODEPAL_HOME_DIR?.trim() || app.getPath("home");
       const templateSettingsPath = app.isPackaged
         ? path.join(app.getAppPath(), "config", "settings.template.yaml")
@@ -864,6 +890,17 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         execPath: process.execPath,
         appPath: resolvedAppPath,
       });
+      try {
+        const migratedIntegrations = integrationService.autoMigrateExistingCodePalHooks();
+        if (migratedIntegrations.length > 0) {
+          console.log(
+            "[CodePal Integrations] migrated existing hook config(s):",
+            migratedIntegrations.map((item) => item.agentId).join(", "),
+          );
+        }
+      } catch (error) {
+        console.error("[CodePal Integrations] failed to migrate existing hook config:", error);
+      }
       const updateService = createUpdateService({
         isPackaged: app.isPackaged,
         currentVersion: app.getVersion(),

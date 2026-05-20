@@ -11,27 +11,34 @@ import {
   normalizeAppPath,
 } from "./commandBuilder";
 
+const DEV_EXEC = "/path/to/Electron";
+const DEV_APP = "/path/to/repo";
+const DEV_HOOK_CLI = `${DEV_APP}/out/main/hook-cli.js`;
+const PACKAGED_EXEC = "/Applications/CodePal.app/Contents/MacOS/CodePal";
+const PACKAGED_APP = "/Applications/CodePal.app/Contents/Resources/app.asar";
+const PACKAGED_HOOK_CLI = `${PACKAGED_APP}/out/main/hook-cli.js`;
+
 describe("commandBuilder", () => {
   describe("buildCursorLifecycleHookCommand", () => {
     it("builds dev-mode command with execPath, appPath, and event name", () => {
       const command = buildCursorLifecycleHookCommand("sessionStart", {
         packaged: false,
-        execPath: "/path/to/Electron",
-        appPath: "/path/to/repo",
+        execPath: DEV_EXEC,
+        appPath: DEV_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook cursor-lifecycle sessionStart',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${DEV_EXEC}" "${DEV_HOOK_CLI}" --codepal-hook cursor-lifecycle sessionStart`,
       );
     });
 
     it("builds packaged command with execPath only", () => {
       const command = buildCursorLifecycleHookCommand("stop", {
         packaged: true,
-        execPath: "/Applications/CodePal.app/Contents/MacOS/CodePal",
-        appPath: "/ignored",
+        execPath: PACKAGED_EXEC,
+        appPath: PACKAGED_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook cursor-lifecycle stop',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${PACKAGED_EXEC}" "${PACKAGED_HOOK_CLI}" --codepal-hook cursor-lifecycle stop`,
       );
     });
   });
@@ -40,22 +47,22 @@ describe("commandBuilder", () => {
     it("builds dev-mode codebuddy hook command", () => {
       const command = buildCodeBuddyHookCommand({
         packaged: false,
-        execPath: "/path/to/Electron",
-        appPath: "/path/to/repo",
+        execPath: DEV_EXEC,
+        appPath: DEV_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook codebuddy',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${DEV_EXEC}" "${DEV_HOOK_CLI}" --codepal-hook codebuddy`,
       );
     });
 
     it("builds packaged codebuddy hook command", () => {
       const command = buildCodeBuddyHookCommand({
         packaged: true,
-        execPath: "/Applications/CodePal.app/Contents/MacOS/CodePal",
-        appPath: "/ignored",
+        execPath: PACKAGED_EXEC,
+        appPath: PACKAGED_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook codebuddy',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${PACKAGED_EXEC}" "${PACKAGED_HOOK_CLI}" --codepal-hook codebuddy`,
       );
     });
   });
@@ -64,22 +71,22 @@ describe("commandBuilder", () => {
     it("builds dev-mode claude hook command", () => {
       const command = buildClaudeHookCommand({
         packaged: false,
-        execPath: "/path/to/Electron",
-        appPath: "/path/to/repo",
+        execPath: DEV_EXEC,
+        appPath: DEV_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook claude',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${DEV_EXEC}" "${DEV_HOOK_CLI}" --codepal-hook claude`,
       );
     });
 
     it("builds packaged claude hook command", () => {
       const command = buildClaudeHookCommand({
         packaged: true,
-        execPath: "/Applications/CodePal.app/Contents/MacOS/CodePal",
-        appPath: "/ignored",
+        execPath: PACKAGED_EXEC,
+        appPath: PACKAGED_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${PACKAGED_EXEC}" "${PACKAGED_HOOK_CLI}" --codepal-hook claude`,
       );
     });
   });
@@ -88,22 +95,22 @@ describe("commandBuilder", () => {
     it("builds dev-mode claude statusline command", () => {
       const command = buildClaudeStatusLineCommand({
         packaged: false,
-        execPath: "/path/to/Electron",
-        appPath: "/path/to/repo",
+        execPath: DEV_EXEC,
+        appPath: DEV_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook claude-statusline',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${DEV_EXEC}" "${DEV_HOOK_CLI}" --codepal-hook claude-statusline`,
       );
     });
 
     it("builds packaged claude statusline command", () => {
       const command = buildClaudeStatusLineCommand({
         packaged: true,
-        execPath: "/Applications/CodePal.app/Contents/MacOS/CodePal",
-        appPath: "/ignored",
+        execPath: PACKAGED_EXEC,
+        appPath: PACKAGED_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook claude-statusline',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${PACKAGED_EXEC}" "${PACKAGED_HOOK_CLI}" --codepal-hook claude-statusline`,
       );
     });
   });
@@ -112,22 +119,22 @@ describe("commandBuilder", () => {
     it("builds dev-mode codex hook command", () => {
       const command = buildCodexHookCommand({
         packaged: false,
-        execPath: "/path/to/Electron",
-        appPath: "/path/to/repo",
+        execPath: DEV_EXEC,
+        appPath: DEV_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook codex',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${DEV_EXEC}" "${DEV_HOOK_CLI}" --codepal-hook codex`,
       );
     });
 
     it("builds packaged codex hook command", () => {
       const command = buildCodexHookCommand({
         packaged: true,
-        execPath: "/Applications/CodePal.app/Contents/MacOS/CodePal",
-        appPath: "/ignored",
+        execPath: PACKAGED_EXEC,
+        appPath: PACKAGED_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook codex',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${PACKAGED_EXEC}" "${PACKAGED_HOOK_CLI}" --codepal-hook codex`,
       );
     });
   });
@@ -137,24 +144,20 @@ describe("commandBuilder", () => {
       expect(
         buildCodexHookArgv({
           packaged: false,
-          execPath: "/path/to/Electron",
-          appPath: "/path/to/repo",
+          execPath: DEV_EXEC,
+          appPath: DEV_APP,
         }),
-      ).toEqual(["/path/to/Electron", "/path/to/repo", "--codepal-hook", "codex"]);
+      ).toEqual([DEV_EXEC, DEV_HOOK_CLI, "--codepal-hook", "codex"]);
     });
 
     it("builds packaged argv for config.toml notify", () => {
       expect(
         buildCodexHookArgv({
           packaged: true,
-          execPath: "/Applications/CodePal.app/Contents/MacOS/CodePal",
-          appPath: "/ignored",
+          execPath: PACKAGED_EXEC,
+          appPath: PACKAGED_APP,
         }),
-      ).toEqual([
-        "/Applications/CodePal.app/Contents/MacOS/CodePal",
-        "--codepal-hook",
-        "codex",
-      ]);
+      ).toEqual([PACKAGED_EXEC, PACKAGED_HOOK_CLI, "--codepal-hook", "codex"]);
     });
   });
 
@@ -162,22 +165,22 @@ describe("commandBuilder", () => {
     it("builds dev-mode cursor hook command", () => {
       const command = buildCursorHookCommand({
         packaged: false,
-        execPath: "/path/to/Electron",
-        appPath: "/path/to/repo",
+        execPath: DEV_EXEC,
+        appPath: DEV_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/path/to/Electron" "/path/to/repo" --codepal-hook cursor',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${DEV_EXEC}" "${DEV_HOOK_CLI}" --codepal-hook cursor`,
       );
     });
 
     it("builds packaged cursor hook command", () => {
       const command = buildCursorHookCommand({
         packaged: true,
-        execPath: "/Applications/CodePal.app/Contents/MacOS/CodePal",
-        appPath: "/ignored",
+        execPath: PACKAGED_EXEC,
+        appPath: PACKAGED_APP,
       });
       expect(command).toBe(
-        '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Applications/CodePal.app/Contents/MacOS/CodePal" --codepal-hook cursor',
+        `/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "${PACKAGED_EXEC}" "${PACKAGED_HOOK_CLI}" --codepal-hook cursor`,
       );
     });
   });
@@ -223,12 +226,12 @@ describe("commandBuilder", () => {
       );
       expect(
         detectLegacyHookCommand(
-          '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/Electron" "/repo" --codepal-hook cursor',
+          '/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "/Electron" "/repo/out/main/hook-cli.js" --codepal-hook cursor',
         ),
       ).toBe(false);
       expect(
         detectLegacyHookCommand(
-          '/usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "/CodePal" --codepal-hook codebuddy',
+          '/usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "/CodePal" "/app.asar/out/main/hook-cli.js" --codepal-hook codebuddy',
         ),
       ).toBe(false);
     });

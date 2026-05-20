@@ -96,6 +96,7 @@ export async function launchCodePal(
       HOME: resolvedHomeDir,
       USERPROFILE: resolvedHomeDir,
       CODEPAL_HOME_DIR: resolvedHomeDir,
+      CODEPAL_E2E_SILENT: "1",
       ...options.extraEnv,
       CODEPAL_IPC_HOST: ipcTarget.host,
       CODEPAL_IPC_PORT: String(ipcTarget.port),

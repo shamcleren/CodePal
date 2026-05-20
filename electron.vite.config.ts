@@ -7,6 +7,14 @@ const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        input: {
+          main: resolve(projectRoot, "src/main/main.ts"),
+          "hook-cli": resolve(projectRoot, "src/main/hook-cli.ts"),
+        },
+      },
+    },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],

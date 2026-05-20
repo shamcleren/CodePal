@@ -210,16 +210,10 @@ function commandTargetsCurrentCodePal(
   if (expectedWrapperCommand && isWrapperCommand(command, expectedWrapperCommand)) {
     return true;
   }
-  if (!detectCodePalHookCommand(command, hookName)) {
-    return false;
-  }
-  if (!command.includes(hookCtx.execPath)) {
-    return false;
-  }
-  if (!hookCtx.packaged && !command.includes(hookCtx.appPath)) {
-    return false;
-  }
-  return true;
+  void command;
+  void hookName;
+  void hookCtx;
+  return false;
 }
 
 function cursorHooksEmpty(hooks: Record<string, unknown>, eventNames: string[]): boolean {
@@ -1883,6 +1877,45 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
         messageParams: { label: diagnostics.label },
         diagnostics,
       };
+    },
+    autoMigrateExistingCodePalHooks(): IntegrationInstallResult[] {
+      const results: IntegrationInstallResult[] = [];
+      for (const agentId of [
+        "claude",
+        "cursor",
+        "codebuddy",
+        "codex",
+        "qoder",
+        "qwen",
+        "factory",
+      ] as const) {
+        const diagnostics = getAgentDiagnostics(agentId);
+        const desiredWrapperCommand = agentId === "cursor" ? buildWrapperCommand(options.homeDir, "cursor") : "";
+        const forkDef = claudeCompatAgentDef(agentId);
+        const isFork = forkDef !== undefined && forkDef.id !== "claude";
+        const forkDirExists =
+          !isFork || (forkDef ? fs.existsSync(path.join(options.homeDir, forkDef.configDir)) : false);
+        const shouldMigrate =
+          diagnostics.supported &&
+          forkDirExists &&
+          (diagnostics.health === "legacy_path" ||
+            (agentId === "claude" &&
+              (isClaudeAutoMigrateCandidate(options.homeDir) ||
+                claudeConfigNeedsCleanup(options.homeDir, CLAUDE_DEF, getProviderGatewayBaseUrl()) ||
+                claudeDeprecatedEntriesPresent(options.homeDir))) ||
+            (isFork &&
+              forkDef &&
+              claudeConfigNeedsCleanup(options.homeDir, forkDef, getProviderGatewayBaseUrl())) ||
+            (agentId === "cursor" &&
+              cursorConfigNeedsCleanup(options.homeDir, desiredWrapperCommand)) ||
+            (agentId === "codebuddy" && codeBuddyConfigNeedsCleanup(options.homeDir)) ||
+            (agentId === "codex" && codexConfigNeedsCleanup(options.homeDir)));
+        if (!shouldMigrate) {
+          continue;
+        }
+        results.push(this.installHooks(agentId));
+      }
+      return results;
     },
     autoInstallMissingSupportedHooks(): IntegrationInstallResult[] {
       const results: IntegrationInstallResult[] = [];

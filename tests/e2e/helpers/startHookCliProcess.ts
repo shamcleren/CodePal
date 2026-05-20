@@ -9,8 +9,8 @@ export function resolveElectronExecutable(): string {
   return require("electron") as string;
 }
 
-export function codePalMainJs(repoRoot: string): string {
-  return path.join(repoRoot, "out", "main", "main.js");
+export function codePalHookCliJs(repoRoot: string): string {
+  return path.join(repoRoot, "out", "main", "hook-cli.js");
 }
 
 export type StartBlockingHookOptions = {
@@ -62,12 +62,14 @@ function collectFirstStdoutLine(child: ChildProcess): Promise<string> {
 export function startBlockingHookCliProcess(
   options: StartBlockingHookOptions,
 ): BlockingHookHandle {
-  const mainJs = codePalMainJs(options.repoRoot);
-  const child = spawn(resolveElectronExecutable(), [mainJs, "--codepal-hook", "blocking-hook"], {
+  const hookCliJs = codePalHookCliJs(options.repoRoot);
+  const child = spawn(resolveElectronExecutable(), [hookCliJs, "--codepal-hook", "blocking-hook"], {
     cwd: options.repoRoot,
     env: {
       ...process.env,
       ...options.env,
+      ELECTRON_RUN_AS_NODE: "1",
+      NODE_NO_WARNINGS: "1",
       CODEPAL_SOCKET_PATH: "",
       CODEPAL_IPC_HOST: options.ipcTarget.host,
       CODEPAL_IPC_PORT: String(options.ipcTarget.port),

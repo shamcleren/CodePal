@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { launchCodePal } from "./helpers/launchCodePal";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
 import { canListen } from "./helpers/probeNetwork";
-import { codePalMainJs, resolveElectronExecutable } from "./helpers/startHookCliProcess";
+import { codePalHookCliJs, resolveElectronExecutable } from "./helpers/startHookCliProcess";
 
 test.beforeEach(async () => {
   if (!(await canListen())) test.skip();
@@ -26,11 +26,13 @@ function startClaudeHookCli(
   ipcTarget: { host: string; port: number },
   extraEnv?: Record<string, string>,
 ): HookCliHandle {
-  const mainJs = codePalMainJs(repoRoot);
-  const child = spawn(resolveElectronExecutable(), [mainJs, "--codepal-hook", "claude"], {
+  const hookCliJs = codePalHookCliJs(repoRoot);
+  const child = spawn(resolveElectronExecutable(), [hookCliJs, "--codepal-hook", "claude"], {
     cwd: repoRoot,
     env: {
       ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
+      NODE_NO_WARNINGS: "1",
       CODEPAL_SOCKET_PATH: "",
       CODEPAL_IPC_HOST: ipcTarget.host,
       CODEPAL_IPC_PORT: String(ipcTarget.port),

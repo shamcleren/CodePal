@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { HookCommandContext } from "../hook/commandBuilder";
+import { resolveHookCliPath, type HookCommandContext } from "../hook/commandBuilder";
 
 export type WrappedAgentKind =
   | "cursor"
@@ -59,6 +59,7 @@ function wrapperScriptBody(kind: WrappedAgentKind, runtimeEnvPath: string): stri
     'CODEPAL_PACKAGED="${CODEPAL_PACKAGED:-}"',
     'CODEPAL_EXEC_PATH="${CODEPAL_EXEC_PATH:-}"',
     'CODEPAL_APP_PATH="${CODEPAL_APP_PATH:-}"',
+    'CODEPAL_HOOK_CLI_PATH="${CODEPAL_HOOK_CLI_PATH:-}"',
     'if [ -f "$RUNTIME_ENV" ]; then',
     '  . "$RUNTIME_ENV"',
     "fi",
@@ -79,19 +80,24 @@ function wrapperScriptBody(kind: WrappedAgentKind, runtimeEnvPath: string): stri
     'CODEPAL_TERM_ZELLIJ="${ZELLIJ:-}"',
     'CODEPAL_TERM_WARP="${WARP_IS_LOCAL_SHELL_SESSION:-}"',
     "export CODEPAL_TERM_TTY CODEPAL_TERM_APP CODEPAL_TERM_ITERM_SESSION_ID CODEPAL_TERM_TMUX CODEPAL_TERM_TMUX_PANE CODEPAL_TERM_GHOSTTY_RESOURCES_DIR CODEPAL_TERM_KITTY_WINDOW_ID CODEPAL_TERM_WEZTERM_PANE CODEPAL_TERM_ZELLIJ CODEPAL_TERM_WARP",
-    // Packaged mode: execPath alone is enough
-    'if [ "$CODEPAL_PACKAGED" = "1" ] && [ -n "$CODEPAL_EXEC_PATH" ] && [ -x "$CODEPAL_EXEC_PATH" ]; then',
-    `  exec /usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "$CODEPAL_EXEC_PATH" --codepal-hook ${kind}`,
-    "fi",
     // Dev mode: appPath must be a valid Electron app root (has package.json).
-    // If out/main was written, normalize to project root.
-    'if [ "$CODEPAL_PACKAGED" != "1" ] && [ -n "$CODEPAL_EXEC_PATH" ] && [ -x "$CODEPAL_EXEC_PATH" ] && [ -n "$CODEPAL_APP_PATH" ]; then',
+    // If out/main was written, normalize to project root. Packaged mode may
+    // point into app.asar, so shell file checks cannot validate hook-cli there.
+    'if [ -n "$CODEPAL_APP_PATH" ]; then',
     '  case "$CODEPAL_APP_PATH" in',
     "    */out/main) CODEPAL_APP_PATH=$(cd \"$CODEPAL_APP_PATH/../..\" 2>/dev/null && pwd) ;;",
     "  esac",
-    '  if [ -f "$CODEPAL_APP_PATH/package.json" ]; then',
-    `    exec /usr/bin/env -u ELECTRON_RUN_AS_NODE NODE_NO_WARNINGS=1 "$CODEPAL_EXEC_PATH" "$CODEPAL_APP_PATH" --codepal-hook ${kind}`,
+    "fi",
+    'if [ -z "$CODEPAL_HOOK_CLI_PATH" ] && [ -n "$CODEPAL_APP_PATH" ]; then',
+    '  CODEPAL_HOOK_CLI_PATH="$CODEPAL_APP_PATH/out/main/hook-cli.js"',
+    "fi",
+    'if [ "$CODEPAL_PACKAGED" != "1" ]; then',
+    '  if [ -z "$CODEPAL_APP_PATH" ] || [ ! -f "$CODEPAL_APP_PATH/package.json" ] || [ ! -f "$CODEPAL_HOOK_CLI_PATH" ]; then',
+    "    exit 0",
     "  fi",
+    "fi",
+    'if [ -n "$CODEPAL_EXEC_PATH" ] && [ -x "$CODEPAL_EXEC_PATH" ] && [ -n "$CODEPAL_HOOK_CLI_PATH" ]; then',
+    `  exec /usr/bin/env ELECTRON_RUN_AS_NODE=1 NODE_NO_WARNINGS=1 "$CODEPAL_EXEC_PATH" "$CODEPAL_HOOK_CLI_PATH" --codepal-hook ${kind}`,
     "fi",
     // No valid path found — exit silently so the agent falls back to its native flow.
     "exit 0",
@@ -104,6 +110,7 @@ function runtimeEnvBody(context: HookCommandContext): string {
     `CODEPAL_PACKAGED=${context.packaged ? "1" : "0"}`,
     `CODEPAL_EXEC_PATH=${shellSingleQuote(context.execPath)}`,
     `CODEPAL_APP_PATH=${shellSingleQuote(context.appPath)}`,
+    `CODEPAL_HOOK_CLI_PATH=${shellSingleQuote(resolveHookCliPath(context))}`,
     "",
   ].join("\n");
 }

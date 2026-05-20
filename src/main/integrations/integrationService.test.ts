@@ -878,7 +878,7 @@ describe("createIntegrationService", () => {
     });
   });
 
-  it("treats recognizable modern CodePal Cursor hook commands as active even when the wrapper differs", () => {
+  it("requires wrapper-based Cursor hooks instead of direct GUI app hook commands", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
     const configPath = join(homeDir, ".cursor", "hooks.json");
     mkdirSync(dirname(configPath), { recursive: true });
@@ -917,9 +917,9 @@ describe("createIntegrationService", () => {
 
     const cursor = service.getDiagnostics().agents.find((agent) => agent.id === "cursor");
     expect(cursor).toMatchObject({
-      health: "active",
-      hookInstalled: true,
-      healthLabel: "正常",
+      health: "repair_needed",
+      hookInstalled: false,
+      statusMessage: "Cursor hooks.json 与当前 CodePal 要求不一致",
     });
   });
 
