@@ -10,8 +10,8 @@ import type {
   SessionHistoryPage,
   SessionHistoryPageRequest,
 } from "../../shared/historyTypes";
-import type { SessionRecord } from "../../shared/sessionTypes";
-import type { SessionJumpTarget } from "../../shared/sessionTypes";
+import type { SessionRecord, SessionJumpTarget } from "../../shared/sessionTypes";
+import type { SessionCapabilityManifest, SessionActionType } from "../../shared/capabilityTypes";
 import type { AppUpdateState } from "../../shared/updateTypes";
 import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry } from "../../shared/usageTypes";
 import type {
@@ -56,8 +56,8 @@ contextBridge.exposeInMainWorld("codepal", {
   getSessionStats(startMs: number, endMs: number) {
     return ipcRenderer.invoke("codepal:get-session-stats", startMs, endMs) as Promise<SessionStatsEntry[]>;
   },
-  generateHtmlReport(startMs: number, endMs: number) {
-    return ipcRenderer.invoke("codepal:generate-html-report", startMs, endMs) as Promise<string>;
+  generateHtmlReport(startMs: number, endMs: number, redactionOptions?: { redactSessionTitles?: boolean; redactModelNames?: boolean }) {
+    return ipcRenderer.invoke("codepal:generate-html-report", startMs, endMs, redactionOptions) as Promise<string>;
   },
   getAppSettings() {
     return ipcRenderer.invoke("codepal:get-app-settings") as Promise<AppSettings>;
@@ -156,6 +156,12 @@ contextBridge.exposeInMainWorld("codepal", {
   clearHistoryStore() {
     return ipcRenderer.invoke("codepal:clear-history-store") as Promise<HistoryDiagnostics>;
   },
+  getSessionTokenUsage(sessionId: string) {
+    return ipcRenderer.invoke(
+      "codepal:get-session-token-usage",
+      sessionId,
+    ) as Promise<import("../../shared/usageTypes").SessionTokenUsageResult>;
+  },
   installIntegrationHooks(agentId: IntegrationAgentId) {
     return ipcRenderer.invoke("codepal:install-integration-hooks", {
       agentId,
@@ -233,5 +239,20 @@ contextBridge.exposeInMainWorld("codepal", {
     return () => {
       ipcRenderer.removeListener(channel, listener);
     };
+  },
+  getSessionCapabilities(sessionId: string) {
+    return ipcRenderer.invoke(
+      "codepal:get-session-capabilities",
+      sessionId,
+    ) as Promise<SessionCapabilityManifest | null>;
+  },
+  executeSessionAction(sessionId: string, actionType: SessionActionType, payload?: { text?: string }) {
+    return ipcRenderer.invoke(
+      "codepal:execute-session-action",
+      { sessionId, actionType, payload },
+    ) as Promise<{ ok: boolean; action: string; sessionId: string; error?: string }>;
+  },
+  deleteSession(sessionId: string) {
+    return ipcRenderer.invoke("codepal:delete-session", sessionId) as Promise<boolean>;
   },
 });

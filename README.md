@@ -45,8 +45,10 @@ CodePal is a dashboard, not a middleman. The agents you already use stay in char
 
 - **Unified session view**: active, waiting, completed, and errored sessions across all agents in one list
 - **Focused activity timeline**: see what each agent is doing — replies, tool calls, and status changes — without the noise
+- **Per-session usage footer**: expanded sessions can show requests, input, output, cache, and estimated cost without adding a heavy review card
 - **Token usage analytics**: per-model token usage, cache hit rates, and estimated costs across all agents, with daily trends and HTML reports
 - **Session history persistence**: full activity history stored locally and restored across app restarts
+- **Readable built-in themes**: dark and light templates keep session details, usage footers, and Analytics tables legible
 - **One-click integration repair**: fix supported local agent configurations from inside the app
 - **Local provider gateway**: connect Claude Desktop and Codex Desktop to third-party models through CodePal while keeping provider tokens out of client configs and preserving existing default models
 - **Bilingual UI**: English and Simplified Chinese, following your system language by default
@@ -74,9 +76,9 @@ Release builds are signed and notarized by Apple. No security prompt on open.
 
 ## What's Next
 
-- **Session Operations Layer**: capability-gated jump, message, resume, repair, export, outcome marking, and local action logs; always user-triggered, never an autonomous scheduler
-- **Personal AI work memory**: session review cards, daily digests, and local reports that explain what happened across agents
-- **Workflow health and confidence**: waiting time, error recovery, quota pressure, context pressure, abnormal cost, attention queue, and observability-confidence signals
+- **Session Operations Layer**: capability-gated jump, message, resume, repair, export, list-level delete, and local action logs; always user-triggered, never an autonomous scheduler
+- **Work item flow and CLI operation flow**: move from passive review cards toward actionable item handoff, preflight, dry-run, execution, and local operation logs
+- **LLM reports when useful**: daily, weekly, and monthly summaries should be generated from real work items and logs, with redaction controls, rather than hand-built metric cards
 - **Free local control tower first**: make the individual local-first workflow valuable enough for daily use before revisiting shared ops visibility, billing, or cloud sync
 
 See [docs/planning/roadmap-next.md](docs/planning/roadmap-next.md) for the full planning direction.

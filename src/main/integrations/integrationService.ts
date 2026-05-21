@@ -876,6 +876,9 @@ function claudeRequiredEntriesForHome(
     { eventName: "SessionStart", matcher: "*", command },
     { eventName: "UserPromptSubmit", command },
     { eventName: "Notification", command },
+    { eventName: "PermissionRequest", matcher: "*", command },
+    { eventName: "PostToolUse", matcher: "*", command },
+    { eventName: "PostToolUseFailure", matcher: "*", command },
     { eventName: "Stop", command },
     { eventName: "SessionEnd", command },
   ];
@@ -1133,7 +1136,16 @@ function claudeHooksMatch(
 }
 
 function claudeHooksEmpty(hooks: Record<string, unknown>): boolean {
-  const keys = ["SessionStart", "UserPromptSubmit", "Notification", "Stop", "SessionEnd"] as const;
+  const keys = [
+    "SessionStart",
+    "UserPromptSubmit",
+    "Notification",
+    "PermissionRequest",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "Stop",
+    "SessionEnd",
+  ] as const;
   return keys.every((key) => {
     const value = hooks[key];
     return !Array.isArray(value) || value.length === 0;

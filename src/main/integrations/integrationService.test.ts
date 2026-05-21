@@ -255,6 +255,9 @@ describe("createIntegrationService", () => {
       ]),
     );
     expect(parsed.hooks.SessionStart).toHaveLength(1);
+    expect(parsed.hooks.PermissionRequest).toHaveLength(1);
+    expect(parsed.hooks.PostToolUse).toHaveLength(1);
+    expect(parsed.hooks.PostToolUseFailure).toHaveLength(1);
     expect(parsed.hooks.Stop).toHaveLength(1);
     expect(parsed.statusLine).toEqual({
       type: "command",
@@ -354,8 +357,31 @@ describe("createIntegrationService", () => {
                 ],
               },
             ],
-            PreToolUse: [
+            PermissionRequest: [
               {
+                matcher: "*",
+                hooks: [
+                  {
+                    type: "command",
+                    command: `"${wrapperHookPath}"`,
+                  },
+                ],
+              },
+            ],
+            PostToolUse: [
+              {
+                matcher: "*",
+                hooks: [
+                  {
+                    type: "command",
+                    command: `"${wrapperHookPath}"`,
+                  },
+                ],
+              },
+            ],
+            PostToolUseFailure: [
+              {
+                matcher: "*",
                 hooks: [
                   {
                     type: "command",
@@ -461,6 +487,15 @@ describe("createIntegrationService", () => {
             ],
             UserPromptSubmit: [{ hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] }],
             Notification: [{ hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] }],
+            PermissionRequest: [
+              { matcher: "*", hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] },
+            ],
+            PostToolUse: [
+              { matcher: "*", hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] },
+            ],
+            PostToolUseFailure: [
+              { matcher: "*", hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] },
+            ],
             Stop: [{ hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] }],
             SessionEnd: [{ hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] }],
           },
@@ -1196,7 +1231,16 @@ describe("createIntegrationService", () => {
       expect(second.changed).toBe(false);
       expect(existsSync(wrapperPath)).toBe(true);
       expect(parsed.statusLine).toBeUndefined();
-      for (const eventName of ["SessionStart", "UserPromptSubmit", "Notification", "Stop", "SessionEnd"]) {
+      for (const eventName of [
+        "SessionStart",
+        "UserPromptSubmit",
+        "Notification",
+        "PermissionRequest",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "Stop",
+        "SessionEnd",
+      ]) {
         expect(parsed.hooks[eventName]).toEqual(
           expect.arrayContaining([
             expect.objectContaining({

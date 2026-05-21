@@ -956,6 +956,10 @@ describe("createSessionStore", () => {
       updatedAt: 300,
       activityItems: [
         expect.objectContaining({
+          kind: "system",
+          meta: expect.objectContaining({ inferred: true }),
+        }),
+        expect.objectContaining({
           body: "hello, world",
         }),
         expect.objectContaining({
@@ -1115,6 +1119,11 @@ describe("createSessionStore", () => {
     });
 
     expect(store.getSessions()[0].activityItems).toEqual([
+      expect.objectContaining({
+        kind: "system",
+        source: "system",
+        body: "Auto-inferred: success",
+      }),
       expect.objectContaining({
         kind: "message",
         source: "assistant",
@@ -1404,6 +1413,49 @@ describe("createSessionStore", () => {
       tool: "claude",
       status: "running",
       timestamp: 11,
+    });
+
+    expect(store.getSessions()[0]).not.toHaveProperty("externalApproval");
+  });
+
+  it("clears externalApproval when a later tool-progress event omits externalApproval", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "s-external",
+      tool: "claude",
+      status: "waiting",
+      timestamp: 10,
+      externalApproval: {
+        kind: "approval_required",
+        title: "Claude permission required",
+        message: "Approve in Terminal",
+        sourceTool: "claude",
+        updatedAt: 10,
+      },
+    });
+    store.applyEvent({
+      sessionId: "s-external",
+      tool: "claude",
+      status: "waiting",
+      task: "Bash",
+      timestamp: 11,
+      meta: {
+        hook_event_name: "PostToolUse",
+        tool_name: "Bash",
+      },
+      activityItems: [
+        {
+          id: "claude:11:tool-result",
+          kind: "tool",
+          source: "tool",
+          title: "Bash",
+          body: "done",
+          timestamp: 11,
+          toolName: "Bash",
+          toolPhase: "result",
+        },
+      ],
     });
 
     expect(store.getSessions()[0]).not.toHaveProperty("externalApproval");
@@ -2291,6 +2343,71 @@ describe("createSessionStore", () => {
         meta: { terminal: { app: 42 } as unknown as Record<string, unknown> },
       });
       expect(store.getSession("t-3")?.terminalContext).toBeUndefined();
+    });
+  });
+
+  describe("addActionLogEntry", () => {
+    it("appends action log entries to session", () => {
+      const store = createSessionStore();
+      store.applyEvent({
+        sessionId: "al-1",
+        tool: "claude",
+        status: "running",
+        timestamp: 1,
+      });
+
+      store.addActionLogEntry("al-1", {
+        action: "jump",
+        timestamp: 100,
+        ok: true,
+      });
+      store.addActionLogEntry("al-1", {
+        action: "sendMessage",
+        timestamp: 200,
+        ok: false,
+        error: "no channel",
+      });
+
+      const session = store.getSession("al-1");
+      expect(session?.actionLog).toHaveLength(2);
+      expect(session?.actionLog?.[0].action).toBe("jump");
+      expect(session?.actionLog?.[0].ok).toBe(true);
+      expect(session?.actionLog?.[1].action).toBe("sendMessage");
+      expect(session?.actionLog?.[1].ok).toBe(false);
+    });
+
+    it("returns false for unknown session", () => {
+      const store = createSessionStore();
+      const ok = store.addActionLogEntry("missing", {
+        action: "jump",
+        timestamp: 100,
+        ok: true,
+      });
+      expect(ok).toBe(false);
+    });
+
+    it("preserves existing action log entries", () => {
+      const store = createSessionStore();
+      store.applyEvent({
+        sessionId: "al-2",
+        tool: "claude",
+        status: "running",
+        timestamp: 1,
+      });
+
+      store.addActionLogEntry("al-2", {
+        action: "jump",
+        timestamp: 100,
+        ok: true,
+      });
+      store.addActionLogEntry("al-2", {
+        action: "openRepo",
+        timestamp: 200,
+        ok: true,
+      });
+
+      const session = store.getSession("al-2");
+      expect(session?.actionLog).toHaveLength(2);
     });
   });
 });

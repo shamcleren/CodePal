@@ -1,11 +1,13 @@
 import { stringifyActionResponsePayload } from "../../shared/actionResponsePayload";
 import {
+  type ActionLogEntry,
   type ActivityItem,
   type ExternalApprovalState,
   type PendingAction,
   type PendingCloseReason,
   type PendingClosed,
   type ResponseTarget,
+  type SessionOutcome,
   type SessionRecord,
   type SessionStatus,
   type TerminalContext,
@@ -79,6 +81,8 @@ type InternalSessionRecord = {
   /** 最近关闭的 action（新 upsert 同 id 时会移除），供控制器去重 */
   closedLedger: Map<string, PendingCloseReason>;
   terminalContext?: TerminalContext;
+  outcome?: SessionOutcome;
+  actionLog?: ActionLogEntry[];
 };
 
 function terminalContextFromEvent(
@@ -426,6 +430,8 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
     ...(internal.activityItems.length > 0 ? { activityItems: internal.activityItems } : {}),
     ...(internal.activities.length > 0 ? { activities: internal.activities } : {}),
     ...(internal.terminalContext ? { terminalContext: internal.terminalContext } : {}),
+    ...(internal.outcome ? { outcome: internal.outcome } : {}),
+    ...(internal.actionLog && internal.actionLog.length > 0 ? { actionLog: internal.actionLog } : {}),
   };
   if (internal.pendingById.size === 0) {
     return internal.externalApproval ? { ...base, externalApproval: internal.externalApproval } : base;
@@ -524,7 +530,24 @@ function resolveNextExternalApproval(
     return prev?.externalApproval;
   }
 
+  if (eventCarriesToolProgress(event) || event.pendingClosed) {
+    return undefined;
+  }
+
   return event.status === "waiting" ? prev?.externalApproval : undefined;
+}
+
+function eventCarriesToolProgress(event: SessionEvent): boolean {
+  if (event.activityItems?.some((item) => item.kind === "tool")) {
+    return true;
+  }
+
+  const hookEventName = firstMetaString(event.meta, "hook_event_name");
+  return (
+    hookEventName === "PostToolUse" ||
+    hookEventName === "PostToolUseFailure" ||
+    hookEventName === "PostToolBatch"
+  );
 }
 
 function isJetBrainsTool(tool: string): boolean {
@@ -568,7 +591,9 @@ function hasOnlyLifecycleOrPlaceholderContent(session: InternalSessionRecord): b
 
   return session.activityItems.every((item) => {
     if (item.kind === "system" || item.kind === "note") {
-      return item.source === "system" && isLowSignalSystemItem(item);
+      if (item.source !== "system") return false;
+      if ((item.meta as Record<string, unknown>)?.inferred === true) return true;
+      return isLowSignalSystemItem(item);
     }
     return (
       item.kind === "message" &&
@@ -1115,6 +1140,31 @@ export function createSessionStore(options?: SessionStoreOptions) {
     return sessions.get(sessionId)?.closedLedger.has(actionId) ?? false;
   }
 
+  function inferOutcomeFromStatus(session: InternalSessionRecord): SessionOutcome | null {
+    const items = session.activityItems ?? [];
+    if (items.length === 0) return null;
+    switch (session.status) {
+      case "completed": {
+        const userMsgs = items.filter((i) => i.kind === "message" && i.source === "user").length;
+        const assistantMsgs = items.filter((i) => i.kind === "message" && i.source !== "user").length;
+        if (userMsgs > 0 && assistantMsgs > 0) return "success";
+        if (userMsgs === 0 && assistantMsgs === 0) return "unclear";
+        return "success";
+      }
+      case "error":
+        return "abandoned";
+      case "idle":
+      case "offline": {
+        if (items.length === 0) return "unclear";
+        const lastActivity = Math.max(...items.map((i) => i.timestamp));
+        const idleMs = Date.now() - lastActivity;
+        return idleMs > 30 * 60 * 1000 ? "abandoned" : "unclear";
+      }
+      default:
+        return null;
+    }
+  }
+
   return {
     applyEvent(event: SessionEvent) {
       if (!isSessionStatus(event.status)) {
@@ -1223,8 +1273,29 @@ export function createSessionStore(options?: SessionStoreOptions) {
         externalApproval: nextExternalApproval,
         closedLedger: nextClosedLedger,
         ...(nextTerminalContext ? { terminalContext: nextTerminalContext } : {}),
+        ...(prev?.outcome ? { outcome: prev.outcome } : {}),
       };
       sessions.set(sessionId, internal);
+      // Auto-infer outcome when session reaches a terminal status
+      if (!internal.outcome && prev?.status !== internal.status) {
+        const inferred = inferOutcomeFromStatus(internal);
+        if (inferred) {
+          const now = Date.now();
+          const activityItem: ActivityItem = {
+            id: `${sessionId}:${now}:outcome:${inferred}`,
+            kind: "system",
+            source: "system",
+            title: "Outcome",
+            body: `Auto-inferred: ${inferred}`,
+            timestamp: now,
+            meta: { outcome: inferred, inferred: true },
+          };
+          internal.outcome = inferred;
+          internal.activityItems = prependActivityItem(internal.activityItems, activityItem);
+          internal.activities = toLegacyActivities(internal.activityItems);
+          sessions.set(sessionId, internal);
+        }
+      }
       if (
         event.tool === "codex" &&
         resolvedTarget.aliasSessionId &&
@@ -1351,6 +1422,48 @@ export function createSessionStore(options?: SessionStoreOptions) {
           return a.id.localeCompare(b.id);
         })
         .map(toSessionRecord);
+    },
+
+    setOutcome(sessionId: string, outcome: SessionOutcome): boolean {
+      const internal = sessions.get(sessionId);
+      if (!internal) {
+        return false;
+      }
+      const now = Date.now();
+      const activityItem: ActivityItem = {
+        id: `${sessionId}:${now}:outcome:${outcome}`,
+        kind: "system",
+        source: "system",
+        title: "Outcome",
+        body: `Marked as ${outcome}`,
+        timestamp: now,
+        meta: { outcome },
+      };
+      const nextActivityItems = prependActivityItem(internal.activityItems, activityItem);
+      sessions.set(sessionId, {
+        ...internal,
+        outcome,
+        updatedAt: now,
+        activityItems: nextActivityItems,
+        activities: toLegacyActivities(nextActivityItems),
+      });
+      return true;
+    },
+
+    addActionLogEntry(sessionId: string, entry: ActionLogEntry): boolean {
+      const internal = sessions.get(sessionId);
+      if (!internal) return false;
+      const log = internal.actionLog ? [...internal.actionLog, entry] : [entry];
+      sessions.set(sessionId, { ...internal, actionLog: log });
+      return true;
+    },
+
+    closeSession(sessionId: string): boolean {
+      if (!sessions.has(sessionId)) {
+        return false;
+      }
+      sessions.delete(sessionId);
+      return true;
     },
   };
 }

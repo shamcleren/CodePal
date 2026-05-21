@@ -74,6 +74,19 @@
 - v1.1.9 shipped: legacy analytics history migration startup fix, history-disabled startup fallback, and explicit startup failure logging
 - v1.1.10 shipped: analytics duplicate cleanup, Codex token snapshot dedupe, and Codex cached-input accounting fix
 - v1.1.11 shipped: Claude statusLine model-id enrichment, Codex timeline noise filtering, estimated cost per agent in usage strip, background hook startup fix
+- Current post-v1.1.11 dev validation on 2026-05-21 covered the first visual-system and expanded-session usage pass:
+  - semantic built-in themes: `graphite-ops` and `paper-ops`
+  - footer-level per-session usage stats for requests, input, output, cache, and estimated cost
+  - clearer session detail partitioning without a heavy top-level ReviewCard
+  - hover-only session delete affordance
+  - light-theme Analytics table readability
+  - `npm test -- src/renderer/styles.test.ts`
+  - `npm run lint`
+  - `npm run build`
+  - `npm test`
+  - `npx playwright test -c playwright.e2e.config.ts tests/e2e/codepal-analytics.e2e.ts`
+  - `npx playwright test -c playwright.e2e.config.ts tests/e2e/codepal-session-expand-scroll.e2e.ts`
+  - `git diff --check`
 
 ## What Already Exists
 
@@ -81,6 +94,7 @@
 
 - CodePal desktop main process, preload bridge, tray, and floating window shell
 - Renderer monitoring panel with status bar, session rows, recent-activity hover details, a conditional update status button, and a full settings drawer for integrations, display, usage, maintenance, and support
+- Display preferences now include two built-in theme templates, `graphite-ops` and `paper-ops`; the renderer uses a semantic CSS token contract so text, surfaces, session rows, timelines, footers, and analytics tables are theme-driven rather than hard-coded per component.
 - Shared session and payload types in `src/shared/`
 
 ### Monitoring Flow
@@ -96,7 +110,7 @@
 - Existing pending-action/control code remains in-repo, but is no longer the primary user-facing path
 - Cursor remains available in-repo and continues to calibrate usage plus dashboard connection flow
 - GoLand and PyCharm now feed the shared monitoring/dashboard path through the shared CodeBuddy JetBrains plugin watcher/framework, including usage visibility; other JetBrains IDEs may reuse the same framework later, but they are outside the current V1 calibrated / accepted scope
-- Next-stage planning now treats CodePal as a free local AI coding control tower and operations memory for heavy AI-coding users, with Session Operations, personal work memory, workflow health, observability confidence, Attention Queue, community ecosystem, and optional shared ops visibility as additive roadmap tracks.
+- Next-stage planning now treats CodePal as a free local AI coding control tower and operations memory for heavy AI-coding users, with Session Operations, work item flow, CLI operation flow, LLM reports, workflow health, factual source / coverage transparency, Attention Queue, community ecosystem, and optional shared ops visibility as additive roadmap tracks.
 - The near-term action layer should be user-triggered, capability-gated, preflighted, locally logged, and explicitly not an autonomous agent scheduler.
 
 ### Current Adapters
@@ -131,6 +145,7 @@
   - full history is read on demand in the existing expanded session details view
   - clearing persisted history only removes CodePal-managed SQLite history, not upstream logs
 - Expanded session rows now keep the outer session list pinned to the expanded row bottom while the details panel grows, so opening a lower row does not leave the newest details below the visible viewport
+- Expanded session details no longer treat ReviewCard as the primary surface. The useful deterministic metrics are constrained to the footer layer: request count, input/output/cache tokens, and estimated cost when usage data is available.
 - The post-v1.0.3 patch candidate currently includes:
   - refreshed brighter app icon artwork
   - Retina-scale and larger-mask macOS menu bar template icon rendering
@@ -159,6 +174,7 @@
 - Main process now also carries a dedicated usage aggregation path separate from session timeline state
 - Usage analytics now backfills local Claude / Codex token history from `~/.claude/projects/**/*.jsonl` and `~/.codex/sessions/**/*.jsonl`; imported rows are keyed by source so startup rescans are idempotent. The backfill starts only after the renderer is ready and uses a cooperative async scanner so large local histories do not block app launch.
 - Analytics now has a standalone renderer page with `today` / `7d` / `30d` presets, custom date ranges, compact model / agent breakdowns, and self-contained detailed HTML report generation.
+- Analytics tables and charts now derive text, numeric, header, border, and active-tab colors from the theme token contract. `paper-ops` has explicit light-theme table text tokens plus E2E coverage so pale backgrounds do not wash out model names or numeric columns.
 - Usage reports show Top Sessions by readable first-user-message summaries with a shortened session id fallback instead of leading with opaque UUIDs.
 - Renderer top bar now uses a compact quota-first usage strip
 - Usage strip now supports `compact` / `detailed` density, with reset times either shown inline or exposed by hover title
@@ -217,9 +233,9 @@ Same `sessionId` may have multiple pending actions at once; each keeps its own o
 - “Do everything in the current window” is not a Phase 1 hard promise
 - Next-stage product work should prioritize personal AI work memory and workflow-health diagnostics over team analytics or new control loops
 - CodePal should not frame workflow-health data as individual developer productivity scoring
-- The roadmap should be additive, not a replacement of existing valuable tracks: Personal AI Work Memory, Workflow Health, Observability Confidence, Ambient Presence, and Team Later remain in scope with updated boundaries.
+- The roadmap should be additive, not a replacement of existing valuable tracks: Work Item Flow, CLI Operation Flow, LLM Reports, Workflow Health, Source / Coverage Transparency, Ambient Presence, and Team Later remain in scope with updated boundaries.
 - CodePal's next positioning is "free local AI coding control tower and operations memory" rather than a paid dashboard, team admin surface, bossware product, or execution platform replacement.
-- Session Operations should cover user-triggered actions such as jump, structured message, resume, repair, export, mark outcome, close, and archive, but must stay capability-gated and locally logged.
+- Session Operations should cover user-triggered actions such as jump, structured message, resume, repair, export report, and list-level delete. `open_repo` should wait for reliable workspace paths, and session outcome should be derived from work item flow only if it becomes useful.
 - Capability Manifest and local Action Broker are the preferred primitives for adding operations without renderer-side guessing or agent-scheduler framing.
 - Attention Queue should route user attention to waiting, idle, errored, expensive, quota-pressured, or repair-needed work; it should not automatically assign, execute, approve, merge, or switch agents.
 - The current product strategy is free user gathering and daily habit formation first; billing, cloud sync, and Pro / Team / Enterprise packaging should not drive near-term roadmap decisions.
@@ -289,6 +305,8 @@ npm run dist:mac
 - Integration diagnostics and repair flow are already in place for all supported agents
 - Claude Code token usage and statusLine `rate_limits` snapshots are already visible in the shared usage surface when available, including last-known cached rate-limit snapshots after restart
 - Token analytics are now available on a standalone Analytics page, including persisted Claude / Codex token records, daily trends, model breakdowns, custom ranges, and HTML reports.
+- Expanded-session usage is available as a compact footer summary. It intentionally stays low-profile and deterministic instead of becoming a large ReviewCard or duplicating the timeline.
+- Built-in visual themes are now part of the renderer baseline through semantic tokens. `graphite-ops` and `paper-ops` cover dark and light usage, and Analytics table readability has focused regression coverage.
 - Header usage display, update status visibility, compact settings navigation, and settings regrouping are already in place
 - Provider Gateway is a first-class settings feature: CodePal can run a local gateway on `127.0.0.1:15721`, manage provider token presence separately from client configs, expose mapped MiMo models, health-check upstream mappings, and provide reversible Claude Desktop / Codex Desktop switch actions with restart guidance
 - Session ordering and expiration now follow dashboard-oriented defaults
@@ -328,17 +346,18 @@ The main product shift is:
 
 - from "more monitoring signals" to **personal AI coding operations memory**
 - from generic analytics to **workflow health** and **tool-friction diagnostics**
-- from hidden confidence assumptions to visible **observability-confidence labels**
+- from hidden confidence assumptions to factual **source / coverage transparency** only where it affects decisions
 - from early team/billing work to proving sustained **individual local-first value**
 
 Recommended next implementation sequence:
 
-1. Design a session review surface that can summarize one completed run using existing history and usage data.
-2. Extend that into a day digest across agents, with clear follow-up and stalled-session signals.
-3. Add workflow-health metrics: waiting time, error recovery, session churn, context pressure, quota pressure, and observability coverage.
-4. Add report export with redaction controls before treating reviews or digests as shareable.
-5. Revisit ambient presence only after there are review / digest signals worth compressing into a smaller surface.
-6. Revisit team, billing, cloud sync, or remote analytics only after the privacy and support contracts are redesigned.
+1. Keep per-session deterministic metrics at the footer level; do not grow the ReviewCard into a primary surface unless there is a proven user action it enables.
+2. Define the Report Facts schema for daily / weekly / monthly summaries before calling any LLM.
+3. Shift the next product layer toward work item flow and CLI operation flow: handoff state, preflight, dry-run, execution, and local operation logs.
+4. Add manual LLM-generated reports only on top of Report Facts and operation logs. Gate generation behind a settings switch, provide model selection, default to the cheapest capable configured model, and keep background generation opt-in with quota warnings.
+5. Treat data-source transparency as factual provenance, not subjective "confidence" badges; show source / missing fields only when it changes user decisions.
+6. Revisit ambient presence only after there are work item, operation, or report signals worth compressing into a smaller surface.
+7. Revisit team, billing, cloud sync, or remote analytics only after the privacy and support contracts are redesigned.
 
 Documentation handoff for future edits:
 
@@ -354,5 +373,5 @@ For release-facing and forward-looking work, use:
 
 - `docs/context/handoffs/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
 - `docs/release/notes/release-notes-v1.1.11.md` for the v1.1.11 release
-- `docs/planning/roadmap-next.md` for personal AI work memory, workflow health, observability confidence, individual Pro sequencing, and team/cloud deferral
+- `docs/planning/roadmap-next.md` for work item flow, CLI operation flow, LLM reports, workflow health, source / coverage transparency, individual Pro sequencing, and team/cloud deferral
 - `docs/release/release-checklist.zh-CN.md` for the final operator-facing release checklist

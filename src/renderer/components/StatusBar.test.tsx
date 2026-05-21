@@ -9,6 +9,7 @@ const defaultSettings: UsageDisplaySettings = {
   showInStatusBar: true,
   hiddenAgents: [],
   density: "compact",
+  theme: "graphite-ops",
 };
 
 describe("StatusBar", () => {

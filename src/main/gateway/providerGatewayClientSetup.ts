@@ -310,7 +310,7 @@ function removeManagedCodexBlock(contents: string): string {
   return contents.replace(pattern, "\n").replace(/\n{3,}/g, "\n\n");
 }
 
-function stripLegacyCodexRootDefaults(contents: string, status: ProviderGatewayStatus): string {
+function stripLegacyCodexRootDefaults(contents: string): string {
   const lines = contents.split(/\n/);
   const firstSection = lines.findIndex((line) => /^\s*\[/.test(line));
   const rootEnd = firstSection === -1 ? lines.length : firstSection;
@@ -320,13 +320,11 @@ function stripLegacyCodexRootDefaults(contents: string, status: ProviderGatewayS
   if (!legacyProvider) {
     return contents;
   }
-  const managedModels = new Set(status.claudeDesktop.inferenceModels);
   const cleanedRoot = rootLines.filter((line) => {
     if (/^\s*model_provider\s*=\s*"codepal"\s*$/.test(line)) {
       return false;
     }
-    const modelMatch = line.match(/^\s*model\s*=\s*"([^"]+)"\s*$/);
-    return !(modelMatch && managedModels.has(modelMatch[1]));
+    return !/^\s*model\s*=/.test(line);
   });
   return [...cleanedRoot, ...restLines].join("\n").replace(/\n{3,}/g, "\n\n");
 }
@@ -377,21 +375,21 @@ function setCodexRootValue(
   return [...rootLines, ...lines.slice(rootEnd)].join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
-function isCodexGatewayActive(contents: string, status: ProviderGatewayStatus): boolean {
+function isCodexGatewayActive(contents: string): boolean {
   const modelProvider = codexRootValue(contents, "model_provider");
   const model = codexRootValue(contents, "model");
-  return modelProvider === "codepal" && Boolean(model && status.claudeDesktop.inferenceModels.includes(model));
+  return modelProvider === "codepal" && Boolean(model);
 }
 
-function stripCodexGatewayRootDefaults(contents: string, status: ProviderGatewayStatus): string {
-  if (!isCodexGatewayActive(contents, status)) {
+function stripCodexGatewayRootDefaults(contents: string): string {
+  if (!isCodexGatewayActive(contents)) {
     return contents;
   }
   return setCodexRootValue(setCodexRootValue(contents, "model_provider", null), "model", null);
 }
 
 function codexProviderBlock(status: ProviderGatewayStatus): string {
-  const model = status.claudeDesktop.inferenceModels[0] ?? "anthropic/MiMo-V2.5-Pro";
+  const model = status.codexDesktop.model ?? "mimo-v2.5-pro";
   return [
     CODEX_PROVIDER_BLOCK_START,
     "[model_providers.codepal]",
@@ -411,12 +409,12 @@ function codexProviderBlock(status: ProviderGatewayStatus): string {
 
 export function codexConfigContents(current: string, status: ProviderGatewayStatus): string {
   const withoutManagedBlock = removeManagedCodexBlock(current);
-  const withoutLegacyGlobalDefaults = stripLegacyCodexRootDefaults(withoutManagedBlock, status).trimEnd();
+  const withoutLegacyGlobalDefaults = stripLegacyCodexRootDefaults(withoutManagedBlock).trimEnd();
   return `${withoutLegacyGlobalDefaults ? `${withoutLegacyGlobalDefaults}\n\n` : ""}${codexProviderBlock(status)}`;
 }
 
 function isCodexConfigCurrent(current: string, status: ProviderGatewayStatus): boolean {
-  const withoutActiveRoot = stripCodexGatewayRootDefaults(current, status);
+  const withoutActiveRoot = stripCodexGatewayRootDefaults(current);
   return codexConfigContents(withoutActiveRoot, status) === withoutActiveRoot;
 }
 
@@ -427,8 +425,8 @@ function configureCodexDesktop(
 ): ProviderGatewayClientSetupResult {
   const configPath = codexConfigPath(homeDir);
   const previous = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
-  const model = status.claudeDesktop.inferenceModels[0] ?? "anthropic/MiMo-V2.5-Pro";
-  if (!isCodexGatewayActive(previous, status)) {
+  const model = status.codexDesktop.model ?? "mimo-v2.5-pro";
+  if (!isCodexGatewayActive(previous)) {
     writeCodexGatewayRestoreState(
       homeDir,
       {
@@ -466,7 +464,7 @@ function restoreCodexDesktop(
   const configPath = codexConfigPath(homeDir);
   const previous = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
   const state = readCodexGatewayRestoreState(homeDir);
-  let next = codexConfigContents(stripCodexGatewayRootDefaults(previous, status), status);
+  let next = codexConfigContents(stripCodexGatewayRootDefaults(previous), status);
   if (state) {
     next = setCodexRootValue(next, "model", state.previousModel ?? null);
     next = setCodexRootValue(next, "model_provider", state.previousModelProvider ?? null);
@@ -556,7 +554,7 @@ export function inspectProviderGatewayClientSetup(options: {
   }
   const contents = fs.readFileSync(configPath, "utf8");
   const configured = isCodexConfigCurrent(contents, options.status);
-  const active = isCodexGatewayActive(contents, options.status);
+  const active = isCodexGatewayActive(contents);
   const canRestore = Boolean(readCodexGatewayRestoreState(options.homeDir));
   return {
     configured,

@@ -231,7 +231,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
         id: "msg_1",
         type: "message",
         role: "assistant",
-        model: "mimo-v2.5-pro",
+        model: "mimo-v2.5",
         content: [],
       });
     }) as typeof fetch;
@@ -243,7 +243,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
         authorization: "Bearer dummy-from-claude",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5",
         max_tokens: 1,
         messages: [{ role: "user", content: "." }],
       }),
@@ -254,7 +254,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       model: "mimo-v2.5",
     });
     await expect(response.json()).resolves.toMatchObject({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5",
     });
   });
 
@@ -357,7 +357,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
         authorization: "Bearer local-proxy",
       },
       body: JSON.stringify({
-        model: "anthropic/MiMo-V2.5-Pro",
+        model: "mimo-v2.5-pro",
         instructions: "Be concise.",
         max_output_tokens: 8,
         input: [
@@ -386,7 +386,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     await expect(response.json()).resolves.toMatchObject({
       object: "response",
       status: "completed",
-      model: "anthropic/MiMo-V2.5-Pro",
+      model: "mimo-v2.5-pro",
       output_text: "pong",
       output: [
         {
@@ -456,7 +456,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        model: "mimo-v2.5-pro",
+        model: "mimo-v9",
         input: "ping",
       }),
     });
@@ -464,7 +464,7 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
       error: {
-        message: "Unsupported model: mimo-v2.5-pro",
+        message: "Unsupported model: mimo-v9",
         type: "invalid_request_error",
         param: "model",
         code: "unsupported_model",
@@ -547,7 +547,6 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       "mimo-v2.5",
       "mimo-v2-pro",
       "mimo-v2-omni",
-      "mimo-v2",
     ]);
   });
 });

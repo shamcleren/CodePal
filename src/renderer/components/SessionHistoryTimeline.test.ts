@@ -13,6 +13,7 @@ import {
   actionDisplayOptions,
   pendingActionButtonLabel,
   pendingEyebrow,
+  summarizeSessionFooterUsage,
 } from "./SessionHistoryTimeline";
 import type { MonitorSessionRow } from "../monitorSession";
 
@@ -264,6 +265,71 @@ describe("mergeSessionTimelineItems", () => {
     );
 
     expect(merged.map((item) => item.id)).toEqual(["assistant-1", "user-1"]);
+  });
+});
+
+describe("summarizeSessionFooterUsage", () => {
+  it("aggregates persisted session usage for footer stats", () => {
+    const summary = summarizeSessionFooterUsage({
+      persisted: [
+        {
+          sessionId: "s1",
+          title: "Run tests",
+          agent: "codex",
+          model: "gpt-5.5",
+          inputTokens: 1_000_000,
+          outputTokens: 500_000,
+          cacheReadTokens: 100_000,
+          cacheCreationTokens: 10_000,
+          totalTokens: 1_610_000,
+          requestCount: 7,
+          firstSeenAt: 1,
+          lastSeenAt: 2,
+        },
+      ],
+      pricing: [
+        {
+          modelId: "gpt-5.5",
+          displayName: "GPT-5.5",
+          inputPerMillion: "5",
+          outputPerMillion: "25",
+          cacheReadPerMillion: "0.5",
+          cacheCreationPerMillion: "6.25",
+        },
+      ],
+    });
+
+    expect(summary).toEqual({
+      requestCount: 7,
+      inputTokens: 1_000_000,
+      outputTokens: 500_000,
+      cacheTokens: 110_000,
+      cost: 17.6125,
+    });
+  });
+
+  it("uses live token data without inventing a review confidence label", () => {
+    const summary = summarizeSessionFooterUsage({
+      persisted: [],
+      live: {
+        completeness: "partial",
+        tokens: {
+          input: 12_000,
+          output: 4_500,
+          cachedInput: 2_000,
+        },
+        cost: { estimated: 0.42 },
+      },
+      pricing: [],
+    });
+
+    expect(summary).toEqual({
+      requestCount: 1,
+      inputTokens: 12_000,
+      outputTokens: 4_500,
+      cacheTokens: 2_000,
+      cost: 0.42,
+    });
   });
 });
 

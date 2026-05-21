@@ -80,6 +80,8 @@ export function AnalyticsPage() {
   const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("model");
   const [data, setData] = useState<TokenStatsResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [redactTitles, setRedactTitles] = useState(false);
+  const [redactModels, setRedactModels] = useState(false);
 
   const fetchData = useCallback(async (preset: RangePreset) => {
     setLoading(true);
@@ -98,9 +100,12 @@ export function AnalyticsPage() {
 
   const handleOpenReport = useCallback(async () => {
     const { start, end } = resolveRange(range, customStart, customEnd);
-    const filePath = await window.codepal.generateHtmlReport(start, end);
+    const opts = (redactTitles || redactModels)
+      ? { redactSessionTitles: redactTitles, redactModelNames: redactModels }
+      : undefined;
+    const filePath = await window.codepal.generateHtmlReport(start, end, opts);
     await window.codepal.openExternalTarget(filePath);
-  }, [range, customStart, customEnd]);
+  }, [range, customStart, customEnd, redactTitles, redactModels]);
 
   const pricingMap = new Map<string, ModelPricing>();
   for (const p of data?.pricing ?? []) {
@@ -255,6 +260,25 @@ export function AnalyticsPage() {
         >
           {i18n.t("tokenStats.openReport")}
         </button>
+      </div>
+
+      <div className="analytics-page__redaction-bar">
+        <label className="analytics-page__redaction-toggle">
+          <input
+            type="checkbox"
+            checked={redactTitles}
+            onChange={(e) => setRedactTitles(e.target.checked)}
+          />
+          {i18n.t("tokenStats.redactTitles")}
+        </label>
+        <label className="analytics-page__redaction-toggle">
+          <input
+            type="checkbox"
+            checked={redactModels}
+            onChange={(e) => setRedactModels(e.target.checked)}
+          />
+          {i18n.t("tokenStats.redactModels")}
+        </label>
       </div>
 
       <div className="analytics-page__hero-grid">

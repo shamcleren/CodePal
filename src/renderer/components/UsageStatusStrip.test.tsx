@@ -73,6 +73,7 @@ const defaultSettings: UsageDisplaySettings = {
   showInStatusBar: true,
   hiddenAgents: [],
   density: "compact",
+  theme: "graphite-ops",
 };
 
 describe("UsageStatusStrip", () => {
@@ -112,7 +113,7 @@ describe("UsageStatusStrip", () => {
       <I18nProvider locale="en">
         <UsageStatusStrip
           overview={overview}
-          settings={{ showInStatusBar: true, hiddenAgents: [], density: "detailed" }}
+          settings={{ showInStatusBar: true, hiddenAgents: [], density: "detailed", theme: "graphite-ops" }}
         />
       </I18nProvider>,
     );
@@ -139,7 +140,12 @@ describe("UsageStatusStrip", () => {
       <I18nProvider locale="zh-CN">
         <UsageStatusStrip
           overview={overview}
-          settings={{ showInStatusBar: true, hiddenAgents: ["claude", "cursor", "codebuddy"], density: "compact" }}
+          settings={{
+            showInStatusBar: true,
+            hiddenAgents: ["claude", "cursor", "codebuddy"],
+            density: "compact",
+            theme: "graphite-ops",
+          }}
         />
       </I18nProvider>,
     );
@@ -155,7 +161,7 @@ describe("UsageStatusStrip", () => {
       <I18nProvider locale="zh-CN">
         <UsageStatusStrip
           overview={overview}
-          settings={{ showInStatusBar: false, hiddenAgents: [], density: "compact" }}
+          settings={{ showInStatusBar: false, hiddenAgents: [], density: "compact", theme: "graphite-ops" }}
         />
       </I18nProvider>,
     );

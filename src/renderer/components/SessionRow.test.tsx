@@ -20,6 +20,7 @@ function baseRow(overrides: Partial<MonitorSessionRow> = {}): MonitorSessionRow 
     timelineItems: [],
     activityItems: [],
     hoverSummary: "waiting",
+    capabilities: null,
     ...overrides,
   };
 }
@@ -244,6 +245,26 @@ describe("SessionRow pending action", () => {
   it("renders footer actions for expanded sessions", () => {
     const html = renderRow(
       baseRow({
+        activityItems: [
+          {
+            id: "user-1",
+            kind: "message",
+            source: "user",
+            title: "User",
+            body: "Start",
+            timestamp: 1,
+          },
+          {
+            id: "tool-1",
+            kind: "tool",
+            source: "tool",
+            title: "Bash",
+            body: "npm test",
+            timestamp: 2,
+            toolName: "Bash",
+            toolPhase: "call",
+          },
+        ],
         timelineItems: [
           {
             id: "1",
@@ -264,6 +285,65 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("Back to latest");
     expect(html).toContain("Copy last 10 messages");
     expect(html).toContain("</div><div class=\"session-row__footer\">");
+
+    const footerHtml = html.slice(html.indexOf("<div class=\"session-row__footer\""));
+    expect(footerHtml).not.toContain("User msgs");
+    expect(footerHtml).not.toContain("Tool calls");
+  });
+
+  it("does not render a session review card above the scrollable timeline", () => {
+    const html = renderRow(
+      baseRow({
+        activityItems: [
+          {
+            id: "user-1",
+            kind: "message",
+            source: "user",
+            title: "User",
+            body: "Review this run",
+            timestamp: 1,
+          },
+        ],
+      }),
+      { expanded: true },
+    );
+
+    expect(html).not.toContain("session-review-card");
+    expect(html.indexOf("session-row__footer")).toBeGreaterThan(
+      html.indexOf("<div class=\"session-row__details\""),
+    );
+  });
+
+  it("keeps the compact details header reserved for session actions", () => {
+    const html = renderRow(
+      baseRow({
+        capabilities: {
+          jump: { support: "supported", confidence: "high" },
+          sendMessage: { support: "unsupported", confidence: "low" },
+          openRepo: { support: "unsupported", confidence: "low" },
+        },
+        activityItems: [
+          {
+            id: "user-1",
+            kind: "message",
+            source: "user",
+            title: "User",
+            body: "Review this run",
+            timestamp: 1,
+          },
+        ],
+      }),
+      { expanded: true },
+    );
+
+    expect(html).toContain("session-row__details-header");
+    expect(html.indexOf("session-row__details-header")).toBeLessThan(
+      html.indexOf("<div class=\"session-row__details\""),
+    );
+    expect(html.indexOf("session-action-bar")).toBeGreaterThan(
+      html.indexOf("session-row__details-header"),
+    );
+    expect(html).not.toContain("session-review-card");
   });
 
   it("renders pending action UI when pending actions exist", () => {

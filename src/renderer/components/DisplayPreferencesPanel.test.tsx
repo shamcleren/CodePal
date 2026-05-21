@@ -8,10 +8,16 @@ describe("DisplayPreferencesPanel", () => {
     const html = renderToStaticMarkup(
       <I18nProvider locale="zh-CN">
         <DisplayPreferencesPanel
-          settings={{ showInStatusBar: true, hiddenAgents: [], density: "detailed" }}
+          settings={{
+            showInStatusBar: true,
+            hiddenAgents: [],
+            density: "detailed",
+            theme: "graphite-ops",
+          }}
           onToggleStrip={vi.fn()}
           onToggleAgent={vi.fn()}
           onDensityChange={vi.fn()}
+          onThemeChange={vi.fn()}
           localeSetting="system"
           onLocaleChange={vi.fn()}
         />
@@ -28,6 +34,10 @@ describe("DisplayPreferencesPanel", () => {
     expect(html).toContain("详细");
     expect(html).toContain("界面语言");
     expect(html).toContain("跟随系统");
+    expect(html).toContain("界面主题");
+    expect(html).toContain("Graphite Ops");
+    expect(html).toContain("Paper Ops");
+    expect(html).toContain("推荐");
     expect(html).not.toContain("Reset ");
     expect(html).toContain("Cursor");
   });

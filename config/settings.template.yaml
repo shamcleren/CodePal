@@ -4,6 +4,7 @@ display:
   showInStatusBar: true
   hiddenAgents: []
   density: detailed
+  theme: graphite-ops
 history:
   persistenceEnabled: true
   detailRetention: 30d

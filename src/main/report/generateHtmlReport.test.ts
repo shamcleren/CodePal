@@ -191,4 +191,87 @@ describe("generateHtmlReport", () => {
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("redacts session titles when redactSessionTitles is true", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+      sessionStats: [],
+      daily: [],
+      byModel: [],
+      topSessions: [
+        {
+          sessionId: "12345678-1234-1234-1234-123456789abc",
+          title: "Sensitive Task Title",
+          agent: "claude",
+          model: "claude-3",
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          totalTokens: 150,
+          requestCount: 1,
+          firstSeenAt: Date.now(),
+          lastSeenAt: Date.now(),
+        },
+      ],
+      pricing: [],
+      redaction: { redactSessionTitles: true },
+    });
+
+    expect(html).not.toContain("Sensitive Task Title");
+    expect(html).toContain("Session 1");
+    expect(html).toContain("Redacted");
+  });
+
+  it("redacts model names when redactModelNames is true", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+      sessionStats: [],
+      daily: [],
+      byModel: [
+        {
+          model: "claude-sonnet-4-5-20250929", agent: "claude",
+          inputTokens: 100, outputTokens: 50,
+          cacheReadTokens: 0, cacheCreationTokens: 0,
+          totalTokens: 150, requestCount: 1,
+        },
+      ],
+      topSessions: [
+        {
+          sessionId: "abc",
+          title: null,
+          agent: "claude",
+          model: "claude-sonnet-4-5-20250929",
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          totalTokens: 150,
+          requestCount: 1,
+          firstSeenAt: Date.now(),
+          lastSeenAt: Date.now(),
+        },
+      ],
+      pricing: [],
+      redaction: { redactModelNames: true },
+    });
+
+    expect(html).not.toContain("claude-sonnet-4-5-20250929");
+    expect(html).toContain("model");
+  });
+
+  it("shows no redaction notice when redaction is not enabled", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+      sessionStats: [],
+      daily: [],
+      byModel: [],
+      pricing: [],
+    });
+
+    expect(html).not.toContain("Redacted");
+  });
 });

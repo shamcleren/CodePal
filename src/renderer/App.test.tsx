@@ -7,6 +7,7 @@ describe("App", () => {
     const html = renderToStaticMarkup(<App />);
 
     expect(html).toContain("CodePal");
+    expect(html).toContain('data-theme="graphite-ops"');
     expect(html).not.toContain("Control Deck");
     expect(html).not.toContain("Run ");
     expect(html).not.toContain("Wait ");

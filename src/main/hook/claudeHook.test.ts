@@ -121,6 +121,110 @@ describe("claudeHook", () => {
     });
   });
 
+  it("maps PermissionRequest into external approval metadata", () => {
+    const line = buildClaudeEventLine(
+      JSON.stringify({
+        session_id: "claude-permission-request",
+        hook_event_name: "PermissionRequest",
+        tool_name: "Bash",
+        tool_input: { command: "npm test" },
+        cwd: "/repo",
+      }),
+      {},
+    );
+
+    expect(JSON.parse(line)).toMatchObject({
+      sessionId: "claude-permission-request",
+      status: "waiting",
+      task: "Claude needs your permission to use Bash",
+      externalApproval: {
+        kind: "approval_required",
+        title: "Approval required in Claude Code",
+        message: "Claude needs your permission to use Bash",
+        sourceTool: "claude",
+        jumpTarget: {
+          agent: "claude",
+          appName: "Terminal",
+          workspacePath: "/repo",
+          sessionId: "claude-permission-request",
+          fallbackBehavior: "activate_app",
+        },
+      },
+      activityItems: [
+        expect.objectContaining({
+          kind: "note",
+          title: "Permission request",
+          body: "Claude needs your permission to use Bash",
+        }),
+      ],
+    });
+  });
+
+  it("maps PostToolUse into a running tool-result event that clears external approval", () => {
+    const line = buildClaudeEventLine(
+      JSON.stringify({
+        session_id: "claude-post-tool",
+        hook_event_name: "PostToolUse",
+        tool_name: "Bash",
+        tool_response: { stdout: "ok", stderr: "" },
+      }),
+      {},
+    );
+
+    expect(JSON.parse(line)).toMatchObject({
+      sessionId: "claude-post-tool",
+      status: "running",
+      task: "Bash",
+      externalApproval: null,
+      meta: {
+        hook_event_name: "PostToolUse",
+        tool_name: "Bash",
+      },
+      activityItems: [
+        expect.objectContaining({
+          kind: "tool",
+          title: "Bash",
+          body: "ok",
+          toolName: "Bash",
+          toolPhase: "result",
+        }),
+      ],
+    });
+  });
+
+  it("maps PostToolUseFailure into a running tool-result event that clears external approval", () => {
+    const line = buildClaudeEventLine(
+      JSON.stringify({
+        session_id: "claude-post-tool-failed",
+        hook_event_name: "PostToolUseFailure",
+        tool_name: "Bash",
+        error: "Command failed",
+      }),
+      {},
+    );
+
+    expect(JSON.parse(line)).toMatchObject({
+      sessionId: "claude-post-tool-failed",
+      status: "running",
+      task: "Bash failed",
+      externalApproval: null,
+      meta: {
+        hook_event_name: "PostToolUseFailure",
+        tool_name: "Bash",
+      },
+      activityItems: [
+        expect.objectContaining({
+          kind: "tool",
+          title: "Bash",
+          body: "Command failed",
+          toolName: "Bash",
+          toolPhase: "result",
+          tone: "error",
+        }),
+      ],
+    });
+  });
+
   describe("isClaudePreToolUsePayload", () => {
     it("returns true for PreToolUse payloads", () => {
       expect(

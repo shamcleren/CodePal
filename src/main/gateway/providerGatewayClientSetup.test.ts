@@ -38,8 +38,8 @@ function status(): ProviderGatewayStatus {
     },
     modelMappings: [
       {
-        claudeModel: "anthropic/MiMo-V2.5-Pro",
-        upstreamModel: "mimo-v2.5-pro",
+        claudeModel: "claude-sonnet-4-6",
+        upstreamModel: "mimo-v2.5",
         health: "ok",
         status: 200,
       },
@@ -48,7 +48,7 @@ function status(): ProviderGatewayStatus {
       baseUrl: "http://127.0.0.1:15721",
       apiKey: "local-proxy",
       authScheme: "bearer",
-      inferenceModels: ["anthropic/MiMo-V2.5-Pro"],
+      inferenceModels: ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5"],
       setup: {
         configured: false,
         restartRequired: false,
@@ -59,7 +59,7 @@ function status(): ProviderGatewayStatus {
       providerId: "codepal",
       profileId: "codepal-mimo",
       wireApi: "responses",
-      model: "anthropic/MiMo-V2.5-Pro",
+      model: "mimo-v2.5-pro",
       apiKey: "local-proxy",
       setup: {
         configured: false,
@@ -112,7 +112,7 @@ describe("provider gateway client setup", () => {
       inferenceGatewayApiKey: "local-proxy",
       inferenceGatewayAuthScheme: "bearer",
       disableDeploymentModeChooser: false,
-      inferenceModels: ["anthropic/MiMo-V2.5-Pro"],
+      inferenceModels: ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5"],
       coworkEgressAllowedHosts: ["127.0.0.1", "localhost"],
     });
     const meta = JSON.parse(fs.readFileSync(path.join(configDir, "_meta.json"), "utf8"));
@@ -205,9 +205,9 @@ describe("provider gateway client setup", () => {
       backupPath: `${configPath}.bak.456`,
     });
     const root = contents.slice(0, contents.indexOf("[projects."));
-    expect(root).toContain('model = "anthropic/MiMo-V2.5-Pro"');
+    expect(root).toContain('model = "mimo-v2.5-pro"');
     expect(root).toContain('model_provider = "codepal"');
-    expect(contents).toContain('model = "anthropic/MiMo-V2.5-Pro"');
+    expect(contents).toContain('model = "mimo-v2.5-pro"');
     expect(contents).toContain('model_provider = "codepal"');
     expect(contents).toContain("[model_providers.codepal]");
     expect(contents).toContain("[profiles.codepal-mimo]");
@@ -242,7 +242,7 @@ describe("provider gateway client setup", () => {
   it("removes legacy global CodePal defaults from older Codex auto setup", () => {
     const contents = codexConfigContents(
       [
-        'model = "anthropic/MiMo-V2.5-Pro"',
+        'model = "mimo-v2.5-pro"',
         'model_provider = "codepal"',
         'model_reasoning_effort = "high"',
         "",
@@ -254,11 +254,11 @@ describe("provider gateway client setup", () => {
     );
 
     const root = contents.slice(0, contents.indexOf("[projects."));
-    expect(root).not.toContain('model = "anthropic/MiMo-V2.5-Pro"');
+    expect(root).not.toContain('model = "mimo-v2.5-pro"');
     expect(root).not.toContain('model_provider = "codepal"');
     expect(root).toContain('model_reasoning_effort = "high"');
     expect(contents).toContain("[profiles.codepal-mimo]");
-    expect(contents).toContain('model = "anthropic/MiMo-V2.5-Pro"');
+    expect(contents).toContain('model = "mimo-v2.5-pro"');
     expect(contents).toContain('model_provider = "codepal"');
   });
 

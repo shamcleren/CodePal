@@ -31,22 +31,18 @@ function firstString(payload: Record<string, unknown>, keys: readonly string[]):
   return undefined;
 }
 
-function maybeBuildClaudeExternalApproval(
-  payload: Record<string, unknown>,
+function looksLikeApprovalMessage(message: string): boolean {
+  return /\b(permission|approval|approve|allow)\b/i.test(message) || /权限|授权|审批|批准|允许/.test(message);
+}
+
+function buildClaudeExternalApproval(
+  message: string,
   sessionId: string,
   timestamp: number,
   cwd: string | undefined,
   env: NodeJS.ProcessEnv,
   toolTag: ClaudeHookToolTag,
-): ExternalApprovalState | undefined {
-  const message = firstString(payload, ["message", "notification", "prompt"]);
-  if (!message) {
-    return undefined;
-  }
-  if (!(/\b(permission|approval|approve|allow)\b/i.test(message) || /权限|授权|审批|批准|允许/.test(message))) {
-    return undefined;
-  }
-
+): ExternalApprovalState {
   const terminalFields = jumpTargetFieldsFromEnv(env);
   return {
     kind: "approval_required",
@@ -68,6 +64,22 @@ function maybeBuildClaudeExternalApproval(
       fallbackBehavior: "activate_app",
     },
   };
+}
+
+function maybeBuildClaudeExternalApproval(
+  payload: Record<string, unknown>,
+  sessionId: string,
+  timestamp: number,
+  cwd: string | undefined,
+  env: NodeJS.ProcessEnv,
+  toolTag: ClaudeHookToolTag,
+): ExternalApprovalState | undefined {
+  const message = firstString(payload, ["message", "notification", "prompt"]);
+  if (!message || !looksLikeApprovalMessage(message)) {
+    return undefined;
+  }
+
+  return buildClaudeExternalApproval(message, sessionId, timestamp, cwd, env, toolTag);
 }
 
 function parseClaudeHookPayload(trimmed: string): Record<string, unknown> {
@@ -259,6 +271,139 @@ function summarizeToolInput(toolName: string, toolInput: unknown): string {
   }
 }
 
+function firstToolOutputText(value: unknown, depth = 0): string | undefined {
+  if (depth > 3 || value === null || value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return truncate(value.trim(), 200);
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = firstToolOutputText(item, depth + 1);
+      if (nested) return nested;
+    }
+    return undefined;
+  }
+
+  if (typeof value !== "object") {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of ["stdout", "stderr", "output", "text", "content", "result", "error", "message"]) {
+    const nested = firstToolOutputText(record[key], depth + 1);
+    if (nested) return nested;
+  }
+
+  try {
+    return truncate(JSON.stringify(record), 200);
+  } catch {
+    return undefined;
+  }
+}
+
+function summarizeToolOutput(payload: Record<string, unknown>): string | undefined {
+  const directError = firstString(payload, ["error", "message"]);
+  if (directError) {
+    return truncate(directError, 200);
+  }
+
+  return (
+    firstToolOutputText(payload.tool_response) ??
+    firstToolOutputText(payload.tool_output) ??
+    firstToolOutputText(payload.tool_result) ??
+    firstToolOutputText(payload.result) ??
+    firstToolOutputText(payload.output) ??
+    firstToolOutputText(payload.response)
+  );
+}
+
+function buildPermissionRequestEvent(
+  payload: Record<string, unknown>,
+  sessionId: string,
+  timestamp: number,
+  cwd: string | undefined,
+  hookEventName: string,
+  env: NodeJS.ProcessEnv,
+  toolTag: ClaudeHookToolTag,
+): string {
+  const label = AGENT_DISPLAY_LABELS[toolTag];
+  const toolName = firstString(payload, ["tool_name", "toolName"]) ?? "tool";
+  const message = `${label} needs your permission to use ${toolName}`;
+  const externalApproval = buildClaudeExternalApproval(message, sessionId, timestamp, cwd, env, toolTag);
+
+  return JSON.stringify({
+    type: "status_change",
+    sessionId,
+    tool: toolTag,
+    status: "waiting",
+    task: message,
+    timestamp,
+    meta: {
+      hook_event_name: hookEventName,
+      notification_type: "permission_request",
+      tool_name: toolName,
+      ...(cwd ? { cwd } : {}),
+    },
+    externalApproval,
+    activityItems: [
+      {
+        id: `${toolTag}-hook:${sessionId}:${timestamp}:permission-request`,
+        kind: "note",
+        source: "system",
+        title: "Permission request",
+        body: message,
+        timestamp,
+        tone: "waiting",
+      },
+    ],
+  });
+}
+
+function buildToolFinishedEvent(
+  payload: Record<string, unknown>,
+  sessionId: string,
+  timestamp: number,
+  cwd: string | undefined,
+  hookEventName: "PostToolUse" | "PostToolUseFailure",
+  toolTag: ClaudeHookToolTag,
+): string {
+  const toolName = firstString(payload, ["tool_name", "toolName"]) ?? "Tool";
+  const failed = hookEventName === "PostToolUseFailure";
+  const body = summarizeToolOutput(payload) ?? (failed ? `${toolName} failed` : `${toolName} completed`);
+
+  return JSON.stringify({
+    type: "status_change",
+    sessionId,
+    tool: toolTag,
+    status: "running",
+    task: failed ? `${toolName} failed` : toolName,
+    timestamp,
+    meta: {
+      hook_event_name: hookEventName,
+      tool_name: toolName,
+      ...(cwd ? { cwd } : {}),
+    },
+    externalApproval: null,
+    activityItems: [
+      {
+        id: `${toolTag}-hook:${sessionId}:${timestamp}:${failed ? "tool-failure" : "tool-result"}:${toolName}`,
+        kind: "tool",
+        source: "tool",
+        title: toolName,
+        body,
+        timestamp,
+        toolName,
+        toolPhase: "result",
+        ...(failed ? { tone: "error" as const } : {}),
+      },
+    ],
+  });
+}
+
 function buildPreToolUseOutbound(
   payload: Record<string, unknown>,
   sessionId: string,
@@ -412,6 +557,12 @@ export function buildClaudeEventLine(
       return buildSessionEndEvent(sessionId, timestamp, cwd, hookEventName, toolTag);
     case "Notification":
       return buildNotificationEvent(payload, sessionId, timestamp, cwd, hookEventName, env, toolTag);
+    case "PermissionRequest":
+      return buildPermissionRequestEvent(payload, sessionId, timestamp, cwd, hookEventName, env, toolTag);
+    case "PostToolUse":
+      return buildToolFinishedEvent(payload, sessionId, timestamp, cwd, hookEventName, toolTag);
+    case "PostToolUseFailure":
+      return buildToolFinishedEvent(payload, sessionId, timestamp, cwd, hookEventName, toolTag);
     default:
       return JSON.stringify({
         type: "status_change",

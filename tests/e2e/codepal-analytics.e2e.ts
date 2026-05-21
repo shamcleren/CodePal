@@ -67,6 +67,30 @@ test("renders analytics from persisted token usage", async () => {
     await expect(page.getByRole("heading", { name: /Analytics|分析/ })).toBeVisible({
       timeout: 15_000,
     });
+    await page.locator(".app").evaluate((element) => {
+      element.setAttribute("data-theme", "paper-ops");
+    });
+    await expect(page.locator(".app")).toHaveAttribute("data-theme", "paper-ops");
+    await expect(page.locator(".analytics-page__hero-value").first()).toHaveCSS(
+      "color",
+      "rgb(23, 33, 29)",
+    );
+    await expect(page.locator(".analytics-page__hero-label").first()).toHaveCSS(
+      "color",
+      "rgb(76, 94, 86)",
+    );
+    await expect(page.locator(".analytics-page__chart-y-axis").first()).toHaveCSS(
+      "color",
+      "rgb(76, 94, 86)",
+    );
+    await expect(page.locator(".analytics-page__table-model").nth(1)).toHaveCSS(
+      "color",
+      "rgb(23, 33, 29)",
+    );
+    await expect(page.locator(".analytics-page__table-num").nth(7)).toHaveCSS(
+      "color",
+      "rgb(45, 61, 54)",
+    );
 
     const totalTokensCard = page
       .locator(".analytics-page__hero-card")

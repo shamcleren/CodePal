@@ -743,6 +743,25 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     LIMIT ?
   `);
 
+  const sessionTokenUsageStmt = db.prepare(`
+    SELECT
+      token_usage.agent AS agent,
+      COALESCE(token_usage.model, 'unknown') AS model,
+      SUM(token_usage.input_tokens) AS inputTokens,
+      SUM(token_usage.output_tokens) AS outputTokens,
+      SUM(token_usage.cache_read_tokens) AS cacheReadTokens,
+      SUM(token_usage.cache_creation_tokens) AS cacheCreationTokens,
+      SUM(token_usage.reasoning_tokens) AS reasoningTokens,
+      SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) AS totalTokens,
+      COUNT(*) AS requestCount,
+      MIN(token_usage.timestamp) AS firstSeenAt,
+      MAX(token_usage.timestamp) AS lastSeenAt
+    FROM token_usage
+    WHERE token_usage.session_id = ?
+    GROUP BY token_usage.agent, token_usage.model
+    ORDER BY totalTokens DESC
+  `);
+
   const sessionStatsStmt = db.prepare(`
     SELECT
       tool AS agent,
@@ -1136,6 +1155,36 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }));
   }
 
+  function getSessionTokenUsage(sessionId: string): SessionTokenStats[] {
+    assertOpen();
+    const rows = sessionTokenUsageStmt.all(sessionId) as Array<{
+      agent: string;
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      reasoningTokens: number;
+      totalTokens: number;
+      requestCount: number;
+      firstSeenAt: number;
+      lastSeenAt: number;
+    }>;
+    return rows.map((row) => ({
+      sessionId,
+      agent: row.agent,
+      model: row.model,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      cacheReadTokens: row.cacheReadTokens,
+      cacheCreationTokens: row.cacheCreationTokens,
+      totalTokens: row.totalTokens,
+      requestCount: row.requestCount,
+      firstSeenAt: row.firstSeenAt,
+      lastSeenAt: row.lastSeenAt,
+    }));
+  }
+
   function getUsageImportStatus(): UsageImportStatus {
     assertOpen();
     const completedAt = lastCleanupStmt.get(USAGE_IMPORT_COMPLETED_AT_KEY) as { value: string } | undefined;
@@ -1273,6 +1322,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     getTokenUsageByModel,
     getTokenUsageByAgent,
     getTopTokenUsageSessions,
+    getSessionTokenUsage,
     getSessionStats,
     getUsageImportStatus,
     setUsageImportStatus,

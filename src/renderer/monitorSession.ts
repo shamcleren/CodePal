@@ -1,4 +1,5 @@
 import type { ActivityItem, SessionRecord } from "../shared/sessionTypes";
+import type { SessionCapabilityManifest } from "../shared/capabilityTypes";
 
 export type TimelineItem = ActivityItem & {
   label: string;
@@ -19,4 +20,5 @@ export type MonitorSessionRow = SessionRecord & {
   timelineItems: TimelineItem[];
   activityItems: ActivityItem[];
   hoverSummary: string;
+  capabilities: SessionCapabilityManifest | null;
 };

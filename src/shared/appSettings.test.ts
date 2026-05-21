@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  APP_THEME_IDS,
   mergeAppSettings,
   normalizeAppSettings,
   normalizeCodeBuddyEndpointSettings,
@@ -38,6 +39,28 @@ describe("appSettings", () => {
     });
 
     expect(settings.locale).toBe("system");
+  });
+
+  it("normalizes display theme to the two built-in theme presets", () => {
+    expect(APP_THEME_IDS).toEqual(["graphite-ops", "paper-ops"]);
+
+    expect(normalizeAppSettings({}).display.theme).toBe("graphite-ops");
+    expect(
+      normalizeAppSettings({
+        version: 1,
+        display: {
+          theme: "paper-ops",
+        },
+      }).display.theme,
+    ).toBe("paper-ops");
+    expect(
+      normalizeAppSettings({
+        version: 1,
+        display: {
+          theme: "classic",
+        },
+      }).display.theme,
+    ).toBe("graphite-ops");
   });
 
   it("returns fresh default-backed settings objects", () => {
@@ -186,7 +209,7 @@ describe("appSettings", () => {
             opus: "mimo-v2.5-pro",
             "claude-sonnet-4-6": "mimo-v2.5",
             "claude-opus-4-7": "mimo-v2.5-pro",
-            "claude-haiku-4-5": "mimo-v2",
+            "claude-haiku-4-5": "mimo-v2.5",
           },
         },
       },
@@ -269,6 +292,37 @@ describe("appSettings", () => {
 
     expect(settings.providerGateway.providers.mimo.modelMappings).toEqual({
       "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
+    });
+  });
+
+  it("migrates the stale MiMo Haiku route while preserving custom mappings", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      providerGateway: {
+        activeProvider: "mimo",
+        providers: {
+          mimo: {
+            type: "anthropic-compatible",
+            displayName: "MiMo Gateway",
+            baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
+            authScheme: "bearer",
+            tokenRef: "mimo.gateway.token",
+            envFallback: "MIMO_GATEWAY_TOKEN",
+            headers: {},
+            modelMappings: {
+              default: "mimo-v2.5-pro",
+              "claude-haiku-4-5": "mimo-v2",
+              "anthropic/Custom": "custom-upstream",
+            },
+          },
+        },
+      },
+    });
+
+    expect(settings.providerGateway.providers.mimo.modelMappings).toEqual({
+      default: "mimo-v2.5-pro",
+      "claude-haiku-4-5": "mimo-v2.5",
+      "anthropic/Custom": "custom-upstream",
     });
   });
 });

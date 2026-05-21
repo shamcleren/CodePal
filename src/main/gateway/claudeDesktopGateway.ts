@@ -184,6 +184,24 @@ function resolveUpstreamModel(
   return undefined;
 }
 
+function matchingUpstreamModel(
+  provider: ProviderGatewayConfig,
+  model: string,
+): string | undefined {
+  const strippedModel = stripClaudeLocalModelMarkers(model);
+  const normalized = strippedModel.toLowerCase();
+  return Object.values(provider.modelMappings).find(
+    (upstreamModel) => upstreamModel.toLowerCase() === normalized,
+  );
+}
+
+function resolveCodexUpstreamModel(
+  provider: ProviderGatewayConfig,
+  model: string,
+): string | undefined {
+  return resolveUpstreamModel(provider, model) ?? matchingUpstreamModel(provider, model);
+}
+
 function getHeader(request: IncomingMessage, name: string): string | undefined {
   const value = request.headers[name.toLowerCase()];
   if (Array.isArray(value)) {
@@ -807,7 +825,7 @@ async function handleCodexResponses(
       return;
     }
     claudeModel = typeof body.model === "string" ? body.model : "";
-    upstreamModel = resolveUpstreamModel(provider, claudeModel) ?? "";
+    upstreamModel = resolveCodexUpstreamModel(provider, claudeModel) ?? "";
     if (!upstreamModel) {
       const error = openAiError(
         400,

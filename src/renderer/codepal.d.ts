@@ -10,8 +10,9 @@ import type {
   SessionHistoryPageRequest,
 } from "../shared/historyTypes";
 import type { SessionJumpTarget, SessionRecord } from "../shared/sessionTypes";
+import type { SessionActionType, SessionCapabilityManifest } from "../shared/capabilityTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
-import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry } from "../shared/usageTypes";
+import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry, SessionTokenUsageResult } from "../shared/usageTypes";
 import type {
   ProviderGatewayClientSetupResult,
   ProviderGatewayClientSetupTarget,
@@ -26,7 +27,7 @@ export type CodePalApi = {
   getUsageOverview: () => Promise<UsageOverview>;
   getTokenStats: (startMs: number, endMs: number, agent?: string) => Promise<TokenStatsResult>;
   getSessionStats: (startMs: number, endMs: number) => Promise<SessionStatsEntry[]>;
-  generateHtmlReport: (startMs: number, endMs: number) => Promise<string>;
+  generateHtmlReport: (startMs: number, endMs: number, redactionOptions?: { redactSessionTitles?: boolean; redactModelNames?: boolean }) => Promise<string>;
   getModelPricing: () => Promise<ModelPricing[]>;
   upsertModelPricing: (pricing: ModelPricing) => Promise<void>;
   getAppSettings: () => Promise<AppSettings>;
@@ -54,6 +55,7 @@ export type CodePalApi = {
   getIntegrationDiagnostics: () => Promise<IntegrationDiagnostics>;
   getHistoryDiagnostics: () => Promise<HistoryDiagnostics>;
   getSessionHistoryPage: (input: SessionHistoryPageRequest) => Promise<SessionHistoryPage>;
+  getSessionTokenUsage: (sessionId: string) => Promise<SessionTokenUsageResult>;
   clearHistoryStore: () => Promise<HistoryDiagnostics>;
   installIntegrationHooks: (
     agentId: IntegrationAgentId,
@@ -69,6 +71,9 @@ export type CodePalApi = {
   onActionResponseResult: (handler: (result: { sessionId: string; actionId: string; result: "success" | "error"; option: string; error?: string }) => void) => () => void;
   sendMessage: (sessionId: string, text: string) => void;
   onSendMessageResult: (handler: (result: { sessionId: string; result: "success" | "error"; error?: string }) => void) => () => void;
+  getSessionCapabilities: (sessionId: string) => Promise<SessionCapabilityManifest | null>;
+  executeSessionAction: (sessionId: string, actionType: SessionActionType, payload?: { text?: string }) => Promise<{ ok: boolean; action: string; sessionId: string; error?: string }>;
+  deleteSession: (sessionId: string) => Promise<boolean>;
 };
 
 declare global {

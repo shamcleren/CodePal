@@ -3,10 +3,12 @@ import type { WheelEvent } from "react";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type { PendingAction } from "../../shared/sessionTypes";
 import { canReply } from "../../shared/sessionTypes";
+import type { ModelPricing, SessionTokenUsageResult } from "../../shared/usageTypes";
 import { useI18n } from "../i18n";
 import type { MonitorSessionRow, TimelineItem } from "../monitorSession";
 import { HoverDetails } from "./HoverDetails";
 import { SessionMessageInput } from "./SessionMessageInput";
+import { SessionActionBar } from "./SessionActionBar";
 
 const HISTORY_INITIAL_PAGE_LIMIT = 100;
 const HISTORY_INCREMENTAL_PAGE_LIMIT = 60;
@@ -25,6 +27,14 @@ const LOW_VALUE_LIFECYCLE_BODIES = new Set([
   "Turn aborted",
 ]);
 const DUPLICATE_HISTORY_TIME_WINDOW_MS = 5_000;
+
+export type SessionFooterUsageSummary = {
+  requestCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
+  cost: number | null;
+};
 
 function normalizeComparableText(text: string): string {
   return text
@@ -49,6 +59,184 @@ function appendUniqueHistoryItems(current: ActivityItem[], next: ActivityItem[])
     merged.push(item);
   }
   return merged;
+}
+
+function parsePricePerToken(value: string): number | null {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed / 1_000_000;
+}
+
+function estimatePersistedUsageCost(
+  persisted: SessionTokenUsageResult["persisted"],
+  pricing: ModelPricing[],
+): number | null {
+  let total = 0;
+  let matched = false;
+
+  for (const row of persisted) {
+    const price = pricing.find(
+      (candidate) =>
+        candidate.modelId === row.model ||
+        candidate.displayName === row.model ||
+        row.model.includes(candidate.modelId),
+    );
+    if (!price) continue;
+
+    const inputRate = parsePricePerToken(price.inputPerMillion);
+    const outputRate = parsePricePerToken(price.outputPerMillion);
+    const cacheReadRate = parsePricePerToken(price.cacheReadPerMillion);
+    const cacheCreationRate = parsePricePerToken(price.cacheCreationPerMillion);
+
+    if (
+      inputRate === null ||
+      outputRate === null ||
+      cacheReadRate === null ||
+      cacheCreationRate === null
+    ) {
+      continue;
+    }
+
+    matched = true;
+    total +=
+      row.inputTokens * inputRate +
+      row.outputTokens * outputRate +
+      row.cacheReadTokens * cacheReadRate +
+      row.cacheCreationTokens * cacheCreationRate;
+  }
+
+  return matched ? total : null;
+}
+
+export function summarizeSessionFooterUsage(
+  usage: SessionTokenUsageResult | null | undefined,
+): SessionFooterUsageSummary | null {
+  if (!usage) return null;
+
+  let requestCount = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheTokens = 0;
+
+  for (const row of usage.persisted) {
+    requestCount += row.requestCount;
+    inputTokens += row.inputTokens;
+    outputTokens += row.outputTokens;
+    cacheTokens += row.cacheReadTokens + row.cacheCreationTokens;
+  }
+
+  if (usage.live?.tokens) {
+    const live = usage.live.tokens;
+    if (typeof live.input === "number") {
+      inputTokens = Math.max(inputTokens, live.input);
+    }
+    if (typeof live.output === "number") {
+      outputTokens = Math.max(outputTokens, live.output);
+    }
+    if (typeof live.cachedInput === "number") {
+      cacheTokens = Math.max(cacheTokens, live.cachedInput);
+    }
+
+    const liveTotal =
+      live.total ??
+      (live.input ?? 0) +
+        (live.output ?? 0) +
+        (live.cachedInput ?? 0) +
+        (live.reasoningOutput ?? 0);
+    if (requestCount === 0 && liveTotal > 0) {
+      requestCount = 1;
+    }
+  }
+
+  const liveCost = usage.live?.cost?.reported ?? usage.live?.cost?.estimated;
+  const cost =
+    typeof liveCost === "number"
+      ? liveCost
+      : estimatePersistedUsageCost(usage.persisted, usage.pricing);
+
+  if (
+    requestCount === 0 &&
+    inputTokens === 0 &&
+    outputTokens === 0 &&
+    cacheTokens === 0 &&
+    cost === null
+  ) {
+    return null;
+  }
+
+  return {
+    requestCount,
+    inputTokens,
+    outputTokens,
+    cacheTokens,
+    cost,
+  };
+}
+
+function formatFooterTokenCount(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `${(value / 1_000).toFixed(1)}K`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+  return value.toLocaleString();
+}
+
+function formatFooterCost(value: number): string {
+  if (value < 0.01) return `$${value.toFixed(4)}`;
+  if (value < 1) return `$${value.toFixed(3)}`;
+  return `$${value.toFixed(2)}`;
+}
+
+function SessionFooterUsageStats({
+  summary,
+}: {
+  summary: SessionFooterUsageSummary;
+}) {
+  const i18n = useI18n();
+  const stats = [
+    {
+      key: "requests",
+      label: i18n.t("session.footer.usage.requests"),
+      value: summary.requestCount.toLocaleString(),
+      show: summary.requestCount > 0,
+    },
+    {
+      key: "input",
+      label: i18n.t("session.footer.usage.input"),
+      value: formatFooterTokenCount(summary.inputTokens),
+      show: summary.inputTokens > 0,
+    },
+    {
+      key: "output",
+      label: i18n.t("session.footer.usage.output"),
+      value: formatFooterTokenCount(summary.outputTokens),
+      show: summary.outputTokens > 0,
+    },
+    {
+      key: "cache",
+      label: i18n.t("session.footer.usage.cache"),
+      value: formatFooterTokenCount(summary.cacheTokens),
+      show: summary.cacheTokens > 0,
+    },
+    {
+      key: "cost",
+      label: i18n.t("session.footer.usage.cost"),
+      value: summary.cost === null ? "" : formatFooterCost(summary.cost),
+      show: summary.cost !== null,
+    },
+  ].filter((item) => item.show);
+
+  if (stats.length === 0) return null;
+
+  return (
+    <div className="session-row__footer-usage" aria-label={i18n.t("session.footer.usage.label")}>
+      {stats.map((item) => (
+        <span key={item.key} className={`session-row__footer-stat session-row__footer-stat--${item.key}`}>
+          <span className="session-row__footer-stat-label">{item.label}</span>
+          <span className="session-row__footer-stat-value">{item.value}</span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function shouldHideLowValueLifecycleItem(item: Pick<ActivityItem, "kind" | "source" | "body">): boolean {
@@ -480,6 +668,7 @@ export function SessionHistoryTimeline({
   const [jumpError, setJumpError] = useState<string | null>(null);
   const jumpErrorTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [localUserMessages, setLocalUserMessages] = useState<ActivityItem[]>([]);
+  const [tokenUsage, setTokenUsage] = useState<SessionTokenUsageResult | null>(null);
 
   const mergedItemsBase = useMemo(
     () => mergeSessionTimelineItems(session.timelineItems, persistedItems),
@@ -534,7 +723,17 @@ export function SessionHistoryTimeline({
     pendingScrollRestoreRef.current = null;
     shouldStickToBottomRef.current = true;
     lastExpandedRef.current = false;
+    setTokenUsage(null);
   }, [historyVersion, session.id]);
+
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+    window.codepal.getSessionTokenUsage(session.id).then((result) => {
+      if (!cancelled) setTokenUsage(result);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [expanded, session.id]);
 
   useEffect(() => {
     if (!expanded) {
@@ -874,6 +1073,7 @@ export function SessionHistoryTimeline({
     historyLoading &&
     persistedItems.length > 0 &&
     historyError === null;
+  const footerUsageSummary = summarizeSessionFooterUsage(tokenUsage);
 
   const footer = (
     <div className="session-row__footer">
@@ -887,6 +1087,7 @@ export function SessionHistoryTimeline({
           </span>
         ) : null}
       </div>
+      {footerUsageSummary ? <SessionFooterUsageStats summary={footerUsageSummary} /> : null}
       <div className="session-row__footer-actions">
         <button
           type="button"
@@ -910,6 +1111,12 @@ export function SessionHistoryTimeline({
 
   return (
     <div className="session-row__details-shell">
+      <div className="session-row__details-header">
+        <SessionActionBar
+          sessionId={session.id}
+          capabilities={session.capabilities}
+        />
+      </div>
       {showTopHistoryLoadingHint ? (
         <div className="session-row__history-peek" role="status">
           <div className="session-row__history-peek-dot" aria-hidden="true" />

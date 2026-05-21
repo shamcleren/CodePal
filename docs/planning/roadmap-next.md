@@ -17,7 +17,54 @@ CodePal is already more than a single floating session list. The shipped baselin
 - integration diagnostics, local repair, and Provider Gateway setup for supported desktop clients
 - signed / notarized macOS release packaging and updater metadata validation
 
+The current post-v1.1.11 development baseline also adds:
+
+- capability manifest and local action broker primitives for bounded Session Operations
+- a compact session action surface with jump, inline message, and list-level delete placement
+- footer-level per-session usage stats for requests, input, output, cache, and estimated cost
+- two built-in semantic visual themes, `graphite-ops` and `paper-ops`, with theme-aware session footer and Analytics surfaces
+
 The next roadmap should build on that local data foundation instead of adding speculative control loops too early.
+
+## Next Version Scope
+
+The next version should pivot from passive review UI to actionable workflow infrastructure.
+
+Ship in the next version:
+
+- Work Item Flow MVP:
+  - derive work items from sessions, status changes, pending states, errors, and user-triggered operations
+  - support states such as `waiting`, `needs_follow_up`, `failed`, `completed`, and `deferred`
+  - group items by project / repository when the source path is reliable
+  - keep item titles and next actions concise enough to scan in the main workflow
+- CLI Operation Flow MVP:
+  - expose a bounded operation surface for target terminal / agent sessions
+  - run preflight before execution
+  - support dry-run where the operation type allows it
+  - record execute result, error, timestamp, target, and source session into a local operation log
+  - keep operations explicitly user-triggered; do not add autonomous scheduling or automatic execution queues
+- Report Facts layer:
+  - build a deterministic daily / weekly / monthly facts object from work items, operation logs, session status, and usage stats
+  - include requests, input, output, cache, estimated cost, completed / failed / follow-up counts, and notable operation results
+  - treat this facts object as the only supported input to reports; do not ask an LLM to summarize raw transcripts by default
+- Manual LLM report generation:
+  - allow manual generation of daily / weekly / monthly reports after the Report Facts layer exists
+  - gate all LLM report generation behind an explicit settings switch because it spends the user's model quota
+  - provide a model selector and default to the cheapest configured model that is capable of summarization
+  - show the selected model and an estimated token / cost range before generation when pricing data is available
+  - default to a lower-cost configured model because the hard fact extraction is deterministic
+  - keep stronger models as an optional deep-analysis path, not the default
+  - keep any background / automatic report generation opt-in only, with a clear quota warning
+  - require redaction controls before prompts, paths, assistant content, command output, or repo identifiers leave the local app
+
+Do not ship in the next version:
+
+- top-level ReviewCard
+- Review Page
+- static Digest tab that only restates session logs
+- subjective data-confidence badges
+- LLM summaries over unbounded raw transcripts
+- autonomous CLI execution, auto-approval, auto-merge, or auto task assignment
 
 ## Product Positioning
 
@@ -51,7 +98,7 @@ That means:
 - keep the monitoring-first trust boundary
 - turn existing session, usage, and timeline data into useful after-the-fact understanding
 - measure workflow health and tool friction, not developer productivity scores
-- make observability confidence visible wherever data may be partial, estimated, inferred, or best-effort
+- show factual source and coverage where data may be partial, estimated, inferred, or best-effort
 - guide the user's attention without taking execution control
 - allow bounded user-triggered operations where adapter capability and preflight checks make them safe enough
 - prove sustained free individual value before team sharing, billing, cloud sync, or broader control surfaces
@@ -66,7 +113,7 @@ Current product decisions should optimize for:
 
 - daily open rate among heavy AI-coding users
 - long-term local trust
-- habit formation around session review and daily digest
+- habit formation around work item flow, CLI operation flow, and useful LLM reports
 - active recommendation to other developers
 - community contribution of adapters, templates, schemas, and troubleshooting knowledge
 
@@ -75,14 +122,15 @@ Do not design the next roadmap as Pro / Team / Enterprise packaging. Future comm
 Free should mean complete for the core personal workflow:
 
 - free session history
-- free session review cards
-- free day digest
+- free work item flow
+- free CLI operation flow
+- free daily / weekly / monthly reports when LLM generation is useful
 - free agent usage overview
 - free local reports
 - free integration repair
 - free templates
 - free workflow-health diagnostics
-- free observation confidence labels
+- free factual source and coverage indicators where they affect decisions
 - free local export
 - free adapter ecosystem and contribution guide
 - free community shared prompt / review templates using sanitized data
@@ -95,18 +143,27 @@ Goal: move from observe-only into user-triggered operations without changing the
 
 Near-term capabilities:
 
-- session card action bar
-- jump to terminal / IDE
-- open repo
-- send structured follow-up message when a reliable terminal channel exists
+- session card action bar (detail view): jump to terminal / IDE
+- open repo (deferred: workspacePath rarely available from session data; reintroduce when path extraction is reliable)
+- send structured follow-up message when a reliable terminal channel exists (inline input, not in action bar)
 - resume session when the adapter exposes a reliable path
 - repair integration
-- export review
-- mark outcome
-- close / archive session
+- export report (deferred until Report Facts and redaction controls exist)
+- delete session (list-level action, not in action bar)
 - local action log
 - action confidence
 - capability-gated UI
+
+Deferred / removed from MVP:
+
+- mark outcome — removed: the footer usage summary does not need manual tagging; outcome should be derived from work item flow if it becomes useful
+- close / archive session — renamed to "delete session" and moved to list-level; users should not need to open a session detail to delete it
+
+Action placement rules:
+
+- action bar (inside session detail): navigation and interaction actions that operate on the live session context (jump, open repo, send message)
+- list-level (session row in the main list): destructive or structural actions that do not require opening the detail view (delete session)
+- do not place destructive actions inside the detail view; do not place context-dependent actions at the list level
 
 Design rules:
 
@@ -161,15 +218,15 @@ CodePal should centralize user-triggered operations through a local action broke
 
 Action types:
 
-- `jump`
-- `send_message`
-- `resume`
-- `open_repo`
-- `repair_integration`
-- `export_review`
-- `mark_outcome`
-- `close_session`
-- `archive_session`
+- `jump` (action bar)
+- `send_message` (inline input)
+- `resume` (action bar)
+- `open_repo` (deferred — workspacePath rarely available)
+- `repair_integration` (action bar)
+- `export_report` (deferred until Report Facts and redaction controls exist)
+- `delete_session` (list-level)
+
+Note: `mark_outcome`, `close_session`, and `archive_session` are removed from the action type list. Outcome should be auto-inferred, not manually tagged. Session removal is `delete_session` at list level.
 
 Broker lifecycle:
 
@@ -181,46 +238,63 @@ Broker lifecycle:
 6. broker executes locally
 7. broker records a local action log
 8. broker reports success or a user-readable failure
-9. review cards and timelines can include the action history
+9. work items, operation logs, and future reports can include the action history
 
-## Track 1: Personal AI Work Memory
+## Track 1: Work Items, CLI Operation Flow, And Reports
 
 This remains the highest-leverage product layer.
 
-Goal: make CodePal useful not only while an agent is running, but also when the user wants to understand what happened after the work is done.
+Goal: make CodePal useful when work needs to move forward, not merely when the user wants to reread what happened.
 
-Near-term capabilities:
+Already started in the current development baseline:
 
-- session review cards / pages that summarize duration, major phases, waiting/error periods, model usage, token/cost totals, completion state, and outcome
-- deterministic first-pass summaries that do not depend on LLM-generated text
-- optional LLM summaries only when they are local-controllable, disableable, and redaction-aware
-- daily digest view across agents: what ran, what finished, what stalled, where usage concentrated, and which sessions need follow-up
-- exportable local reports in HTML / Markdown with redaction controls for prompts, paths, and assistant content
-- better session titles and grouping by project / repository when the source path is reliable
+- deterministic per-session usage stats stay in the expanded footer: requests, input, output, cache, and estimated cost
+- heavy ReviewCard UI is intentionally not the primary surface
+- theme-aware footer and analytics surfaces remain readable in both dark and light themes
+
+Next increments:
+
+- Report Facts layer: deterministic input for daily / weekly / monthly reports
+- work item flow: waiting, needs follow-up, failed, completed, and deferred items across agents
+- CLI operation flow: target terminal, preflight, dry-run, execute, result, and local action log
+- LLM-generated daily / weekly / monthly reports from work items and operation logs, not from a static metric card
+- redaction controls for prompts, paths, assistant content, command output, and repo identifiers before report export
+- better item titles and grouping by project / repository when the source path is reliable
 - local-only retention controls that separate detailed transcript-like history from aggregate analytics
 
-Session review cards should include:
+The footer-level usage summary may cover:
 
-- agent type
-- repo / project
-- session start and end time
-- duration
-- completion / interruption / idle / error state
-- resume events
-- context compact / compression signals
-- token usage
+- request count
+- input tokens
+- output tokens
+- cache tokens
 - estimated cost
-- major activity timeline
-- waiting time
-- user intervention count
-- jump / message / repair / export / mark-outcome action history
-- session outcome marker
-- data confidence
+
+Work item and CLI operation flow should add:
+
+- repo / project
+- current owner / next action
+- linked sessions and terminal targets
+- preflight status and dry-run output
+- execution result and local action history
+- follow-up / failed / completed state transitions
+- report export and redaction metadata
+
+LLM report rules:
+
+- reports are generated only from Report Facts plus selected operation-log excerpts, not from unbounded raw transcripts
+- LLM report generation must be controlled by a settings switch because it spends the user's quota
+- users must be able to choose the report model; default to the cheapest configured summarization-capable model
+- background report generation must stay opt-in and show a quota/cost warning
+- the default model should be a lower-cost configured model; expensive models are opt-in for deeper analysis
+- generation should be manual in the next version, not scheduled or automatic
+- redaction must run before report prompts leave the local app
 
 Why first:
 
-- it uses the existing history SQLite, usage backfill, Analytics page, and HTML report foundation
-- it gives users a reason to open CodePal at the end of the day, not only when something is stuck
+- it converts CodePal from passive monitoring into useful local operation handoff
+- it gives users a reason to keep CodePal open during active work, not only at the end of the day
+- it creates the structured substrate that LLM daily / weekly / monthly reports actually need
 - it fits the local privacy contract better than team dashboards or remote analytics
 
 ## Track 2: Workflow Health
@@ -246,20 +320,20 @@ Design rules:
 - label estimated, backfilled, inferred, and real-time data differently
 - show missing data explicitly instead of hiding gaps behind polished charts
 
-## Track 3: Observability Confidence
+## Track 3: Source And Coverage Transparency
 
-Before expanding to many more agents or platforms, make trust in the observed data visible.
+Before expanding to many more agents or platforms, make the source and coverage of important data visible without pretending CodePal can assign a universal confidence score.
 
 Near-term work:
 
 - show which integrations are live, backfilled, estimated, degraded, or unsupported
 - expose event-delivery reliability and recent ingestion gaps in diagnostics
-- label usage rows, cost estimates, timeline segments, session reviews, and digests by data source and confidence
+- label usage rows, cost estimates, timelines, work items, CLI operations, and reports by concrete data source when it affects user decisions
 - make terminal delivery capabilities explicit: tmux, WezTerm, kitty, iTerm2, and Ghostty are supported; Terminal.app and Warp remain outside reliable message-send support
 - keep unknown upstream payloads in adapter calibration work, not renderer-specific guessing
 - keep Provider Gateway quota surfaces honest: MiMo quota remains dashboard/manual until a stable official quota API exists
 
-Each confidence label should distinguish:
+Each source / coverage indicator should distinguish only factual provenance:
 
 - data source
 - live observation vs log backfill
@@ -267,7 +341,6 @@ Each confidence label should distinguish:
 - deduped / cleaned status
 - best-effort status
 - known missing fields
-- adapter completeness
 - terminal path stability
 
 ## Track 4: Attention Queue And Ambient Presence
@@ -372,7 +445,7 @@ If commercial work is ever revisited, it should:
 - avoid pulling the product toward team surveillance
 - come after durable daily usage and trust are validated
 
-Do not start with billing implementation. First validate whether users keep the app open and come back to the review / digest / attention surfaces.
+Do not start with billing implementation. First validate whether users keep the app open and come back to the work item flow, CLI operation flow, report generation, and attention surfaces.
 
 ## Explicitly Deferred
 
@@ -397,12 +470,24 @@ Do not start with billing implementation. First validate whether users keep the 
 
 If planning effort is limited, use this order:
 
-1. define capability manifest and action broker primitives
-2. ship Session Operations MVP
-3. design and validate session review
-4. add observability-confidence labels across review, usage, timelines, diagnostics, and operations
-5. add day digest and local report export
-6. add workflow-health signals and Attention Queue
-7. add ambient presence only after attention signals are useful
-8. open community templates, schemas, and adapter contribution paths
-9. only then revisit optional shared ops visibility, cloud sync, broader control flows, new platforms, or commercial packaging
+1. ~~define capability manifest and action broker primitives~~ — done (v1.2.0-dev)
+2. ship Session Operations MVP — revised scope:
+   - capability manifest: done
+   - action broker: done (jump, sendMessage)
+   - session action bar: jump only (detail view)
+   - send message: inline input (already working)
+   - delete session: list-level button (done)
+   - ~~open repo~~: deferred — workspacePath rarely available
+   - ~~mark outcome~~: removed — derive outcome from work item flow if it becomes useful
+   - ~~close session~~: replaced by delete_session at list level
+3. keep deterministic per-session stats at the footer level:
+   - requests / input / output / cache / estimated cost: started
+   - top-level ReviewCard / Review Page: deferred unless it enables a concrete action
+4. define Report Facts schema for daily / weekly / monthly reports
+5. design and validate work item flow plus CLI operation flow
+6. add manual LLM-generated daily / weekly / monthly reports on top of Report Facts and local operation logs
+7. add factual source / coverage indicators only where they change user decisions
+8. add workflow-health signals and Attention Queue
+9. add ambient presence only after attention signals are useful
+10. open community templates, schemas, and adapter contribution paths
+11. only then revisit optional shared ops visibility, cloud sync, broader control flows, new platforms, or commercial packaging

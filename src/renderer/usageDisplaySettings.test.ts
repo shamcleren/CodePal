@@ -7,6 +7,7 @@ describe("usageDisplaySettings", () => {
       showInStatusBar: true,
       hiddenAgents: [],
       density: "detailed",
+      theme: "graphite-ops",
     });
   });
 });

@@ -45,10 +45,46 @@ function isClaudeDesktopSafeModelId(model: string): boolean {
   );
 }
 
+function isCanonicalClaudeModelId(model: string): boolean {
+  const normalized = model.trim().toLowerCase();
+  return normalized.startsWith("claude-") || normalized.startsWith("anthropic/claude-");
+}
+
+function claudeDesktopModelMappings<T extends { claudeModel: string }>(modelMappings: T[]): T[] {
+  const canonicalModels = modelMappings.filter((mapping) =>
+    isCanonicalClaudeModelId(mapping.claudeModel),
+  );
+  if (canonicalModels.length > 0) {
+    return canonicalModels;
+  }
+  const safeModels = modelMappings.filter((mapping) => isClaudeDesktopSafeModelId(mapping.claudeModel));
+  return safeModels.length > 0 ? safeModels : modelMappings;
+}
+
 function claudeDesktopInferenceModels(modelMappings: Array<{ claudeModel: string }>): string[] {
   const allModels = modelMappings.map((mapping) => mapping.claudeModel);
+  const canonicalModels = allModels.filter(isCanonicalClaudeModelId);
+  if (canonicalModels.length > 0) {
+    return canonicalModels;
+  }
   const safeModels = allModels.filter(isClaudeDesktopSafeModelId);
   return safeModels.length > 0 ? safeModels : allModels;
+}
+
+function codexProfileModel(
+  modelMappings: Array<{ claudeModel: string; upstreamModel: string }>,
+): string | null {
+  const preferredKeys = new Set([
+    "anthropic/mimo-v2.5-pro",
+    "claude-opus-4-7",
+    "opus",
+  ]);
+  const preferredMapping = modelMappings.find(
+    (mapping) =>
+      mapping.upstreamModel.toLowerCase() === "mimo-v2.5-pro" ||
+      preferredKeys.has(mapping.claudeModel.toLowerCase()),
+  );
+  return preferredMapping?.upstreamModel ?? modelMappings[0]?.upstreamModel ?? null;
 }
 
 export function buildProviderGatewayStatus(
@@ -60,7 +96,7 @@ export function buildProviderGatewayStatus(
   const healthByModel = new Map(
     (input.lastHealthCheck?.models ?? []).map((model) => [model.claudeModel, model]),
   );
-  const modelMappings = provider
+  const allModelMappings = provider
     ? Object.entries(provider.modelMappings).map(([claudeModel, upstreamModel]) => {
         const health = healthByModel.get(claudeModel);
         return {
@@ -72,6 +108,7 @@ export function buildProviderGatewayStatus(
         };
       })
     : [];
+  const modelMappings = claudeDesktopModelMappings(allModelMappings);
 
   return {
     enabled: gateway.enabled,
@@ -93,7 +130,7 @@ export function buildProviderGatewayStatus(
       baseUrl: listener.localUrl,
       apiKey: "local-proxy",
       authScheme: "bearer",
-      inferenceModels: claudeDesktopInferenceModels(modelMappings),
+      inferenceModels: claudeDesktopInferenceModels(allModelMappings),
       setup: input.claudeDesktopSetup ?? {
         configured: false,
         restartRequired: false,
@@ -104,7 +141,7 @@ export function buildProviderGatewayStatus(
       providerId: "codepal",
       profileId: "codepal-mimo",
       wireApi: "responses",
-      model: modelMappings[0]?.claudeModel ?? null,
+      model: codexProfileModel(allModelMappings),
       apiKey: "local-proxy",
       setup: input.codexDesktopSetup ?? {
         configured: false,

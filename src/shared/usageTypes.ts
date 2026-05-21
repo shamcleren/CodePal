@@ -154,6 +154,20 @@ export interface SessionTokenStats {
   lastSeenAt: number;
 }
 
+export interface SessionTokenUsageResult {
+  /** Aggregated from persisted token_usage rows */
+  persisted: SessionTokenStats[];
+  /** Real-time snapshot from usageStore, if available */
+  live?: {
+    tokens?: UsageTokens;
+    cost?: UsageCost;
+    model?: string;
+    completeness: UsageCompleteness;
+  };
+  /** Model pricing for cost estimation */
+  pricing: ModelPricing[];
+}
+
 export interface UsageImportStatus {
   completedAt: number | null;
   claudeRowsImported: number;

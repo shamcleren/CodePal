@@ -57,6 +57,8 @@ import { createNotificationService } from "./notification/notificationService";
 import type { NotificationService } from "./notification/notificationService";
 import { createSessionJumpService } from "./jump/sessionJumpService";
 import { createTerminalTextSender } from "./terminal/terminalTextSender";
+import { createActionBroker } from "./session/actionBroker";
+import { resolveSessionCapabilities } from "../shared/capabilityResolver";
 import {
   applyAccessoryActivationPolicy,
   shouldUseAccessoryActivationPolicy,
@@ -72,6 +74,12 @@ const sessionStore = createSessionStore({
   onPendingActionCreated: (params) => {
     notificationServiceRef?.onPendingActionCreated(params);
   },
+});
+const actionBroker = createActionBroker({
+  sessionStore,
+  jumpService: sessionJumpService,
+  terminalTextSender,
+  openPath: (target: string) => shell.openPath(target),
 });
 const usageStore = createUsageStore();
 const actionResponseTransport = createActionResponseTransport(process.env);
@@ -240,6 +248,18 @@ function wireActionResponseIpc(
       pricing: currentHistoryStore.getModelPricing(),
     };
   });
+  ipcMain.handle("codepal:get-session-token-usage", (_event, sessionId: unknown) => {
+    if (typeof sessionId !== "string" || !sessionId) {
+      return { persisted: [], pricing: [] };
+    }
+    const persisted = currentHistoryStore?.getSessionTokenUsage(sessionId) ?? [];
+    const liveEntry = usageStore.getOverview().sessions.find((s) => s.sessionId === sessionId);
+    const live = liveEntry
+      ? { tokens: liveEntry.tokens, cost: liveEntry.cost, model: liveEntry.model, completeness: liveEntry.completeness }
+      : undefined;
+    const pricing = currentHistoryStore?.getModelPricing() ?? [];
+    return { persisted, live, pricing };
+  });
   ipcMain.handle("codepal:get-model-pricing", () => {
     if (!currentHistoryStore) return [];
     return currentHistoryStore.getModelPricing();
@@ -252,7 +272,7 @@ function wireActionResponseIpc(
     if (!currentHistoryStore) return [];
     return currentHistoryStore.getSessionStats(startMs, endMs);
   });
-  ipcMain.handle("codepal:generate-html-report", (_event, startMs: number, endMs: number) => {
+  ipcMain.handle("codepal:generate-html-report", (_event, startMs: number, endMs: number, redactionOptions?: import("../main/report/generateHtmlReport").ReportRedactionOptions) => {
     if (!currentHistoryStore) return "";
     const startDate = new Date(startMs).toISOString().slice(0, 10);
     const endDate = new Date(endMs).toISOString().slice(0, 10);
@@ -266,6 +286,7 @@ function wireActionResponseIpc(
       topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, undefined, 25),
       importStatus: currentHistoryStore.getUsageImportStatus(),
       pricing: currentHistoryStore.getModelPricing(),
+      redaction: redactionOptions,
     });
     const filePath = path.join(os.tmpdir(), `codepal-report-${Date.now()}.html`);
     fs.writeFileSync(filePath, html, "utf8");
@@ -476,6 +497,57 @@ function wireActionResponseIpc(
         console.error("[CodePal] send-message error:", err);
         emit("error", err instanceof Error ? err.message : String(err));
       });
+  });
+  ipcMain.handle("codepal:get-session-capabilities", (_event, sessionId: unknown) => {
+    if (typeof sessionId !== "string") return null;
+    const session = sessionStore.getSession(sessionId);
+    if (!session) return null;
+    return resolveSessionCapabilities(session);
+  });
+  ipcMain.handle("codepal:execute-session-action", async (_event, payload: unknown) => {
+    if (!payload || typeof payload !== "object") {
+      return { ok: false, action: "unknown", sessionId: "", error: "invalid payload" };
+    }
+    const p = payload as Record<string, unknown>;
+    const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
+    const actionType = typeof p.actionType === "string" ? p.actionType : "";
+    const params = (p.payload ?? {}) as Record<string, unknown>;
+    if (!sessionId || !actionType) {
+      return { ok: false, action: actionType, sessionId, error: "missing sessionId or actionType" };
+    }
+    const result = await actionBroker.executeAction(
+      sessionId,
+      actionType as import("../shared/capabilityTypes").SessionActionType,
+      {
+        text: typeof params.text === "string" ? params.text : undefined,
+      },
+    );
+    sessionStore.addActionLogEntry(sessionId, {
+      action: result.action as import("../shared/sessionTypes").ActionLogAction,
+      timestamp: Date.now(),
+      ok: result.ok,
+      error: result.error,
+      detail: typeof params.text === "string" ? params.text.slice(0, 80) : undefined,
+    });
+    if (result.ok) {
+      broadcastSessions();
+    }
+    return result;
+  });
+  ipcMain.handle("codepal:delete-session", (_event, sessionId: unknown) => {
+    if (typeof sessionId !== "string" || !sessionId) {
+      return false;
+    }
+    sessionStore.addActionLogEntry(sessionId, {
+      action: "deleteSession",
+      timestamp: Date.now(),
+      ok: true,
+    });
+    const ok = sessionStore.closeSession(sessionId);
+    if (ok) {
+      broadcastSessions();
+    }
+    return ok;
   });
 }
 

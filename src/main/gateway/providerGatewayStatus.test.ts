@@ -22,8 +22,6 @@ describe("providerGatewayStatus", () => {
       apiKey: "local-proxy",
       authScheme: "bearer",
       inferenceModels: [
-        "sonnet",
-        "opus",
         "claude-sonnet-4-6",
         "claude-opus-4-7",
         "claude-haiku-4-5",
@@ -33,12 +31,17 @@ describe("providerGatewayStatus", () => {
         restartRequired: false,
       },
     });
+    expect(status.modelMappings.map((model) => model.claudeModel)).toEqual([
+      "claude-sonnet-4-6",
+      "claude-opus-4-7",
+      "claude-haiku-4-5",
+    ]);
     expect(status.codexDesktop).toEqual({
       baseUrl: "http://127.0.0.1:15721/v1",
       providerId: "codepal",
       profileId: "codepal-mimo",
       wireApi: "responses",
-      model: "anthropic/MiMo-V2.5-Pro",
+      model: "mimo-v2.5-pro",
       apiKey: "local-proxy",
       setup: {
         configured: false,
@@ -59,7 +62,7 @@ describe("providerGatewayStatus", () => {
         ok: false,
         models: [
           {
-            claudeModel: "anthropic/MiMo-V2.5-Pro",
+            claudeModel: "claude-opus-4-7",
             upstreamModel: "mimo-v2.5-pro",
             health: "error",
             status: 401,
@@ -68,11 +71,47 @@ describe("providerGatewayStatus", () => {
       },
     });
 
-    expect(status.modelMappings[0]).toMatchObject({
-      claudeModel: "anthropic/MiMo-V2.5-Pro",
+    expect(status.modelMappings[1]).toMatchObject({
+      claudeModel: "claude-opus-4-7",
       upstreamModel: "mimo-v2.5-pro",
       health: "error",
       status: 401,
     });
+  });
+
+  it("uses the Pro upstream model for Codex even when MiMo mappings are reordered", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      providerGateway: {
+        activeProvider: "mimo",
+        providers: {
+          mimo: {
+            type: "anthropic-compatible",
+            displayName: "MiMo Gateway",
+            baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
+            authScheme: "bearer",
+            tokenRef: "mimo.gateway.token",
+            envFallback: "MIMO_GATEWAY_TOKEN",
+            headers: {},
+            modelMappings: {
+              sonnet: "mimo-v2.5",
+              default: "mimo-v2.5",
+              "claude-sonnet-4-6": "mimo-v2.5",
+              "claude-haiku-4-5": "mimo-v2.5",
+              "claude-opus-4-7": "mimo-v2.5-pro",
+            },
+          },
+        },
+      },
+    });
+
+    const status = buildProviderGatewayStatus({
+      settings,
+      tokenConfigured: true,
+      listener: { state: "listening", host: "127.0.0.1", port: 15721 },
+      lastHealthCheck: null,
+    });
+
+    expect(status.codexDesktop.model).toBe("mimo-v2.5-pro");
   });
 });

@@ -125,6 +125,7 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
   }
 
   const i18n = useI18n();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const meta = toolDisplay(session.tool);
   const { className: stateClass, label: stateLabel } = statusPresentation(session.status);
   const showCollapsedSummary =
@@ -167,6 +168,37 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
           </span>
         </span>
       </button>
+      {confirmDelete ? (
+        <div className="session-row__delete-confirm">
+          <span className="session-row__delete-confirm-text">{i18n.t("session.deleteConfirm")}</span>
+          <button
+            type="button"
+            className="session-row__delete-btn session-row__delete-btn--yes"
+            onClick={() => void window.codepal.deleteSession(session.id)}
+          >
+            {i18n.t("common.confirm")}
+          </button>
+          <button
+            type="button"
+            className="session-row__delete-btn session-row__delete-btn--no"
+            onClick={() => setConfirmDelete(false)}
+          >
+            {i18n.t("common.cancel")}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="session-row__delete-trigger"
+          title={i18n.t("session.delete")}
+          onClick={(e) => {
+            e.stopPropagation();
+            setConfirmDelete(true);
+          }}
+        >
+          ×
+        </button>
+      )}
       {hasEverExpanded ? (
         <SessionHistoryTimeline
           session={session}

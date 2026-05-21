@@ -14,7 +14,7 @@ Its shipped V1 foundation is simple:
 
 CodePal is intentionally stronger on visibility than on control.
 
-As of the v1.1.11 baseline, CodePal also has enough local history, usage, analytics, reporting, notification, terminal-navigation, capability-gated message delivery, integration repair, and Provider Gateway infrastructure to support the next product layer: personal AI coding operations memory plus a bounded Session Operations Layer.
+As of the v1.1.11 baseline, CodePal also has enough local history, usage, analytics, reporting, notification, terminal-navigation, capability-gated message delivery, integration repair, and Provider Gateway infrastructure to support the next product layer: personal AI coding operations memory plus a bounded Session Operations Layer. Current post-v1.1.11 development keeps deterministic session stats at the footer level and adds a semantic visual theme system on top of that foundation.
 
 ## Product Goal
 
@@ -27,8 +27,8 @@ CodePal reduces that fragmentation by providing:
 - one place to keep usage and quota context visible
 - one settings surface for integration diagnostics and local repair
 - one local provider gateway that can bridge supported desktop clients to third-party model providers without leaking provider tokens into those clients
-- one local memory layer that can turn observed sessions into reviews, daily digests, workflow-health signals, and redacted reports
-- one capability-gated local operations surface for user-triggered actions such as jump, structured message, resume, repair, export, and outcome marking
+- one local memory layer that can turn observed work items and operation logs into daily / weekly / monthly reports when LLM generation is useful and redaction-aware
+- one capability-gated local operations surface for user-triggered actions such as jump, structured message, resume, repair, export, and list-level delete
 
 ## Phase 1 Boundary
 
@@ -61,15 +61,18 @@ The V1 monitoring-first baseline is not the product ceiling.
 The next stage should expand CodePal from a live monitoring surface into a free local AI coding control tower and operations memory layer:
 
 - a Session Operations Layer for user-triggered, capability-gated actions
-- session reviews that explain what happened during a run
-- daily digests that summarize agent work across tools
+- work item flow that tracks handoff, follow-up, failure, and completion across agents
+- CLI operation flow for preflight, dry-run, execution, and local action logging
+- daily / weekly / monthly LLM reports that summarize real work items and operation logs
 - workflow-health signals such as waiting time, error recovery, context pressure, quota pressure, and session churn
 - an Attention Queue that routes the user's attention to sessions and integrations needing follow-up
-- observability-confidence labels that distinguish live, backfilled, estimated, inferred, degraded, and unsupported data
+- factual data-source transparency where missing or estimated data changes the user's decision
 - local report export with redaction controls
 - community-facing templates, schemas, adapter guidance, and sanitized examples that strengthen the free local ecosystem
 
 This direction keeps CodePal local-first and monitoring-first while giving users a reason to return after work finishes, not only when something is actively running or stuck.
+
+The review-card path should stay deliberately constrained. Per-session deterministic metrics belong in the expanded footer, not in a large top-level review surface. Fuller reports should come from useful work item and operation data, not from duplicating the timeline in a card.
 
 Team sharing, billing, cloud sync, and broader control-loop expansion should remain behind proof of sustained free individual value and an updated privacy model. CodePal should not become a team productivity scoring surface or an autonomous agent scheduler.
 
@@ -139,14 +142,17 @@ This is the current foundation:
 
 This is the next product layer on top of the monitoring foundation:
 
-- session review
-- day digest
+- work item flow
+- CLI operation flow
+- daily / weekly / monthly LLM reports
 - project / repository grouping where source paths are reliable
 - local report export with redaction controls
 - workflow-health signals for waiting time, error recovery, quota pressure, context pressure, and session churn
-- observability-confidence labels for live, backfilled, estimated, inferred, degraded, and unsupported signals
+- factual source / coverage labels for live, backfilled, estimated, inferred, degraded, and unsupported signals when those facts affect decisions
 
 This layer must not become developer scoring. Its purpose is to help an individual understand tool friction and workflow quality.
+
+The current implementation keeps deterministic facts in the expanded-session footer: request count, input/output/cache tokens, and estimated cost. Review pages are deferred until work item flow, CLI operation flow, and LLM reports create a stronger reason to summarize.
 
 ### 3. Session Operations Layer
 
@@ -155,13 +161,12 @@ This is the next bounded action layer on top of monitoring and memory.
 It should cover user-triggered operations such as:
 
 - jump to terminal / IDE
-- open repository
+- open repository when a reliable workspace path is available
 - send a structured follow-up message when a reliable terminal channel exists
 - resume a session when the adapter exposes a reliable path
 - repair an integration
 - export a review
-- mark a session outcome
-- close or archive a session
+- delete a session from the list-level row action
 
 Design constraints:
 
@@ -219,7 +224,8 @@ Candidate capabilities include:
 
 Each capability should distinguish `supported`, `partial`, `best_effort`, and `unsupported`; include source and confidence metadata; and provide user-readable caveats and failure reasons.
 
-The local Action Broker should own preflight, execution, action logging, result reporting, and confidence display for operations such as `jump`, `send_message`, `resume`, `open_repo`, `repair_integration`, `export_review`, `mark_outcome`, `close_session`, and `archive_session`.
+The local Action Broker should own preflight, execution, action logging, result reporting, and confidence display for operations such as `jump`, `send_message`, `resume`, `open_repo`, `repair_integration`, `export_review`, and `delete_session`.
+Outcome should be auto-inferred from observed session state until review / digest consumers prove that manual tagging creates value. Session removal should stay a list-level `delete_session` operation rather than a detail-pane action.
 
 ### 7. Capability Unification Layer
 
@@ -266,6 +272,8 @@ Each integration should map into common concepts:
 This keeps the renderer simple and avoids per-tool UI forks.
 
 The renderer still treats the dashboard list as a summary surface. Full retained history is loaded only when a session row is expanded, so restart-safe history does not degrade the main monitoring path.
+
+The renderer also owns a semantic visual theme contract. Theme templates such as `graphite-ops` and `paper-ops` define typography, text, surface, session, timeline, footer, analytics, status, and action tokens; components should consume those tokens instead of introducing raw colors or fallback fonts in local CSS.
 
 On startup, recent user-initiated sessions (last 24 hours, up to 150) are restored from the SQLite history store into the in-memory session store. This means the dashboard is immediately populated after an app update or restart without resurfacing lifecycle-only noise such as bare "session ended" rows. Restored sessions that were `running` or `waiting` at shutdown are normalized to `idle`, and live hook events always take precedence over restored state.
 
@@ -348,6 +356,9 @@ That means:
 - suppression of low-information status noise
 - hover details instead of forcing navigation
 - compact usage display in the header
+- clear section boundaries for session rows, timelines, usage footers, settings, and analytics tables
+- built-in light and dark themes that preserve text contrast across the dashboard and Analytics page
+- hover-only destructive affordances unless keyboard focus makes the control intentionally visible
 
 ## Settings Principles
 

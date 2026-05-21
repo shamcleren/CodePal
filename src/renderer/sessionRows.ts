@@ -668,5 +668,6 @@ export function sessionRecordToRow(
     timelineItems,
     activityItems: record.activityItems ?? [],
     hoverSummary: fallbackSummary ?? buildHoverSummary(record, timelineItems, collapsedSummary),
+    capabilities: null,
   };
 }

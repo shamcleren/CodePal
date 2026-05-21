@@ -110,6 +110,7 @@ function sessionMatchesRow(row: MonitorSessionRow, session: SessionRecord): bool
     row.task === session.task &&
     row.updatedAt === session.updatedAt &&
     row.lastUserMessageAt === session.lastUserMessageAt &&
+    row.outcome === session.outcome &&
     sameActivityItems(row.activityItems, session.activityItems) &&
     sameStringArray(row.activities, session.activities) &&
     samePendingActions(row.pendingActions, session.pendingActions)

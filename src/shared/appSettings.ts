@@ -9,10 +9,15 @@ export type UsageAgentId =
   | "qwen"
   | "factory";
 
+export const APP_THEME_IDS = ["graphite-ops", "paper-ops"] as const;
+
+export type AppThemeId = (typeof APP_THEME_IDS)[number];
+
 export type UsageDisplaySettings = {
   showInStatusBar: boolean;
   hiddenAgents: UsageAgentId[];
   density: "compact" | "detailed";
+  theme: AppThemeId;
 };
 
 export type CodeBuddyEndpointSettings = {
@@ -91,6 +96,10 @@ export type AppSettingsPatch = {
   };
 };
 
+const CLAUDE_HAIKU_ROUTE_ID = "claude-haiku-4-5";
+const MIMO_DEFAULT_UPSTREAM_MODEL = "mimo-v2.5";
+const MIMO_LEGACY_HAIKU_UPSTREAM_MODEL = "mimo-v2";
+
 export const DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES = [
   "RIO_TOKEN",
   "RIO_TOKEN_HTTPS",
@@ -107,6 +116,7 @@ export const defaultUsageDisplaySettings: UsageDisplaySettings = {
   showInStatusBar: true,
   hiddenAgents: [],
   density: "detailed",
+  theme: "graphite-ops",
 };
 
 export const defaultHistorySettings: HistorySettings = {
@@ -143,12 +153,12 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         "anthropic/MiMo-V2.5": "mimo-v2.5",
         "anthropic/MiMo-V2-Pro": "mimo-v2-pro",
         "anthropic/MiMo-V2-Omni": "mimo-v2-omni",
-        default: "mimo-v2.5",
-        sonnet: "mimo-v2.5",
+        default: MIMO_DEFAULT_UPSTREAM_MODEL,
+        sonnet: MIMO_DEFAULT_UPSTREAM_MODEL,
         opus: "mimo-v2.5-pro",
-        "claude-sonnet-4-6": "mimo-v2.5",
+        "claude-sonnet-4-6": MIMO_DEFAULT_UPSTREAM_MODEL,
         "claude-opus-4-7": "mimo-v2.5-pro",
-        "claude-haiku-4-5": "mimo-v2",
+        [CLAUDE_HAIKU_ROUTE_ID]: MIMO_DEFAULT_UPSTREAM_MODEL,
       },
     },
   },
@@ -229,6 +239,10 @@ function isUsageAgentId(value: unknown): value is UsageAgentId {
     value === "qwen" ||
     value === "factory"
   );
+}
+
+function isAppThemeId(value: unknown): value is AppThemeId {
+  return APP_THEME_IDS.includes(value as AppThemeId);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -315,6 +329,9 @@ function normalizeUsageDisplaySettings(value: unknown): UsageDisplaySettings {
       candidate.density === "compact" || candidate.density === "detailed"
         ? candidate.density
         : defaultUsageDisplaySettings.density,
+    theme: isAppThemeId(candidate.theme)
+      ? candidate.theme
+      : defaultUsageDisplaySettings.theme,
   };
 }
 
@@ -432,9 +449,24 @@ function normalizeModelMappings(
   return entries.length > 0 ? Object.fromEntries(entries) : { ...defaults };
 }
 
+function migrateMimoModelMappings(
+  mappings: Record<string, string>,
+  defaults: Record<string, string>,
+): Record<string, string> {
+  const next = { ...mappings };
+  const haikuFallback = defaults[CLAUDE_HAIKU_ROUTE_ID] ?? MIMO_DEFAULT_UPSTREAM_MODEL;
+  for (const key of [CLAUDE_HAIKU_ROUTE_ID, "haiku"]) {
+    if (next[key] === MIMO_LEGACY_HAIKU_UPSTREAM_MODEL) {
+      next[key] = haikuFallback;
+    }
+  }
+  return next;
+}
+
 function normalizeProviderConfig(
   value: unknown,
   defaults: ProviderGatewayConfig,
+  providerId?: string,
 ): ProviderGatewayConfig {
   const candidate = asRecord(value);
   if (!candidate) {
@@ -444,6 +476,7 @@ function normalizeProviderConfig(
       modelMappings: { ...defaults.modelMappings },
     };
   }
+  const modelMappings = normalizeModelMappings(candidate.modelMappings, defaults.modelMappings);
   return {
     type:
       candidate.type === "anthropic-compatible"
@@ -455,7 +488,10 @@ function normalizeProviderConfig(
     tokenRef: normalizeProviderString(candidate.tokenRef, defaults.tokenRef),
     envFallback: normalizeProviderString(candidate.envFallback, defaults.envFallback),
     headers: normalizeHeaders(candidate.headers),
-    modelMappings: normalizeModelMappings(candidate.modelMappings, defaults.modelMappings),
+    modelMappings:
+      providerId === "mimo"
+        ? migrateMimoModelMappings(modelMappings, defaults.modelMappings)
+        : modelMappings,
   };
 }
 
@@ -485,7 +521,7 @@ function normalizeProviderGatewaySettings(value: unknown): ProviderGatewaySettin
           const providerId = id.trim();
           return [
             providerId,
-            normalizeProviderConfig(provider, defaultProvider),
+            normalizeProviderConfig(provider, defaultProvider, providerId),
           ] as const;
         })
     : [];

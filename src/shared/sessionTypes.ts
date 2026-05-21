@@ -326,6 +326,38 @@ export function isPendingClosed(value: unknown): value is PendingClosed {
   return true;
 }
 
+export type SessionOutcome =
+  | "success"
+  | "abandoned"
+  | "superseded"
+  | "unclear";
+
+export type ActionLogAction =
+  | "jump"
+  | "sendMessage"
+  | "openRepo"
+  | "deleteSession";
+
+export interface ActionLogEntry {
+  action: ActionLogAction;
+  timestamp: number;
+  ok: boolean;
+  error?: string;
+  /** Freeform context such as message preview or target path */
+  detail?: string;
+}
+
+export const SESSION_OUTCOMES: readonly SessionOutcome[] = [
+  "success",
+  "abandoned",
+  "superseded",
+  "unclear",
+] as const;
+
+export function isSessionOutcome(value: string): value is SessionOutcome {
+  return (SESSION_OUTCOMES as readonly string[]).includes(value);
+}
+
 export interface SessionRecord {
   id: string;
   tool: string;
@@ -340,6 +372,9 @@ export interface SessionRecord {
   externalApproval?: ExternalApprovalState;
   /** Terminal-side metadata captured at hook time; absent when the wrapper could not observe a terminal */
   terminalContext?: TerminalContext;
+  outcome?: SessionOutcome;
+  /** Chronological log of user-triggered CodePal operations on this session */
+  actionLog?: ActionLogEntry[];
 }
 
 /**

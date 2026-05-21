@@ -487,7 +487,7 @@ export function App() {
 
   return (
     <I18nProvider locale={resolvedLocale}>
-    <div className="app app-shell">
+    <div className="app app-shell" data-theme={appSettings.display.theme}>
       <div className="app-header">
         <div className="app-header__meta">
           <h1 className="app-title">CodePal</h1>
@@ -724,6 +724,14 @@ export function App() {
                         display: {
                           ...appSettings.display,
                           density: nextValue,
+                        },
+                      })
+                    }
+                    onThemeChange={(nextValue) =>
+                      void updateAppSettings({
+                        display: {
+                          ...appSettings.display,
+                          theme: nextValue,
                         },
                       })
                     }
