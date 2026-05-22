@@ -547,7 +547,7 @@ export function App() {
           />
         </>
       ) : (
-        <AnalyticsPage />
+        <AnalyticsPage appSettings={appSettings} />
       )}
       {settingsOpen ? (
         <button

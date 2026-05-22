@@ -5,6 +5,8 @@ import path from "node:path";
 import type { AppSettingsPatch } from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
 import { generateHtmlReport } from "./report/generateHtmlReport";
+import { buildReportFacts } from "../shared/reportFacts";
+import { generateLlmReport } from "./report/llmReportGenerator";
 import { dispatchActionResponse } from "./actionResponse/dispatchActionResponse";
 import type { ActionResponseResult } from "./actionResponse/dispatchActionResponse";
 import {
@@ -291,6 +293,41 @@ function wireActionResponseIpc(
     const filePath = path.join(os.tmpdir(), `codepal-report-${Date.now()}.html`);
     fs.writeFileSync(filePath, html, "utf8");
     return filePath;
+  });
+  ipcMain.handle("codepal:generate-llm-report", async (_event, startMs: number, endMs: number, options?: { model?: string; redaction?: { redactSessionTitles?: boolean; redactModelNames?: boolean } }) => {
+    if (!currentHistoryStore) {
+      return { ok: false, error: "History store not available", model: "", estimatedInputTokens: 0 };
+    }
+    const settings = settingsService.getSettings();
+    if (!settings.reports.llmEnabled) {
+      return { ok: false, error: "LLM report generation is not enabled in settings", model: "", estimatedInputTokens: 0 };
+    }
+    const startDate = new Date(startMs).toISOString().slice(0, 10);
+    const endDate = new Date(endMs).toISOString().slice(0, 10);
+    const facts = buildReportFacts({
+      granularity: "daily",
+      startDate,
+      endDate,
+      sessionStats: currentHistoryStore.getSessionStats(startMs, endMs),
+      daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs),
+      byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs),
+      byAgent: currentHistoryStore.getTokenUsageByAgent(startMs, endMs),
+      topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, undefined, 25),
+      importStatus: currentHistoryStore.getUsageImportStatus(),
+      pricing: currentHistoryStore.getModelPricing(),
+    });
+    const gatewaySettings = settings.providerGateway;
+    const activeProvider = gatewaySettings.providers[gatewaySettings.activeProvider];
+    const gatewayBaseUrl = activeProvider
+      ? `http://${gatewaySettings.host}:${gatewaySettings.port}`
+      : undefined;
+    const model = options?.model || settings.reports.llmDefaultModel || "claude-haiku-4-5";
+    return generateLlmReport({
+      facts,
+      model,
+      redaction: options?.redaction,
+      gatewayBaseUrl,
+    });
   });
   ipcMain.handle("codepal:get-app-settings", () => settingsService.getSettings());
   ipcMain.handle("codepal:get-home-dir", () => app.getPath("home"));

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { AppSettings } from "../../shared/appSettings";
 import type { ModelPricing, TokenStatsResult } from "../../shared/usageTypes";
 import { useI18n } from "../i18n";
 
@@ -72,7 +73,7 @@ function weekAgoStr(): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function AnalyticsPage() {
+export function AnalyticsPage({ appSettings }: { appSettings?: AppSettings }) {
   const i18n = useI18n();
   const [range, setRange] = useState<RangePreset>("7d");
   const [customStart, setCustomStart] = useState(weekAgoStr());
@@ -82,6 +83,10 @@ export function AnalyticsPage() {
   const [loading, setLoading] = useState(false);
   const [redactTitles, setRedactTitles] = useState(false);
   const [redactModels, setRedactModels] = useState(false);
+  const [llmReportGenerating, setLlmReportGenerating] = useState(false);
+  const [llmReportResult, setLlmReportResult] = useState<string | null>(null);
+  const [llmReportError, setLlmReportError] = useState<string | null>(null);
+  const [llmModel, setLlmModel] = useState(appSettings?.reports?.llmDefaultModel ?? "");
 
   const fetchData = useCallback(async (preset: RangePreset) => {
     setLoading(true);
@@ -106,6 +111,33 @@ export function AnalyticsPage() {
     const filePath = await window.codepal.generateHtmlReport(start, end, opts);
     await window.codepal.openExternalTarget(filePath);
   }, [range, customStart, customEnd, redactTitles, redactModels]);
+
+  const handleLlmReport = useCallback(async () => {
+    setLlmReportGenerating(true);
+    setLlmReportResult(null);
+    setLlmReportError(null);
+    try {
+      const { start, end } = resolveRange(range, customStart, customEnd);
+      const opts = {
+        model: llmModel || undefined,
+        redaction: (redactTitles || redactModels)
+          ? { redactSessionTitles: redactTitles, redactModelNames: redactModels }
+          : undefined,
+      };
+      const result = await window.codepal.generateLlmReport(start, end, opts);
+      if (result.ok && result.report) {
+        setLlmReportResult(result.report);
+      } else {
+        setLlmReportError(result.error ?? "Report generation failed");
+      }
+    } catch (err) {
+      setLlmReportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLlmReportGenerating(false);
+    }
+  }, [range, customStart, customEnd, llmModel, redactTitles, redactModels]);
+
+  const llmEnabled = appSettings?.reports?.llmEnabled ?? false;
 
   const pricingMap = new Map<string, ModelPricing>();
   for (const p of data?.pricing ?? []) {
@@ -280,6 +312,36 @@ export function AnalyticsPage() {
           {i18n.t("tokenStats.redactModels")}
         </label>
       </div>
+
+      {llmEnabled ? (
+        <div className="analytics-page__llm-section">
+          <div className="analytics-page__llm-header">
+            <span className="analytics-page__llm-label">LLM Report</span>
+            <input
+              type="text"
+              value={llmModel}
+              onChange={(e) => setLlmModel(e.target.value)}
+              placeholder={appSettings?.reports?.llmDefaultModel || "claude-haiku-4-5"}
+              className="analytics-page__llm-model-input"
+            />
+            <button
+              onClick={() => void handleLlmReport()}
+              disabled={llmReportGenerating}
+              className="analytics-page__llm-btn"
+            >
+              {llmReportGenerating ? "..." : "Generate"}
+            </button>
+          </div>
+          {llmReportError ? (
+            <div className="analytics-page__llm-error">{llmReportError}</div>
+          ) : null}
+          {llmReportResult ? (
+            <div className="analytics-page__llm-result">
+              <pre className="analytics-page__llm-report">{llmReportResult}</pre>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="analytics-page__hero-grid">
         {heroStats.map((stat) => (

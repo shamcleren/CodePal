@@ -47,6 +47,13 @@ export type NotificationSettings = {
   resumed: boolean;
 };
 
+export type ReportSettings = {
+  /** Gate: enable LLM-powered report generation (spends model quota) */
+  llmEnabled: boolean;
+  /** Default model for report generation (empty = cheapest configured) */
+  llmDefaultModel: string;
+};
+
 export type ProviderGatewayAuthScheme = "bearer";
 
 export type ProviderGatewayType = "anthropic-compatible";
@@ -76,6 +83,7 @@ export type AppSettings = {
   display: UsageDisplaySettings;
   history: HistorySettings;
   notifications: NotificationSettings;
+  reports: ReportSettings;
   providerGateway: ProviderGatewaySettings;
   codebuddy: {
     code: CodeBuddyEndpointSettings;
@@ -89,6 +97,7 @@ export type AppSettingsPatch = {
   display?: Partial<UsageDisplaySettings>;
   history?: Partial<HistorySettings>;
   notifications?: Partial<NotificationSettings>;
+  reports?: Partial<ReportSettings>;
   providerGateway?: Partial<ProviderGatewaySettings>;
   codebuddy?: {
     code?: Partial<CodeBuddyEndpointSettings>;
@@ -134,6 +143,11 @@ export const defaultNotificationSettings: NotificationSettings = {
   resumed: true,
 };
 
+export const defaultReportSettings: ReportSettings = {
+  llmEnabled: false,
+  llmDefaultModel: "",
+};
+
 export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
   enabled: true,
   host: "127.0.0.1",
@@ -170,6 +184,7 @@ export const defaultAppSettings: AppSettings = {
   display: defaultUsageDisplaySettings,
   history: defaultHistorySettings,
   notifications: { ...defaultNotificationSettings },
+  reports: { ...defaultReportSettings },
   providerGateway: defaultProviderGatewaySettings,
   codebuddy: {
     code: {
@@ -202,6 +217,9 @@ export function cloneAppSettings(settings: AppSettings): AppSettings {
     },
     notifications: {
       ...settings.notifications,
+    },
+    reports: {
+      ...settings.reports,
     },
     providerGateway: {
       ...settings.providerGateway,
@@ -392,6 +410,23 @@ function normalizeNotificationSettings(value: unknown): NotificationSettings {
     waiting: typeof candidate.waiting === "boolean" ? candidate.waiting : defaultNotificationSettings.waiting,
     error: typeof candidate.error === "boolean" ? candidate.error : defaultNotificationSettings.error,
     resumed: typeof candidate.resumed === "boolean" ? candidate.resumed : defaultNotificationSettings.resumed,
+  };
+}
+
+function normalizeReportSettings(value: unknown): ReportSettings {
+  const candidate = asRecord(value);
+  if (!candidate) {
+    return { ...defaultReportSettings };
+  }
+  return {
+    llmEnabled:
+      typeof candidate.llmEnabled === "boolean"
+        ? candidate.llmEnabled
+        : defaultReportSettings.llmEnabled,
+    llmDefaultModel:
+      typeof candidate.llmDefaultModel === "string"
+        ? candidate.llmDefaultModel.trim()
+        : defaultReportSettings.llmDefaultModel,
   };
 }
 
@@ -590,6 +625,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
   const display = normalizeUsageDisplaySettings(candidate.display);
   const history = normalizeHistorySettings(candidate.history);
   const notifications = normalizeNotificationSettings(candidate.notifications);
+  const reports = normalizeReportSettings(candidate.reports);
   const providerGateway = normalizeProviderGatewaySettings(candidate.providerGateway);
   const codebuddy = asRecord(candidate.codebuddy);
 
@@ -599,6 +635,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     display,
     history,
     notifications,
+    reports,
     providerGateway,
     codebuddy: {
       code: normalizeCodeBuddyEndpointSettings(codebuddy?.code, defaultAppSettings.codebuddy.code),
@@ -628,6 +665,10 @@ export function mergeAppSettings(
     notifications: {
       ...current.notifications,
       ...(incoming.notifications ?? {}),
+    },
+    reports: {
+      ...current.reports,
+      ...(incoming.reports ?? {}),
     },
     providerGateway: {
       ...current.providerGateway,

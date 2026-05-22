@@ -3436,6 +3436,89 @@ body {
   cursor: pointer;
 }
 
+/* ── LLM Report section ── */
+
+.analytics-page__llm-section {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+}
+
+.analytics-page__llm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.analytics-page__llm-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.analytics-page__llm-model-input {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--analytics-control-bg);
+  color: var(--text);
+  width: 180px;
+}
+
+.analytics-page__llm-btn {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--analytics-control-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.analytics-page__llm-btn:hover:not(:disabled) {
+  background: var(--analytics-control-hover-bg);
+}
+
+.analytics-page__llm-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.analytics-page__llm-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--error);
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--error-bg);
+}
+
+.analytics-page__llm-result {
+  margin-top: 8px;
+}
+
+.analytics-page__llm-report {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-elevated-2);
+  color: var(--text);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
 /* ── Custom date range ── */
 
 .analytics-page__date-range {

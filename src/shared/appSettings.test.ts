@@ -295,6 +295,51 @@ describe("appSettings", () => {
     });
   });
 
+  it("applies default report settings when reports is missing", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      locale: "en",
+    });
+
+    expect(settings.reports).toEqual({
+      llmEnabled: false,
+      llmDefaultModel: "",
+    });
+  });
+
+  it("preserves explicit report settings", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      reports: {
+        llmEnabled: true,
+        llmDefaultModel: "claude-haiku-4-5-20251001",
+      },
+    });
+
+    expect(settings.reports).toEqual({
+      llmEnabled: true,
+      llmDefaultModel: "claude-haiku-4-5-20251001",
+    });
+  });
+
+  it("merges report settings without dropping existing values", () => {
+    const merged = mergeAppSettings(
+      normalizeAppSettings({
+        version: 1,
+        reports: {
+          llmEnabled: true,
+          llmDefaultModel: "claude-haiku-4-5-20251001",
+        },
+      }),
+      { reports: { llmDefaultModel: "claude-sonnet-4-6" } },
+    );
+
+    expect(merged.reports).toEqual({
+      llmEnabled: true,
+      llmDefaultModel: "claude-sonnet-4-6",
+    });
+  });
+
   it("migrates the stale MiMo Haiku route while preserving custom mappings", () => {
     const settings = normalizeAppSettings({
       version: 1,

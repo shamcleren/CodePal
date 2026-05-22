@@ -28,6 +28,7 @@ export type CodePalApi = {
   getTokenStats: (startMs: number, endMs: number, agent?: string) => Promise<TokenStatsResult>;
   getSessionStats: (startMs: number, endMs: number) => Promise<SessionStatsEntry[]>;
   generateHtmlReport: (startMs: number, endMs: number, redactionOptions?: { redactSessionTitles?: boolean; redactModelNames?: boolean }) => Promise<string>;
+  generateLlmReport: (startMs: number, endMs: number, options?: { model?: string; redaction?: { redactSessionTitles?: boolean; redactModelNames?: boolean } }) => Promise<{ ok: boolean; report?: string; error?: string; model: string; estimatedInputTokens: number }>;
   getModelPricing: () => Promise<ModelPricing[]>;
   upsertModelPricing: (pricing: ModelPricing) => Promise<void>;
   getAppSettings: () => Promise<AppSettings>;

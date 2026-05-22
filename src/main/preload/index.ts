@@ -59,6 +59,9 @@ contextBridge.exposeInMainWorld("codepal", {
   generateHtmlReport(startMs: number, endMs: number, redactionOptions?: { redactSessionTitles?: boolean; redactModelNames?: boolean }) {
     return ipcRenderer.invoke("codepal:generate-html-report", startMs, endMs, redactionOptions) as Promise<string>;
   },
+  generateLlmReport(startMs: number, endMs: number, options?: { model?: string; redaction?: { redactSessionTitles?: boolean; redactModelNames?: boolean } }) {
+    return ipcRenderer.invoke("codepal:generate-llm-report", startMs, endMs, options) as Promise<{ ok: boolean; report?: string; error?: string; model: string; estimatedInputTokens: number }>;
+  },
   getAppSettings() {
     return ipcRenderer.invoke("codepal:get-app-settings") as Promise<AppSettings>;
   },
