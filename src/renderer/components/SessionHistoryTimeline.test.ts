@@ -331,6 +331,34 @@ describe("summarizeSessionFooterUsage", () => {
       cost: 0.42,
     });
   });
+
+  it("includes live context pressure in footer stats", () => {
+    const summary = summarizeSessionFooterUsage({
+      persisted: [],
+      live: {
+        completeness: "partial",
+        context: {
+          used: 227_392,
+          max: 258_400,
+          percent: 88,
+        },
+      },
+      pricing: [],
+    });
+
+    expect(summary).toEqual({
+      requestCount: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheTokens: 0,
+      context: {
+        used: 227_392,
+        max: 258_400,
+        percent: 88,
+      },
+      cost: null,
+    });
+  });
 });
 
 describe("shouldLoadNextHistoryPage", () => {

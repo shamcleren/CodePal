@@ -18,6 +18,107 @@ describe("generateHtmlReport", () => {
     expect(html).toContain("</html>");
   });
 
+  it("localizes the deterministic report to Simplified Chinese", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+      locale: "zh-CN",
+      sessionStats: [{ agent: "codex", status: "completed", count: 2 }],
+      daily: [
+        {
+          date: "2026-05-12",
+          agent: "codex",
+          inputTokens: 1_000,
+          outputTokens: 200,
+          cacheReadTokens: 300,
+          cacheCreationTokens: 0,
+          reasoningTokens: 0,
+          totalTokens: 1_500,
+          requestCount: 3,
+        },
+      ],
+      byModel: [],
+      workHealth: {
+        signals: [
+          {
+            kind: "attention",
+            label: "Attention",
+            value: "2",
+            detail: "2 active items need review",
+            tone: "warning",
+            sessionIds: ["s1", "s2"],
+          },
+        ],
+      },
+      pricing: [],
+    });
+
+    expect(html).toContain("<html lang=\"zh-CN\">");
+    expect(html).toContain("CodePal 用量报告");
+    expect(html).toContain("Token 用量");
+    expect(html).toContain("每日趋势");
+    expect(html).toContain("工作健康");
+    expect(html).toContain("2 个活跃项需要关注");
+    expect(html).not.toContain("CodePal Usage Report");
+    expect(html).not.toContain(">Work Health<");
+  });
+
+  it("uses context session count instead of the percent value in localized report details", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+      locale: "zh-CN",
+      sessionStats: [],
+      daily: [],
+      byModel: [],
+      workHealth: {
+        signals: [
+          {
+            kind: "context_near_full",
+            label: "Context near full",
+            value: "88%",
+            detail: "1 session above 85% context",
+            tone: "warning",
+            sessionIds: ["ctx-1"],
+          },
+        ],
+      },
+      pricing: [],
+    });
+
+    expect(html).toContain("88%");
+    expect(html).toContain("1 个 session 超过上下文阈值");
+    expect(html).not.toContain("88 个 session 超过上下文阈值");
+  });
+
+  it("uses a wide responsive report layout with scrollable tables", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+      sessionStats: [],
+      daily: [],
+      byModel: [
+        {
+          model: "very-long-model-name-that-should-not-force-the-whole-table-to-wrap",
+          agent: "codex",
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheReadTokens: 20,
+          cacheCreationTokens: 0,
+          totalTokens: 170,
+          requestCount: 1,
+        },
+      ],
+      pricing: [],
+    });
+
+    expect(html).toContain("max-width: 1680px;");
+    expect(html).toContain("class=\"table-wrap\"");
+    expect(html).toContain("table-layout: auto;");
+    expect(html).not.toContain("max-width: 960px;");
+    expect(html).not.toContain("table-layout: fixed;");
+  });
+
   it("includes session stats when present", () => {
     const html = generateHtmlReport({
       startDate: "2026-05-12",
@@ -89,7 +190,88 @@ describe("generateHtmlReport", () => {
     expect(html).toContain("Daily Trend");
     expect(html).toContain("05-12");
     expect(html).toContain("05-13");
-    expect(html).toContain("bar-col");
+    expect(html).toContain("report-trend__svg");
+    expect(html).toContain("report-trend__line--total");
+    expect(html).toContain("report-trend__hover-zone");
+    expect(html).toContain("report-trend__tooltip");
+    expect(html).not.toContain("bar-col");
+  });
+
+  it("includes work health and report trend tooltips when provided", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-14",
+      sessionStats: [],
+      daily: [
+        {
+          date: "2026-05-12", agent: "codex",
+          inputTokens: 100, outputTokens: 25, cacheReadTokens: 50,
+          cacheCreationTokens: 0, reasoningTokens: 0, totalTokens: 175, requestCount: 2,
+        },
+        {
+          date: "2026-05-13", agent: "codex",
+          inputTokens: 200, outputTokens: 50, cacheReadTokens: 100,
+          cacheCreationTokens: 0, reasoningTokens: 0, totalTokens: 350, requestCount: 3,
+        },
+      ],
+      byModel: [],
+      pricing: [],
+      workHealth: {
+        signals: [
+          {
+            kind: "attention",
+            label: "Attention",
+            value: "2",
+            detail: "2 active items need review",
+            tone: "warning",
+            sessionIds: ["s1", "s2"],
+          },
+        ],
+      },
+    } as Parameters<typeof generateHtmlReport>[0]);
+
+    expect(html).toContain("Work Health");
+    expect(html).toContain("2 active items need review");
+    expect(html).toContain("report-health__signal--warning");
+    expect(html).toContain("data-total=\"175\"");
+    expect(html).toContain("data-input=\"100\"");
+    expect(html).toContain("CodePalReportTrend");
+  });
+
+  it("matches the selected report metric for non-token trends", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-14",
+      sessionStats: [],
+      daily: [],
+      byModel: [],
+      pricing: [],
+      metric: "requests",
+      trend: {
+        granularity: "hour",
+        sourcePointCount: 1,
+        points: [
+          {
+            bucketStart: Date.parse("2026-05-12T10:00:00.000Z"),
+            agent: "codex",
+            model: "gpt-5.5",
+            inputTokens: 100,
+            outputTokens: 25,
+            cacheReadTokens: 50,
+            cacheCreationTokens: 0,
+            reasoningTokens: 0,
+            totalTokens: 175,
+            requestCount: 7,
+          },
+        ],
+      },
+    });
+
+    expect(html).toContain("data-metric=\"requests\"");
+    expect(html).toContain("data-value=\"7\"");
+    expect(html).toContain(">Requests</span>");
+    expect(html).not.toContain("<path class=\"report-trend__line report-trend__line--input\"");
+    expect(html).not.toContain("<path class=\"report-trend__line report-trend__line--cache\"");
   });
 
   it("includes model table with cost", () => {
@@ -169,6 +351,41 @@ describe("generateHtmlReport", () => {
     expect(html).not.toContain("12345678-1234-1234-1234-123456789abc</td>");
     expect(html).toContain("Claude rows: 2");
     expect(html).toContain("Codex rows: 3");
+  });
+
+  it("includes live context percentages in the top sessions table", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-05-12",
+      endDate: "2026-05-18",
+      sessionStats: [],
+      daily: [],
+      byModel: [],
+      topSessions: [
+        {
+          sessionId: "ctx-session",
+          title: "Refactor analytics footer",
+          agent: "codex",
+          model: "gpt-5.5",
+          inputTokens: 1_000,
+          outputTokens: 500,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          totalTokens: 1_500,
+          requestCount: 2,
+          firstSeenAt: 1_773_456_000_000,
+          lastSeenAt: 1_773_456_000_000,
+        },
+      ],
+      sessionContexts: {
+        "ctx-session": { percent: 88, used: 227_392, max: 258_400 },
+      },
+      pricing: [],
+    });
+
+    expect(html).toContain("<th class=\"num\">Context</th>");
+    expect(html).toContain("report-context report-context--warning");
+    expect(html).toContain("88%");
+    expect(html).toContain("227.4K / 258.4K");
   });
 
   it("escapes HTML in model names", () => {

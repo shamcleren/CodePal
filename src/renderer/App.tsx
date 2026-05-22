@@ -559,7 +559,15 @@ export function App() {
           />
         </>
       ) : (
-        <AnalyticsPage appSettings={appSettings} />
+        <AnalyticsPage
+          appSettings={appSettings}
+          workItemList={workItemList}
+          usageOverview={usageOverview}
+          onFocusSession={(sessionId) => {
+            setActiveView("sessions");
+            setJumpToSessionId(sessionId);
+          }}
+        />
       )}
       {settingsOpen ? (
         <button

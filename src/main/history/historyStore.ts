@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { HistoryRetentionPreset } from "../../shared/appSettings";
+import type { TokenTrendGranularity, TokenTrendPoint } from "../../shared/analyticsTypes";
 import type { HistoryDiagnostics, SessionHistoryPage, SessionHistoryPageRequest } from "../../shared/historyTypes";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type {
@@ -31,6 +32,16 @@ type CleanupOptions = {
   detailRetention: CleanupRetention;
   analyticsRetention: CleanupRetention;
 };
+
+function bucketStartFor(timestamp: number, granularity: TokenTrendGranularity): number {
+  if (granularity === "day") {
+    const day = new Date(timestamp);
+    day.setHours(0, 0, 0, 0);
+    return day.getTime();
+  }
+  const bucketMs = granularity === "minute" ? 60_000 : 60 * 60_000;
+  return Math.floor(timestamp / bucketMs) * bucketMs;
+}
 
 type HistoryCursor = {
   timestamp: number;
@@ -1185,6 +1196,83 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }));
   }
 
+  function getTokenUsageTrend(
+    startMs: number,
+    endMs: number,
+    granularity: TokenTrendGranularity,
+    filters: { agent?: string; model?: string } = {},
+  ): TokenTrendPoint[] {
+    assertOpen();
+    const rows = db.prepare(`
+      SELECT
+        timestamp,
+        agent,
+        COALESCE(model, 'unknown') AS model,
+        input_tokens AS inputTokens,
+        output_tokens AS outputTokens,
+        cache_read_tokens AS cacheReadTokens,
+        cache_creation_tokens AS cacheCreationTokens,
+        reasoning_tokens AS reasoningTokens
+      FROM token_usage
+      WHERE timestamp >= ? AND timestamp < ?
+        AND (? IS NULL OR agent = ?)
+        AND (? IS NULL OR COALESCE(model, 'unknown') = ?)
+      ORDER BY timestamp ASC, agent ASC, model ASC
+    `).all(
+      startMs,
+      endMs,
+      filters.agent ?? null,
+      filters.agent ?? null,
+      filters.model ?? null,
+      filters.model ?? null,
+    ) as Array<{
+      timestamp: number;
+      agent: string;
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      reasoningTokens: number;
+    }>;
+
+    const buckets = new Map<string, TokenTrendPoint>();
+    for (const row of rows) {
+      const bucketStart = bucketStartFor(row.timestamp, granularity);
+      const key = `${bucketStart}\u0000${row.agent}\u0000${row.model}`;
+      const existing = buckets.get(key) ?? {
+        bucketStart,
+        agent: row.agent,
+        model: row.model,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        reasoningTokens: 0,
+        totalTokens: 0,
+        requestCount: 0,
+      };
+      existing.inputTokens += row.inputTokens;
+      existing.outputTokens += row.outputTokens;
+      existing.cacheReadTokens += row.cacheReadTokens;
+      existing.cacheCreationTokens += row.cacheCreationTokens;
+      existing.reasoningTokens += row.reasoningTokens;
+      existing.totalTokens +=
+        row.inputTokens +
+        row.outputTokens +
+        row.cacheReadTokens +
+        row.cacheCreationTokens;
+      existing.requestCount += 1;
+      buckets.set(key, existing);
+    }
+
+    return Array.from(buckets.values()).sort((a, b) => {
+      if (a.bucketStart !== b.bucketStart) return a.bucketStart - b.bucketStart;
+      if (a.agent !== b.agent) return a.agent.localeCompare(b.agent);
+      return a.model.localeCompare(b.model);
+    });
+  }
+
   function getUsageImportStatus(): UsageImportStatus {
     assertOpen();
     const completedAt = lastCleanupStmt.get(USAGE_IMPORT_COMPLETED_AT_KEY) as { value: string } | undefined;
@@ -1323,6 +1411,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     getTokenUsageByAgent,
     getTopTokenUsageSessions,
     getSessionTokenUsage,
+    getTokenUsageTrend,
     getSessionStats,
     getUsageImportStatus,
     setUsageImportStatus,

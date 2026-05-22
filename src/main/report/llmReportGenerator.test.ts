@@ -142,8 +142,8 @@ describe("generateLlmReport", () => {
     vi.unstubAllGlobals();
   });
 
-  it("returns error when network fails", async () => {
-    const mockFetch = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
+  it("returns an actionable error when the local gateway cannot be reached", async () => {
+    const mockFetch = vi.fn().mockRejectedValue(new Error("fetch failed"));
     vi.stubGlobal("fetch", mockFetch);
 
     const result = await generateLlmReport({
@@ -152,7 +152,8 @@ describe("generateLlmReport", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("ECONNREFUSED");
+    expect(result.error).toContain("Provider Gateway is not reachable at http://127.0.0.1:9999");
+    expect(result.error).toContain("Settings -> Provider Gateway");
 
     vi.unstubAllGlobals();
   });

@@ -61,7 +61,7 @@
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
 - v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
-- v1.0.3 through v1.1.11 are all shipped. Current shipped baseline is **v1.1.11**.
+- v1.0.3 through v1.2.0 are all shipped. Current shipped baseline is **v1.2.0**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -74,6 +74,7 @@
 - v1.1.9 shipped: legacy analytics history migration startup fix, history-disabled startup fallback, and explicit startup failure logging
 - v1.1.10 shipped: analytics duplicate cleanup, Codex token snapshot dedupe, and Codex cached-input accounting fix
 - v1.1.11 shipped: Claude statusLine model-id enrichment, Codex timeline noise filtering, estimated cost per agent in usage strip, background hook startup fix
+- v1.2.0 shipped: Report Facts + work items + operation flow + LLM report generation, attention queue banner, SVG line trend chart with LTTB, Work Health strip, agent filter chips, report settings panel, semantic built-in themes
 - Current post-v1.1.11 dev validation on 2026-05-21 covered the first visual-system and expanded-session usage pass:
   - semantic built-in themes: `graphite-ops` and `paper-ops`
   - footer-level per-session usage stats for requests, input, output, cache, and estimated cost
@@ -200,6 +201,10 @@
 - v1.0.3 release assets are treated as shipped; future release work should preserve updater metadata and signing / notarization verification rather than re-describing v1.0.3 as pending
 - v1.1.10 local unit / lint / build verification was green on 2026-05-19.
 - v1.1.11 local unit / lint / build verification is green on 2026-05-20.
+- v1.2.0 local lint / test / build verification is green on 2026-05-22:
+  - `npm run lint` — clean
+  - `npm test` — 905 tests across 100 files, all passing
+  - `npm run build` — successful
 
 ### Pending Action Loop
 
@@ -321,9 +326,9 @@ npm run dist:mac
 - team sharing, cloud sync, billing, and broader control surfaces until the individual local workflow has proven sustained value
 - any productivity-scoring or team-ranking surface
 
-### v1.1.0–v1.1.11 Release Track
+### v1.1.0–v1.2.0 Release Track
 
-v1.1.0 through v1.1.11 are shipped. See individual release notes for details:
+v1.1.0 through v1.2.0 are shipped. See individual release notes for details:
 
 - `docs/release/notes/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release/notes/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -337,6 +342,7 @@ v1.1.0 through v1.1.11 are shipped. See individual release notes for details:
 - `docs/release/notes/release-notes-v1.1.9.md` — legacy analytics history migration startup fix and history-disabled startup fallback
 - `docs/release/notes/release-notes-v1.1.10.md` — analytics duplicate cleanup, Codex token snapshot dedupe, and cached-input accounting fix
 - `docs/release/notes/release-notes-v1.1.11.md` — Claude statusLine model-id enrichment, Codex timeline noise filtering, estimated cost per agent, background hook fix
+- `docs/release/notes/release-notes-v1.2.0.md` — Report Facts, work items, operation flow, LLM reports, attention banner, SVG line trend chart, Work Health strip, agent filters, report settings, semantic themes
 
 ## Next Product Direction Handoff
 

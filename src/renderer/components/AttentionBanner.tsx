@@ -68,7 +68,6 @@ export function AttentionBanner({
                   key={item.id}
                   item={item}
                   onJump={onJumpToSession}
-                  i18n={i18n}
                 />
               ))}
             </div>
@@ -82,11 +81,9 @@ export function AttentionBanner({
 function AttentionItem({
   item,
   onJump,
-  i18n,
 }: {
   item: WorkItem;
   onJump: (sessionId: string) => void;
-  i18n: { t: (key: string) => string };
 }) {
   return (
     <button

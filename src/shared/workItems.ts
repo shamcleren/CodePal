@@ -1,4 +1,4 @@
-import type { SessionRecord, ActivityItem, ActionLogEntry, SessionStatus } from "./sessionTypes";
+import type { SessionRecord, ActionLogEntry } from "./sessionTypes";
 
 /** The lifecycle state of a work item */
 export type WorkItemState =
@@ -65,8 +65,8 @@ function deriveState(session: SessionRecord, now: number): WorkItemState {
     return "needs_follow_up";
   }
 
-  // Idle → needs_follow_up
-  if (session.status === "idle") return "needs_follow_up";
+  // Idle is often a restored or terminal-looking local state, not an actionable signal.
+  if (session.status === "idle") return "completed";
 
   // Offline → deferred
   if (session.status === "offline") return "deferred";
@@ -128,9 +128,6 @@ function deriveNextAction(session: SessionRecord, state: WorkItemState): string 
     case "failed":
       return "Review error and decide next step";
     case "needs_follow_up":
-      if (session.status === "idle") {
-        return "Session is idle — check if work is done";
-      }
       return "Check progress or resume";
     case "deferred":
       return "Session is offline — resume when ready";

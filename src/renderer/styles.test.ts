@@ -245,6 +245,17 @@ describe("renderer layout styles", () => {
     expect(cssBlocks(css, ".analytics-page__table td.analytics-page__table-num")).toContainEqual(
       expect.stringContaining("color: var(--analytics-table-number-text);"),
     );
+    expect(cssBlock(css, ".work-health-strip__value")).toContain("font-weight");
+    expect(cssBlock(css, ".analytics-line-chart svg")).toContain("height:");
+    expect(cssBlock(css, ".analytics-small-multiples")).toContain("grid-template-columns");
+    expect(css).toContain("--trend-line-input: #54d6c0;");
+    expect(css).toContain("--trend-line-output: #9b78ff;");
+    expect(cssBlock(css, ".analytics-small-multiples__line")).toContain("vector-effect");
+    expect(cssBlock(css, ".analytics-line-chart__tooltip")).toContain("position: absolute;");
+    expect(cssBlock(css, ".analytics-line-chart__tooltip")).toContain("font-size: 12px;");
+    expect(cssBlock(css, ".analytics-line-chart__tooltip")).toContain(
+      "background: var(--trend-tooltip-bg);",
+    );
   });
 
   it("keeps built-in theme templates aligned on semantic tokens", () => {

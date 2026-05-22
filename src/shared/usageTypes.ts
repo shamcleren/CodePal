@@ -160,6 +160,7 @@ export interface SessionTokenUsageResult {
   /** Real-time snapshot from usageStore, if available */
   live?: {
     tokens?: UsageTokens;
+    context?: UsageContext;
     cost?: UsageCost;
     model?: string;
     completeness: UsageCompleteness;

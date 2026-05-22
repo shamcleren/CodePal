@@ -647,6 +647,82 @@ describe("createHistoryStore", () => {
     ]);
   });
 
+  it("returns bucketed token trends with agent and model filters", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath });
+
+    const base = Date.UTC(2026, 4, 22, 10, 0, 0);
+    store.writeTokenUsage({
+      sessionId: "codex-1",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: base + 5 * 60_000,
+      inputTokens: 100,
+      outputTokens: 10,
+      cacheReadTokens: 20,
+      sourceKind: "test",
+      sourceKey: "trend-1",
+    });
+    store.writeTokenUsage({
+      sessionId: "codex-2",
+      agent: "codex",
+      model: "gpt-5.4",
+      timestamp: base + 35 * 60_000,
+      inputTokens: 200,
+      outputTokens: 20,
+      sourceKind: "test",
+      sourceKey: "trend-2",
+    });
+    store.writeTokenUsage({
+      sessionId: "claude-1",
+      agent: "claude",
+      model: "sonnet",
+      timestamp: base + 65 * 60_000,
+      inputTokens: 300,
+      outputTokens: 30,
+      sourceKind: "test",
+      sourceKey: "trend-3",
+    });
+
+    expect(store.getTokenUsageTrend(base, base + 2 * 60 * 60_000, "hour")).toEqual([
+      expect.objectContaining({
+        bucketStart: base,
+        agent: "codex",
+        model: "gpt-5.4",
+        totalTokens: 220,
+        requestCount: 1,
+      }),
+      expect.objectContaining({
+        bucketStart: base,
+        agent: "codex",
+        model: "gpt-5.5",
+        totalTokens: 130,
+        requestCount: 1,
+      }),
+      expect.objectContaining({
+        bucketStart: base + 60 * 60_000,
+        agent: "claude",
+        model: "sonnet",
+        totalTokens: 330,
+        requestCount: 1,
+      }),
+    ]);
+
+    expect(store.getTokenUsageTrend(base, base + 2 * 60 * 60_000, "minute", {
+      agent: "codex",
+      model: "gpt-5.5",
+    })).toEqual([
+      expect.objectContaining({
+        bucketStart: base + 5 * 60_000,
+        agent: "codex",
+        model: "gpt-5.5",
+        inputTokens: 100,
+        totalTokens: 130,
+      }),
+    ]);
+  });
+
   describe("getRecentSessions", () => {
     it("returns sessions updated within maxAgeMs", () => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));

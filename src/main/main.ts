@@ -6,6 +6,9 @@ import type { AppSettingsPatch } from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
 import { generateHtmlReport } from "./report/generateHtmlReport";
 import { buildReportFacts } from "../shared/reportFacts";
+import { deriveAnalyticsWorkHealth } from "../shared/analyticsWorkHealth";
+import { deriveWorkItems } from "../shared/workItems";
+import { resolveLlmReportGatewayForReport } from "./report/llmReportGateway";
 import { generateLlmReport } from "./report/llmReportGenerator";
 import { dispatchActionResponse } from "./actionResponse/dispatchActionResponse";
 import type { ActionResponseResult } from "./actionResponse/dispatchActionResponse";
@@ -38,6 +41,8 @@ import type { SessionRecord } from "../shared/sessionTypes";
 import { isSessionJumpTarget } from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview } from "../shared/usageTypes";
+import type { TokenTrendGranularity } from "../shared/analyticsTypes";
+import type { AppLocale, ResolvedLocale } from "../shared/i18nTypes";
 import {
   PROVIDER_GATEWAY_CLIENT_SETUP_TARGETS,
   type ProviderGatewayClientSetupTarget,
@@ -197,6 +202,18 @@ function providerGatewayStatusForRenderer(
   });
 }
 
+function defaultReportTrendGranularity(startMs: number, endMs: number): TokenTrendGranularity {
+  const durationMs = Math.max(1, endMs - startMs);
+  if (durationMs <= 24 * 60 * 60 * 1000) return "minute";
+  if (durationMs <= 45 * 24 * 60 * 60 * 1000) return "hour";
+  return "day";
+}
+
+function resolveReportLocale(setting: AppLocale, systemLocale: string | undefined): ResolvedLocale {
+  if (setting === "en" || setting === "zh-CN") return setting;
+  return systemLocale?.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+}
+
 function wireActionResponseIpc(
   settingsService: ReturnType<typeof createSettingsService>,
   gatewaySecretStore: GatewaySecretStore,
@@ -250,6 +267,31 @@ function wireActionResponseIpc(
       pricing: currentHistoryStore.getModelPricing(),
     };
   });
+  ipcMain.handle(
+    "codepal:get-token-trend",
+    (
+      _event,
+      startMs: number,
+      endMs: number,
+      granularity: import("../shared/analyticsTypes").TokenTrendGranularity,
+      filters?: { agent?: string; model?: string },
+    ) => {
+      if (!currentHistoryStore) {
+        return { granularity, points: [], sourcePointCount: 0 };
+      }
+      const points = currentHistoryStore.getTokenUsageTrend(
+        startMs,
+        endMs,
+        granularity,
+        filters,
+      );
+      return {
+        granularity,
+        points,
+        sourcePointCount: points.length,
+      };
+    },
+  );
   ipcMain.handle("codepal:get-session-token-usage", (_event, sessionId: unknown) => {
     if (typeof sessionId !== "string" || !sessionId) {
       return { persisted: [], pricing: [] };
@@ -257,7 +299,13 @@ function wireActionResponseIpc(
     const persisted = currentHistoryStore?.getSessionTokenUsage(sessionId) ?? [];
     const liveEntry = usageStore.getOverview().sessions.find((s) => s.sessionId === sessionId);
     const live = liveEntry
-      ? { tokens: liveEntry.tokens, cost: liveEntry.cost, model: liveEntry.model, completeness: liveEntry.completeness }
+      ? {
+          tokens: liveEntry.tokens,
+          context: liveEntry.context,
+          cost: liveEntry.cost,
+          model: liveEntry.model,
+          completeness: liveEntry.completeness,
+        }
       : undefined;
     const pricing = currentHistoryStore?.getModelPricing() ?? [];
     return { persisted, live, pricing };
@@ -274,21 +322,68 @@ function wireActionResponseIpc(
     if (!currentHistoryStore) return [];
     return currentHistoryStore.getSessionStats(startMs, endMs);
   });
-  ipcMain.handle("codepal:generate-html-report", (_event, startMs: number, endMs: number, redactionOptions?: import("../main/report/generateHtmlReport").ReportRedactionOptions) => {
+  ipcMain.handle("codepal:generate-html-report", (_event, startMs: number, endMs: number, reportOptions?: import("../main/report/generateHtmlReport").ReportRedactionOptions) => {
     if (!currentHistoryStore) return "";
     const startDate = new Date(startMs).toISOString().slice(0, 10);
     const endDate = new Date(endMs).toISOString().slice(0, 10);
+    const agent = reportOptions?.agent;
+    const model = reportOptions?.model;
+    const locale = reportOptions?.locale ?? resolveReportLocale(settingsService.getSettings().locale, app.getLocale());
+    const granularity = reportOptions?.trendGranularity ?? defaultReportTrendGranularity(startMs, endMs);
+    const trendPoints = currentHistoryStore.getTokenUsageTrend(startMs, endMs, granularity, {
+      agent,
+      model,
+    });
+    const durationMs = Math.max(1, endMs - startMs);
+    const previousStartMs = startMs - durationMs;
+    const previousEndMs = startMs - 1;
+    const pricing = currentHistoryStore.getModelPricing();
+    const currentStats = {
+      daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs, agent),
+      byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs, agent),
+      byAgent: currentHistoryStore.getTokenUsageByAgent(startMs, endMs, agent),
+      topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, agent, 25),
+      importStatus: currentHistoryStore.getUsageImportStatus(),
+      pricing,
+    };
+    const previousStats = {
+      daily: currentHistoryStore.getTokenUsageDailyStats(previousStartMs, previousEndMs, agent),
+      byModel: currentHistoryStore.getTokenUsageByModel(previousStartMs, previousEndMs, agent),
+      byAgent: currentHistoryStore.getTokenUsageByAgent(previousStartMs, previousEndMs, agent),
+      topSessions: currentHistoryStore.getTopTokenUsageSessions(previousStartMs, previousEndMs, agent, 25),
+      importStatus: currentStats.importStatus,
+      pricing,
+    };
+    const workHealth = deriveAnalyticsWorkHealth({
+      workItemList: deriveWorkItems(sessionStore.getSessions()),
+      usageOverview: usageStore.getOverview(),
+      currentStats,
+      previousStats,
+      selectedRange: { startMs, endMs },
+    });
+    const sessionContexts = Object.fromEntries(
+      usageStore
+        .getOverview()
+        .sessions
+        .filter((session) => session.context)
+        .map((session) => [session.sessionId, session.context]),
+    );
     const html = generateHtmlReport({
       startDate,
       endDate,
       sessionStats: currentHistoryStore.getSessionStats(startMs, endMs),
-      daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs),
-      byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs),
-      byAgent: currentHistoryStore.getTokenUsageByAgent(startMs, endMs),
-      topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, undefined, 25),
-      importStatus: currentHistoryStore.getUsageImportStatus(),
-      pricing: currentHistoryStore.getModelPricing(),
-      redaction: redactionOptions,
+      daily: currentStats.daily,
+      byModel: currentStats.byModel,
+      byAgent: currentStats.byAgent,
+      topSessions: currentStats.topSessions,
+      sessionContexts,
+      importStatus: currentStats.importStatus,
+      trend: { granularity, points: trendPoints, sourcePointCount: trendPoints.length },
+      metric: reportOptions?.metric,
+      locale,
+      workHealth,
+      pricing,
+      redaction: reportOptions,
     });
     const filePath = path.join(os.tmpdir(), `codepal-report-${Date.now()}.html`);
     fs.writeFileSync(filePath, html, "utf8");
@@ -318,15 +413,25 @@ function wireActionResponseIpc(
     });
     const gatewaySettings = settings.providerGateway;
     const activeProvider = gatewaySettings.providers[gatewaySettings.activeProvider];
-    const gatewayBaseUrl = activeProvider
-      ? `http://${gatewaySettings.host}:${gatewaySettings.port}`
-      : undefined;
     const model = options?.model || settings.reports.llmDefaultModel || "claude-haiku-4-5";
+    const gatewayResolution = resolveLlmReportGatewayForReport({
+      gateway: gatewaySettings,
+      listener: providerGatewayListener,
+      tokenConfigured: activeProvider ? gatewaySecretStore.hasToken(activeProvider) : false,
+    });
+    if (!gatewayResolution.ok) {
+      return {
+        ok: false,
+        error: gatewayResolution.error,
+        model,
+        estimatedInputTokens: 0,
+      };
+    }
     return generateLlmReport({
       facts,
       model,
       redaction: options?.redaction,
-      gatewayBaseUrl,
+      gatewayBaseUrl: gatewayResolution.gatewayBaseUrl,
     });
   });
   ipcMain.handle("codepal:get-app-settings", () => settingsService.getSettings());

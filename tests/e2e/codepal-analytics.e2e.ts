@@ -79,9 +79,11 @@ test("renders analytics from persisted token usage", async () => {
       "color",
       "rgb(76, 94, 86)",
     );
-    await expect(page.locator(".analytics-page__chart-y-axis").first()).toHaveCSS(
-      "color",
-      "rgb(76, 94, 86)",
+    await expect(page.locator(".analytics-line-chart")).toBeVisible();
+    await expect(page.locator(".analytics-line-chart svg")).toHaveCSS("height", "240px");
+    await expect(page.locator(".analytics-line-chart__axis-label").first()).toHaveCSS(
+      "fill",
+      "rgb(114, 128, 120)",
     );
     await expect(page.locator(".analytics-page__table-model").nth(1)).toHaveCSS(
       "color",
@@ -106,13 +108,21 @@ test("renders analytics from persisted token usage", async () => {
       .locator(".analytics-page__hero-card")
       .filter({ hasText: /Top Model|主要模型/ });
     await expect(topModelCard.locator(".analytics-page__hero-value")).toHaveText("gpt-5.5");
+    await expect(page.locator(".analytics-line-chart__point").first()).toBeVisible();
+    await page.locator(".analytics-line-chart__hover-zone").first().hover();
+    await expect(page.locator(".analytics-line-chart__tooltip")).toBeVisible();
+    await expect(page.locator(".analytics-line-chart__tooltip")).toContainText("Total");
+    await expect(page.locator(".analytics-small-multiples__card").first()).toContainText(/Peak|峰值/);
+    await page.locator(".analytics-small-multiples__hover-zone").first().hover();
+    await expect(page.locator(".analytics-small-multiples__tooltip")).toBeVisible();
+    await expect(page.locator(".analytics-small-multiples__tooltip")).toContainText("Codex");
 
     await page.getByRole("button", { name: /30 Days|30 天/ }).click();
     await expect(page.locator(".analytics-page__range-btn--active")).toHaveText(/30 Days|30 天/);
     await expect(page.locator(".analytics-page__table")).toContainText("gpt-5.5");
 
     await page.getByRole("button", { name: /By Agent|按 Agent/ }).click();
-    await expect(page.locator(".analytics-page__segment--active")).toHaveText(/By Agent|按 Agent/);
+    await expect(page.getByRole("button", { name: /By Agent|按 Agent/ })).toHaveClass(/analytics-page__segment--active/);
     await expect(page.locator(".analytics-page__table")).toContainText("codex");
   } finally {
     historyStore?.close();

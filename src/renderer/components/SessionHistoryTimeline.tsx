@@ -3,7 +3,7 @@ import type { WheelEvent } from "react";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type { PendingAction } from "../../shared/sessionTypes";
 import { canReply } from "../../shared/sessionTypes";
-import type { ModelPricing, SessionTokenUsageResult } from "../../shared/usageTypes";
+import type { ModelPricing, SessionTokenUsageResult, UsageContext } from "../../shared/usageTypes";
 import { useI18n } from "../i18n";
 import type { MonitorSessionRow, TimelineItem } from "../monitorSession";
 import { HoverDetails } from "./HoverDetails";
@@ -33,6 +33,7 @@ export type SessionFooterUsageSummary = {
   inputTokens: number;
   outputTokens: number;
   cacheTokens: number;
+  context?: UsageContext & { percent: number };
   cost: number | null;
 };
 
@@ -108,6 +109,33 @@ function estimatePersistedUsageCost(
   return matched ? total : null;
 }
 
+function normalizeFooterContext(
+  context: UsageContext | undefined,
+): SessionFooterUsageSummary["context"] | undefined {
+  if (!context) return undefined;
+  const derivedPercent =
+    typeof context.percent === "number"
+      ? context.percent
+      : typeof context.used === "number" && typeof context.max === "number" && context.max > 0
+        ? (context.used / context.max) * 100
+        : undefined;
+  if (typeof derivedPercent !== "number" || !Number.isFinite(derivedPercent)) {
+    return undefined;
+  }
+
+  return {
+    ...context,
+    percent: Math.max(0, Math.round(derivedPercent)),
+  };
+}
+
+function contextTone(percent: number): "normal" | "notice" | "warning" | "danger" {
+  if (percent >= 95) return "danger";
+  if (percent >= 85) return "warning";
+  if (percent >= 70) return "notice";
+  return "normal";
+}
+
 export function summarizeSessionFooterUsage(
   usage: SessionTokenUsageResult | null | undefined,
 ): SessionFooterUsageSummary | null {
@@ -153,12 +181,14 @@ export function summarizeSessionFooterUsage(
     typeof liveCost === "number"
       ? liveCost
       : estimatePersistedUsageCost(usage.persisted, usage.pricing);
+  const context = normalizeFooterContext(usage.live?.context);
 
   if (
     requestCount === 0 &&
     inputTokens === 0 &&
     outputTokens === 0 &&
     cacheTokens === 0 &&
+    !context &&
     cost === null
   ) {
     return null;
@@ -169,6 +199,7 @@ export function summarizeSessionFooterUsage(
     inputTokens,
     outputTokens,
     cacheTokens,
+    ...(context ? { context } : {}),
     cost,
   };
 }
@@ -192,6 +223,10 @@ function SessionFooterUsageStats({
   summary: SessionFooterUsageSummary;
 }) {
   const i18n = useI18n();
+  const contextTitle =
+    typeof summary.context?.used === "number" && typeof summary.context.max === "number"
+      ? `${formatFooterTokenCount(summary.context.used)} / ${formatFooterTokenCount(summary.context.max)}`
+      : undefined;
   const stats = [
     {
       key: "requests",
@@ -218,6 +253,14 @@ function SessionFooterUsageStats({
       show: summary.cacheTokens > 0,
     },
     {
+      key: "context",
+      label: i18n.t("session.footer.usage.context"),
+      value: summary.context ? `${summary.context.percent}%` : "",
+      show: Boolean(summary.context),
+      tone: summary.context ? contextTone(summary.context.percent) : undefined,
+      title: contextTitle,
+    },
+    {
       key: "cost",
       label: i18n.t("session.footer.usage.cost"),
       value: summary.cost === null ? "" : formatFooterCost(summary.cost),
@@ -230,7 +273,15 @@ function SessionFooterUsageStats({
   return (
     <div className="session-row__footer-usage" aria-label={i18n.t("session.footer.usage.label")}>
       {stats.map((item) => (
-        <span key={item.key} className={`session-row__footer-stat session-row__footer-stat--${item.key}`}>
+        <span
+          key={item.key}
+          title={item.title}
+          className={[
+            "session-row__footer-stat",
+            `session-row__footer-stat--${item.key}`,
+            item.tone ? `session-row__footer-stat--context-${item.tone}` : "",
+          ].filter(Boolean).join(" ")}
+        >
           <span className="session-row__footer-stat-label">{item.label}</span>
           <span className="session-row__footer-stat-value">{item.value}</span>
         </span>

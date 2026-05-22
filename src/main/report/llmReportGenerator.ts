@@ -191,9 +191,10 @@ export async function generateLlmReport(input: LlmReportInput): Promise<LlmRepor
       estimatedInputTokens,
     };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: `Provider Gateway is not reachable at ${gatewayUrl}. Open Settings -> Provider Gateway and make sure the local gateway is listening. Details: ${message}`,
       model,
       estimatedInputTokens,
     };

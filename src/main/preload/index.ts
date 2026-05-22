@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AppSettings, AppSettingsPatch } from "../../shared/appSettings";
+import type { AnalyticsMetric, TokenTrendGranularity, TokenTrendResult } from "../../shared/analyticsTypes";
+import type { ResolvedLocale } from "../../shared/i18nTypes";
 import type {
   IntegrationAgentId,
   IntegrationDiagnostics,
@@ -47,6 +49,20 @@ contextBridge.exposeInMainWorld("codepal", {
   getTokenStats(startMs: number, endMs: number, agent?: string) {
     return ipcRenderer.invoke("codepal:get-token-stats", startMs, endMs, agent) as Promise<TokenStatsResult>;
   },
+  getTokenTrend(
+    startMs: number,
+    endMs: number,
+    granularity: TokenTrendGranularity,
+    filters?: { agent?: string; model?: string },
+  ) {
+    return ipcRenderer.invoke(
+      "codepal:get-token-trend",
+      startMs,
+      endMs,
+      granularity,
+      filters,
+    ) as Promise<TokenTrendResult>;
+  },
   getModelPricing() {
     return ipcRenderer.invoke("codepal:get-model-pricing") as Promise<ModelPricing[]>;
   },
@@ -56,7 +72,15 @@ contextBridge.exposeInMainWorld("codepal", {
   getSessionStats(startMs: number, endMs: number) {
     return ipcRenderer.invoke("codepal:get-session-stats", startMs, endMs) as Promise<SessionStatsEntry[]>;
   },
-  generateHtmlReport(startMs: number, endMs: number, redactionOptions?: { redactSessionTitles?: boolean; redactModelNames?: boolean }) {
+  generateHtmlReport(startMs: number, endMs: number, redactionOptions?: {
+    redactSessionTitles?: boolean;
+    redactModelNames?: boolean;
+    trendGranularity?: TokenTrendGranularity;
+    metric?: AnalyticsMetric;
+    agent?: string;
+    model?: string;
+    locale?: ResolvedLocale;
+  }) {
     return ipcRenderer.invoke("codepal:generate-html-report", startMs, endMs, redactionOptions) as Promise<string>;
   },
   generateLlmReport(startMs: number, endMs: number, options?: { model?: string; redaction?: { redactSessionTitles?: boolean; redactModelNames?: boolean } }) {

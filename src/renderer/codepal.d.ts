@@ -1,4 +1,6 @@
 import type { AppSettings, AppSettingsPatch } from "../shared/appSettings";
+import type { AnalyticsMetric, TokenTrendGranularity, TokenTrendResult } from "../shared/analyticsTypes";
+import type { ResolvedLocale } from "../shared/i18nTypes";
 import type {
   IntegrationAgentId,
   IntegrationDiagnostics,
@@ -26,8 +28,26 @@ export type CodePalApi = {
   onSessions: (handler: (sessions: SessionRecord[]) => void) => () => void;
   getUsageOverview: () => Promise<UsageOverview>;
   getTokenStats: (startMs: number, endMs: number, agent?: string) => Promise<TokenStatsResult>;
+  getTokenTrend: (
+    startMs: number,
+    endMs: number,
+    granularity: TokenTrendGranularity,
+    filters?: { agent?: string; model?: string },
+  ) => Promise<TokenTrendResult>;
   getSessionStats: (startMs: number, endMs: number) => Promise<SessionStatsEntry[]>;
-  generateHtmlReport: (startMs: number, endMs: number, redactionOptions?: { redactSessionTitles?: boolean; redactModelNames?: boolean }) => Promise<string>;
+  generateHtmlReport: (
+    startMs: number,
+    endMs: number,
+    redactionOptions?: {
+      redactSessionTitles?: boolean;
+      redactModelNames?: boolean;
+      trendGranularity?: TokenTrendGranularity;
+      metric?: AnalyticsMetric;
+      agent?: string;
+      model?: string;
+      locale?: ResolvedLocale;
+    },
+  ) => Promise<string>;
   generateLlmReport: (startMs: number, endMs: number, options?: { model?: string; redaction?: { redactSessionTitles?: boolean; redactModelNames?: boolean } }) => Promise<{ ok: boolean; report?: string; error?: string; model: string; estimatedInputTokens: number }>;
   getModelPricing: () => Promise<ModelPricing[]>;
   upsertModelPricing: (pricing: ModelPricing) => Promise<void>;

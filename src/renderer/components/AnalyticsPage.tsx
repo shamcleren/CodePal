@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppSettings } from "../../shared/appSettings";
-import type { ModelPricing, TokenStatsResult } from "../../shared/usageTypes";
+import type { AnalyticsMetric, TokenTrendGranularity, TokenTrendResult, WorkHealthSignal, WorkHealthSignalKind } from "../../shared/analyticsTypes";
+import type { ModelPricing, TokenStatsResult, UsageOverview } from "../../shared/usageTypes";
+import type { WorkItemList } from "../../shared/workItems";
 import { useI18n } from "../i18n";
+import { AnalyticsLineChart } from "./AnalyticsLineChart";
+import { AnalyticsSmallMultiples } from "./AnalyticsSmallMultiples";
+import { WorkHealthStrip } from "./WorkHealthStrip";
+import { deriveAnalyticsWorkHealth } from "../../shared/analyticsWorkHealth";
+import { buildWorkHealthSessionTargets } from "../lib/workHealthSessionTargets";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
 type BreakdownMode = "model" | "agent";
@@ -23,15 +30,28 @@ function resolveRange(preset: RangePreset, customStart?: string, customEnd?: str
     case "today":
       return { start: startOfDay.getTime(), end: now };
     case "7d":
-      return { start: now - 7 * 24 * 60 * 60 * 1000, end: now };
+      return { start: startOfDay.getTime() - 6 * 24 * 60 * 60 * 1000, end: now };
     case "30d":
-      return { start: now - 30 * 24 * 60 * 60 * 1000, end: now };
+      return { start: startOfDay.getTime() - 29 * 24 * 60 * 60 * 1000, end: now };
     case "custom": {
       const start = customStart ? new Date(customStart + "T00:00:00").getTime() : startOfDay.getTime();
       const end = customEnd ? new Date(customEnd + "T23:59:59").getTime() : now;
       return { start, end };
     }
   }
+}
+
+function previousEqualRange(range: { start: number; end: number }): { start: number; end: number } {
+  const duration = Math.max(1, range.end - range.start);
+  return { start: range.start - duration, end: range.start - 1 };
+}
+
+function defaultGranularity(preset: RangePreset, start: number, end: number): TokenTrendGranularity {
+  if (preset === "today") return "minute";
+  if (preset === "custom") {
+    return end - start >= 24 * 60 * 60 * 1000 ? "hour" : "minute";
+  }
+  return "hour";
 }
 
 function formatTokens(n: number): string {
@@ -73,13 +93,30 @@ function weekAgoStr(): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function AnalyticsPage({ appSettings }: { appSettings?: AppSettings }) {
+export function AnalyticsPage({
+  appSettings,
+  workItemList,
+  usageOverview,
+  onFocusSession,
+}: {
+  appSettings?: AppSettings;
+  workItemList?: WorkItemList;
+  usageOverview?: UsageOverview | null;
+  onFocusSession?: (sessionId: string) => void;
+}) {
   const i18n = useI18n();
   const [range, setRange] = useState<RangePreset>("7d");
   const [customStart, setCustomStart] = useState(weekAgoStr());
   const [customEnd, setCustomEnd] = useState(todayStr());
   const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("model");
   const [data, setData] = useState<TokenStatsResult | null>(null);
+  const [previousData, setPreviousData] = useState<TokenStatsResult | null>(null);
+  const [trendData, setTrendData] = useState<TokenTrendResult | null>(null);
+  const [granularity, setGranularity] = useState<TokenTrendGranularity>("hour");
+  const [metric, setMetric] = useState<AnalyticsMetric>("tokens");
+  const [agentFilter, setAgentFilter] = useState<string | undefined>(undefined);
+  const [modelFilter, setModelFilter] = useState<string | undefined>(undefined);
+  const [activeHealthKind, setActiveHealthKind] = useState<WorkHealthSignalKind | null>(null);
   const [loading, setLoading] = useState(false);
   const [redactTitles, setRedactTitles] = useState(false);
   const [redactModels, setRedactModels] = useState(false);
@@ -91,9 +128,18 @@ export function AnalyticsPage({ appSettings }: { appSettings?: AppSettings }) {
   const fetchData = useCallback(async (preset: RangePreset) => {
     setLoading(true);
     try {
-      const { start, end } = resolveRange(preset, customStart, customEnd);
-      const result = await window.codepal.getTokenStats(start, end);
+      const resolved = resolveRange(preset, customStart, customEnd);
+      const previous = previousEqualRange(resolved);
+      const [result, previousResult] = await Promise.all([
+        window.codepal.getTokenStats(resolved.start, resolved.end),
+        window.codepal.getTokenStats(previous.start, previous.end),
+      ]);
       setData(result);
+      setPreviousData(previousResult);
+      setGranularity((current) => {
+        const preferred = defaultGranularity(preset, resolved.start, resolved.end);
+        return current === preferred || preset === "custom" ? current : preferred;
+      });
     } finally {
       setLoading(false);
     }
@@ -103,14 +149,36 @@ export function AnalyticsPage({ appSettings }: { appSettings?: AppSettings }) {
     void fetchData(range);
   }, [range, fetchData]);
 
+  useEffect(() => {
+    const { start, end } = resolveRange(range, customStart, customEnd);
+    let cancelled = false;
+    void window.codepal
+      .getTokenTrend(start, end, granularity, {
+        agent: agentFilter,
+        model: modelFilter,
+      })
+      .then((result) => {
+        if (!cancelled) setTrendData(result);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [range, customStart, customEnd, granularity, agentFilter, modelFilter]);
+
   const handleOpenReport = useCallback(async () => {
     const { start, end } = resolveRange(range, customStart, customEnd);
-    const opts = (redactTitles || redactModels)
-      ? { redactSessionTitles: redactTitles, redactModelNames: redactModels }
-      : undefined;
+    const opts = {
+      redactSessionTitles: redactTitles,
+      redactModelNames: redactModels,
+      trendGranularity: granularity,
+      metric,
+      agent: agentFilter,
+      model: modelFilter,
+      locale: i18n.locale,
+    };
     const filePath = await window.codepal.generateHtmlReport(start, end, opts);
     await window.codepal.openExternalTarget(filePath);
-  }, [range, customStart, customEnd, redactTitles, redactModels]);
+  }, [range, customStart, customEnd, redactTitles, redactModels, granularity, metric, agentFilter, modelFilter, i18n.locale]);
 
   const handleLlmReport = useCallback(async () => {
     setLlmReportGenerating(true);
@@ -164,16 +232,52 @@ export function AnalyticsPage({ appSettings }: { appSettings?: AppSettings }) {
       })
     : i18n.t("tokenStats.backfillPending");
 
-  const dailyByDate = new Map<string, { input: number; output: number; cache: number }>();
-  for (const d of data?.daily ?? []) {
-    const existing = dailyByDate.get(d.date) ?? { input: 0, output: 0, cache: 0 };
-    existing.input += d.inputTokens;
-    existing.output += d.outputTokens;
-    existing.cache += d.cacheReadTokens + d.cacheCreationTokens;
-    dailyByDate.set(d.date, existing);
-  }
-  const dailyEntries = Array.from(dailyByDate.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  const maxDailyTokens = Math.max(1, ...dailyEntries.map(([, v]) => v.input + v.output + v.cache));
+  const availableAgents = useMemo(() => {
+    const set = new Set<string>((data?.byAgent ?? []).map((entry) => entry.agent));
+    for (const point of trendData?.points ?? []) set.add(point.agent);
+    return Array.from(set).sort();
+  }, [data?.byAgent, trendData?.points]);
+
+  const availableModels = useMemo(() => {
+    const set = new Set<string>((data?.byModel ?? []).map((entry) => entry.model));
+    for (const point of trendData?.points ?? []) set.add(point.model);
+    return Array.from(set).sort();
+  }, [data?.byModel, trendData?.points]);
+
+  const currentRange = useMemo(() => {
+    const { start, end } = resolveRange(range, customStart, customEnd);
+    return { startMs: start, endMs: end };
+  }, [range, customStart, customEnd]);
+
+  const healthSummary = useMemo(
+    () =>
+      workItemList && data && previousData
+        ? deriveAnalyticsWorkHealth({
+            workItemList,
+            usageOverview: usageOverview ?? null,
+            currentStats: data,
+            previousStats: previousData,
+            selectedRange: currentRange,
+          })
+        : null,
+    [workItemList, usageOverview, data, previousData, currentRange],
+  );
+
+  const activeHealthSignal = healthSummary?.signals.find((signal) => signal.kind === activeHealthKind);
+  const activeHealthTargets = useMemo(
+    () =>
+      activeHealthSignal
+        ? buildWorkHealthSessionTargets(activeHealthSignal.sessionIds, workItemList, usageOverview)
+        : [],
+    [activeHealthSignal, workItemList, usageOverview],
+  );
+
+  const handleHealthSignal = useCallback((signal: WorkHealthSignal) => {
+    setActiveHealthKind((current) => current === signal.kind ? null : signal.kind);
+    if (signal.sessionIds.length === 1) {
+      onFocusSession?.(signal.sessionIds[0]);
+    }
+  }, [onFocusSession]);
 
   const rangeButtons: Array<{ key: RangePreset; label: string }> = [
     { key: "today", label: i18n.t("tokenStats.range.today") },
@@ -244,9 +348,8 @@ export function AnalyticsPage({ appSettings }: { appSettings?: AppSettings }) {
               key={btn.key}
               onClick={() => {
                 setRange(btn.key);
-                if (btn.key !== "custom") {
-                  void fetchData(btn.key);
-                }
+                const resolved = resolveRange(btn.key, customStart, customEnd);
+                setGranularity(defaultGranularity(btn.key, resolved.start, resolved.end));
               }}
               className={`analytics-page__range-btn ${range === btn.key ? "analytics-page__range-btn--active" : ""}`}
             >
@@ -362,44 +465,123 @@ export function AnalyticsPage({ appSettings }: { appSettings?: AppSettings }) {
         </div>
       ) : null}
 
-      {dailyEntries.length > 0 ? (
-        <div className="analytics-page__section">
-          <div className="analytics-page__section-title">{i18n.t("tokenStats.dailyTrend")}</div>
-          <div className="analytics-page__chart-wrap">
-            <div className="analytics-page__chart-y-axis">
-              <span>{formatTokens(maxDailyTokens)}</span>
-              <span>{formatTokens(Math.round(maxDailyTokens * 0.5))}</span>
-              <span>0</span>
+      {healthSummary ? (
+        <>
+          <WorkHealthStrip
+            summary={healthSummary}
+            activeKind={activeHealthKind}
+            onSignalClick={handleHealthSignal}
+          />
+          {activeHealthTargets.length > 1 ? (
+            <div className="work-health-panel__list">
+              <div className="work-health-panel__list-title">
+                {i18n.t("workHealth.filteredList")}
+              </div>
+              {activeHealthTargets.map((target) => (
+                <button
+                  key={target.sessionId}
+                  type="button"
+                  className="work-health-panel__list-item"
+                  onClick={() => onFocusSession?.(target.sessionId)}
+                >
+                  <span>{target.title}</span>
+                  <span>{i18n.t("workHealth.focusSession")}</span>
+                </button>
+              ))}
             </div>
-            <div className="analytics-page__chart">
-              {dailyEntries.map(([date, vals]) => {
-                const total = vals.input + vals.output + vals.cache;
-                const heightPct = (total / maxDailyTokens) * 100;
-                const inputPct = total > 0 ? (vals.input / total) * heightPct : 0;
-                const outputPct = total > 0 ? (vals.output / total) * heightPct : 0;
-                return (
-                  <div
-                    key={date}
-                    className="analytics-page__chart-col"
-                    title={`${date}\n${i18n.t("tokenStats.input")}: ${formatTokens(vals.input)}\n${i18n.t("tokenStats.output")}: ${formatTokens(vals.output)}\n${i18n.t("tokenStats.cache")}: ${formatTokens(vals.cache)}\n${i18n.t("tokenStats.totalTokens")}: ${formatTokens(total)}`}
-                  >
-                    <div className="analytics-page__chart-value">{formatTokens(total)}</div>
-                    <div className="analytics-page__chart-bar-group" style={{ height: `${Math.max(2, heightPct)}%` }}>
-                      <div className="analytics-page__chart-bar analytics-page__chart-bar--input" style={{ height: `${inputPct / Math.max(2, heightPct) * 100}%` }} />
-                      <div className="analytics-page__chart-bar analytics-page__chart-bar--output" style={{ height: `${outputPct / Math.max(2, heightPct) * 100}%` }} />
-                      <div className="analytics-page__chart-bar analytics-page__chart-bar--cache" style={{ flex: 1 }} />
-                    </div>
-                    <div className="analytics-page__chart-label">{date.slice(5)}</div>
-                  </div>
-                );
-              })}
+          ) : null}
+        </>
+      ) : null}
+
+      {(trendData?.points.length ?? 0) > 0 ? (
+        <div className="analytics-page__section analytics-page__trend-section">
+          <div className="analytics-page__section-header">
+            <div className="analytics-page__section-title">{i18n.t("tokenStats.dailyTrend")}</div>
+            <div className="analytics-page__segmented" aria-label="Trend granularity">
+              {(["minute", "hour", "day"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`analytics-page__segment ${granularity === value ? "analytics-page__segment--active" : ""}`}
+                  onClick={() => setGranularity(value)}
+                >
+                  {i18n.t(`tokenStats.granularity.${value}`)}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="analytics-page__chart-legend">
-            <span className="analytics-page__legend-item"><span className="analytics-page__legend-dot analytics-page__legend-dot--input" />{i18n.t("tokenStats.input")}</span>
-            <span className="analytics-page__legend-item"><span className="analytics-page__legend-dot analytics-page__legend-dot--output" />{i18n.t("tokenStats.output")}</span>
-            <span className="analytics-page__legend-item"><span className="analytics-page__legend-dot analytics-page__legend-dot--cache" />{i18n.t("tokenStats.cache")}</span>
+          <div className="analytics-page__trend-controls">
+            <div className="analytics-page__segmented" aria-label="Trend metric">
+              {(["tokens", "requests", "cost", "cacheHit"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`analytics-page__segment ${metric === value ? "analytics-page__segment--active" : ""}`}
+                  onClick={() => setMetric(value)}
+                >
+                  {i18n.t(`tokenStats.metric.${value}`)}
+                </button>
+              ))}
+            </div>
           </div>
+          {availableAgents.length > 1 ? (
+            <div className="analytics-page__filter-chips">
+              <button
+                type="button"
+                className={`analytics-page__filter-chip${agentFilter === undefined ? " analytics-page__filter-chip--active" : ""}`}
+                onClick={() => setAgentFilter(undefined)}
+              >
+                {i18n.t("tokenStats.filterAllAgents")}
+              </button>
+              {availableAgents.map((agent) => (
+                <button
+                  key={agent}
+                  type="button"
+                  className={`analytics-page__filter-chip${agentFilter === agent ? " analytics-page__filter-chip--active" : ""}`}
+                  onClick={() => {
+                    setAgentFilter((current) => current === agent ? undefined : agent);
+                    setModelFilter(undefined);
+                  }}
+                >
+                  {agentLabel(agent)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {availableModels.length > 1 ? (
+            <div className="analytics-page__filter-chips">
+              <button
+                type="button"
+                className={`analytics-page__filter-chip${modelFilter === undefined ? " analytics-page__filter-chip--active" : ""}`}
+                onClick={() => setModelFilter(undefined)}
+              >
+                {i18n.t("tokenStats.filterAllModels")}
+              </button>
+              {availableModels.slice(0, 8).map((model) => (
+                <button
+                  key={model}
+                  type="button"
+                  className={`analytics-page__filter-chip${modelFilter === model ? " analytics-page__filter-chip--active" : ""}`}
+                  onClick={() => setModelFilter((current) => current === model ? undefined : model)}
+                >
+                  {model}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <AnalyticsLineChart
+            points={trendData?.points ?? []}
+            metric={metric}
+            granularity={granularity}
+            domainStart={currentRange.startMs}
+            domainEnd={currentRange.endMs}
+            pricing={data?.pricing ?? []}
+          />
+          <AnalyticsSmallMultiples
+            points={trendData?.points ?? []}
+            selectedAgent={agentFilter}
+            formatValue={formatTokens}
+          />
         </div>
       ) : null}
 
@@ -424,6 +606,15 @@ export function AnalyticsPage({ appSettings }: { appSettings?: AppSettings }) {
               </button>
             </div>
           </div>
+          {importStatus ? (
+            <div className="analytics-page__source-coverage">
+              {i18n.t("tokenStats.sourceCoverage", {
+                live: (data?.daily ?? []).filter((row) => row.requestCount > 0).length,
+                backfill: importStatus.claudeRowsImported + importStatus.codexRowsImported,
+                estimated: (data?.byModel ?? []).length,
+              })}
+            </div>
+          ) : null}
           <table className="analytics-page__table">
             <thead>
               <tr>

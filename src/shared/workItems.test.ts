@@ -75,7 +75,7 @@ describe("deriveWorkItems", () => {
     expect(result.items[0].priority).toBe("critical");
   });
 
-  it("derives needs_follow_up from idle status", () => {
+  it("excludes idle status because restored idle rows are not actionable", () => {
     const sessions: SessionRecord[] = [
       makeSession({
         id: "a",
@@ -84,8 +84,8 @@ describe("deriveWorkItems", () => {
       }),
     ];
     const result = deriveWorkItems(sessions);
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0].state).toBe("needs_follow_up");
+    expect(result.items).toHaveLength(0);
+    expect(result.byState.needs_follow_up).toHaveLength(0);
   });
 
   it("derives needs_follow_up from stale running session", () => {
@@ -126,7 +126,7 @@ describe("deriveWorkItems", () => {
     const result = deriveWorkItems(sessions, now);
     expect(result.items[0].state).toBe("failed");
     expect(result.items[1].state).toBe("waiting");
-    expect(result.items[2].state).toBe("needs_follow_up");
+    expect(result.items).toHaveLength(2);
   });
 
   it("uses title and task for display title", () => {
@@ -176,7 +176,7 @@ describe("deriveWorkItems", () => {
       makeSession({ id: "d", status: "offline", updatedAt: now }),
     ];
     const result = deriveWorkItems(sessions, now);
-    // waiting=high, failed=critical, needs_follow_up=medium, deferred=low
+    // waiting=high, failed=critical, idle=ignored, deferred=low
     // attention = critical + high
     expect(attentionCount(result)).toBe(2);
   });

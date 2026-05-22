@@ -35,6 +35,7 @@ CodePal 现在已经不是单一的悬浮 session 列表。当前已发基线包
 - 事项流转 MVP：
   - 从 session、状态变化、pending、error、用户触发操作中派生事项
   - 支持 `waiting`、`needs_follow_up`、`failed`、`completed`、`deferred` 等状态
+  - 默认不要把恢复出来的 `idle` 行当成需要处理；很多历史 `idle` 是终态或本地脏数据
   - 当 source path 可靠时，按 project / repository 分组
   - 事项标题和 next action 必须足够短，适合在主工作流里扫读
 - CLI 操作流 MVP：
@@ -50,12 +51,24 @@ CodePal 现在已经不是单一的悬浮 session 列表。当前已发基线包
 - 手动 LLM 报告生成：
   - Report Facts 层存在后，允许用户手动生成日报 / 周报 / 月报
   - 因为会消耗用户模型额度，所有 LLM 报告生成都必须受设置开关控制
+  - 优先通过可见的 agent / CLI session 生成报告：本地构建脱敏后的 Report Facts，再通过 capability-gated `sendMessage` / report-session 路径发给 agent，让生成过程出现在正常 session 列表和用量分析里
   - 提供模型选择器，默认使用已配置模型中最便宜、且足够做总结的模型
+  - 开启后，手动 LLM 报告入口应出现在 Analytics toolbar 附近；不要藏在脱敏控制下面
+  - 直接 Provider Gateway 生成只保留为显式 quick-generate / fallback；如果使用它，生成前校验 gateway 是否可用，并把 gateway/token/listener 问题显示成可处理错误，不要裸露 `fetch failed`
   - 当 pricing 数据可用时，生成前展示所选模型和估算 token / cost 范围
   - 事实提取是确定性的，所以默认使用低成本模型
   - 更强模型只作为可选 deep analysis 路径，不作为默认
   - 任何后台 / 自动报告生成都必须显式 opt-in，并展示清晰的额度消耗提示
   - prompts、路径、assistant 内容、命令输出、repo 标识离开本地 app 前必须先经过脱敏控制
+- Analytics Work Health 与趋势图重设计：
+  - 将当前每日堆叠柱状图替换为线性趋势图
+  - 支持分钟 / 小时 / 天粒度，7 天和 30 天视图默认使用小时
+  - 当前可见点数超过图表宽度可有效承载的数量时，使用 LTTB 降采样
+  - 增加 agent / model 筛选，以及按关键 agent 或 model 展示的小趋势子图
+  - 增加紧凑 Work Health 条，展示需要关注数、最长等待、未恢复失败、上下文接近满载、成本异常
+  - 健康信号必须可行动：单 session 信号聚焦对应 session row，多 session 信号打开过滤后的关注列表
+  - 把难懂信号写具体，例如用“上下文接近满载 87%”替代笼统的“上下文压力”
+  - 成本异常必须带明确比较窗口，例如“较上一等长周期 +34%”
 
 下个版本不做：
 
@@ -284,11 +297,30 @@ LLM 报告规则：
 
 - 报告只能基于 Report Facts 加被选择的 operation-log 片段生成，不能默认把无限制原始 transcript 扔给 LLM
 - LLM 报告生成必须受设置开关控制，因为它会消耗用户额度
+- 首选传输路径是可见的 agent / CLI session，而不是隐藏的 app-side Provider Gateway 调用
+- 当存在 start-session capability 时，报告操作应创建专用 report session；否则可以选中一个已有、可回复的 session
+- 用户应该能在 CodePal 正常表面里看到 prompt、报告输出、token usage、错误和后续影响
+- session 路径应走 capability-gated terminal message delivery，并记录本地 operation log
 - 用户必须能选择报告模型；默认使用已配置模型中最便宜、且足够做总结的模型
+- 开启后的手动生成入口应靠近确定性报告入口，避免用户找不到
+- 直接 Provider Gateway 生成是 fallback / quick-generate，不是主体验
+- 使用 fallback 时，生成前必须检查 Provider Gateway listener、active provider 和 provider token 是否就绪
+- fallback 网络失败时应说明本地 gateway URL 并指向 Settings -> Provider Gateway，不要直接展示 `fetch failed`
 - 后台报告生成必须保持 opt-in，并展示额度 / 成本提示
 - 默认模型应是低成本配置模型；昂贵模型只作为 deep analysis 的 opt-in
 - 下个版本报告生成应以手动触发为主，不做 scheduled / automatic 默认行为
 - report prompt 离开本地 app 前必须先执行脱敏
+
+LLM 报告落地顺序：
+
+1. 保留确定性 HTML report 作为始终可用的基线能力。
+2. 在本地构建 Report Facts prompt payload，包含被选择的 operation-log 片段和 redaction metadata。
+3. 增加报告目标选择：如果已有 start-session capability，优先创建专用 report session；否则列出已有、可回复的 session。
+4. 通过 capability-gated `sendMessage` / session action 路径发送 prompt，并在发送后聚焦目标 session。
+5. 写入本地 operation log，记录 report type、target session、selected model hint、redaction flags、dispatch result 和错误。
+6. 让正常 session watcher 捕获报告输出和 token usage；不要另建隐藏的 report transcript。
+7. 只有在 session 路径存在后，才增加显式 `quick generate in app` fallback，并标明它会直接使用 Provider Gateway。
+8. 后台或 scheduled report generation 只能在手动 session-first 生成被验证有用后再做，并且保持 opt-in。
 
 为什么先做：
 
@@ -303,14 +335,14 @@ CodePal 可以进入流程质量诊断，但不要变成 bossware 或绩效打�
 
 优先信号：
 
-- 等待时长：session 停在 waiting / idle gap 的时间
-- idle time：看似活跃的工作安静了多久
+- 等待时长：session 停在 `waiting` 的时间
+- stale active time：`running` 或其他看似活跃的工作安静了多久
 - 异常恢复：session 出错后是否恢复或完成
 - session churn：重复 abort、restart、compact，或大量 subexecution 的运行
 - 上下文压力：当上游有信号时，识别 context compaction、模型切换或大 token run
 - 配额压力：本地用量、估算费用、last-known rate-limit snapshot
 - 异常 cost：相对近期个人历史的 token / cost outlier
-- 未闭环工作：completed 或 idle 但没有明确 outcome 的 session
+- 未闭环工作：completed 或 stale active 但没有明确 outcome 的 session
 - 观测覆盖率：哪些工作 CodePal 能确信看见，哪些只是推断或可能漏掉
 
 设计规则：
@@ -319,6 +351,29 @@ CodePal 可以进入流程质量诊断，但不要变成 bossware 或绩效打�
 - 避免排行榜、个人生产力评分或团队绩效语言
 - 区分 estimated、backfilled、inferred、real-time 数据
 - 明确显示 missing data，不要用漂亮图表掩盖缺口
+- 恢复出来的 `idle` 行默认视为不可行动的历史数据，除非另有真实信号表明它 stale 或 failed
+
+近期 Analytics MVP：
+
+- 将健康层保持为 Analytics 内的紧凑信息条，不新建 Review Page。
+- 在摘要指标卡后渲染 Work Health 条，包含：
+  - 需要关注数
+  - 最长等待
+  - 未恢复失败
+  - 当存在真实上下文来源时显示上下文接近满载数量或百分比
+  - 相对上一等长周期的成本异常
+- 每个 Work Health 项都应作为导航入口：
+  - 单一目标 session：切到会话页并展开该行
+  - 多个目标 session：打开过滤后的关注列表
+  - 无目标或无来源：置灰并说明原因
+- 终端 / IDE 跳转继续走现有 capability-gated session action；Analytics 只负责聚焦 session，不静默激活终端。
+- 将每日柱状趋势替换为支持 `minute`、`hour`、`day` bucket 的折线图。
+- 增加 agent / model 筛选，以及按 top agent 或 model 的小趋势图。
+- 对密集趋势序列使用基于图表宽度计算的 LTTB 目标点数，并在 UI 中标明采样后 / 原始点数。
+- 使用具体标签：
+  - “上下文接近满载 87%”或“上下文已压缩 1 次”
+  - “较上一等长周期 +34%”
+  - 当上一周期无成本基线时显示“新成本活动”
 
 ## Track 3：数据来源与覆盖透明度
 
@@ -353,7 +408,7 @@ Attention Queue 候选：
 
 - running sessions
 - waiting for decision 的 sessions
-- idle 太久的 sessions
+- 变成 stale 的活跃 sessions
 - errored sessions
 - 应该 resume 的 sessions
 - 应该 close / review 的 sessions
@@ -470,8 +525,8 @@ team / cloud 工作在 release-ready 之前必须先更新 privacy 和 support �
 
 如果规划精力有限，按这个顺序做：
 
-1. ~~定义 capability manifest 和 action broker primitives~~ — 已完成 (v1.2.0-dev)
-2. 交付 Session Operations MVP — 修订范围：
+1. ~~定义 capability manifest 和 action broker primitives~~ — 已完成 (v1.2.0)
+2. ~~交付 Session Operations MVP~~ — 已完成 (v1.2.0)：
    - capability manifest：已完成
    - action broker：已完成（jump、sendMessage）
    - session action bar：仅 jump（详情视图内）
@@ -480,14 +535,23 @@ team / cloud 工作在 release-ready 之前必须先更新 privacy 和 support �
    - ~~open repo~~：暂缓 — workspacePath 极少可用
    - ~~mark outcome~~：移除 — 如果后续有价值，从事项流转中推导 outcome
    - ~~close session~~：替换为列表层的 delete_session
-3. 把确定性单 session 统计限制在 footer 层级：
-   - 请求数 / input / output / cache / 估算费用：已开始
+3. ~~把确定性单 session 统计限制在 footer 层级~~ — 已完成 (v1.2.0)：
+   - 请求数 / input / output / cache / 估算费用：已完成
    - 顶层 ReviewCard / Review Page：暂缓，除非它能明确驱动一个具体操作
-4. 定义日报 / 周报 / 月报使用的 Report Facts schema
-5. 设计并验证事项流转和 CLI 操作流
-6. 基于 Report Facts 和本地操作日志增加手动 LLM 日报 / 周报 / 月报
-7. 仅在会影响用户决策时展示事实型 source / coverage 指示
-8. 加 workflow-health 信号和 Attention Queue
-9. 在 attention signals 真正有用后增加 ambient presence
-10. 开放 community templates、schemas 和 adapter contribution paths
-11. 最后再回头评估 optional shared ops visibility、cloud sync、更大控制面、新平台或商业化包装
+4. ~~定义日报 / 周报 / 月报使用的 Report Facts schema~~ — 已完成 (v1.2.0)：
+   - report facts、work items、operation flow、LLM report generation 已交付
+   - 设置面板中的报告偏好已交付
+5. ~~重设计 Analytics 趋势与 Work Health~~ — 已完成 (v1.2.0)：
+   - SVG 折线图 + LTTB 降采样替代每日堆叠柱状图
+   - 宽度感知的 LTTB 降采样
+   - 趋势图上方的 agent 筛选 chips
+   - Work Health strip：attention、longest wait、unrecovered failures、context-near-full、cost anomaly 信号
+   - 可点击 Work Health 信号，跳转到对应 session
+   - 分钟 / 小时粒度暂缓（后端暂无数据）；当前以天粒度为基线
+6. 设计并验证事项流转和 CLI 操作流
+7. 基于 Report Facts 和本地操作日志增加手动 LLM 日报 / 周报 / 月报
+8. 仅在会影响用户决策时展示事实型 source / coverage 指示
+9. 加更完整的 workflow-health 信号和 Attention Queue
+10. 在 attention signals 真正有用后增加 ambient presence
+11. 开放 community templates、schemas 和 adapter contribution paths
+12. 最后再回头评估 optional shared ops visibility、cloud sync、更大控制面、新平台或商业化包装
