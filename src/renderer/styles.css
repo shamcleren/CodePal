@@ -3436,6 +3436,21 @@ body {
   cursor: pointer;
 }
 
+/* ── Report preferences ── */
+
+.report-prefs__model-input {
+  min-width: 0;
+  padding: 6px 10px;
+  margin-top: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  width: 100%;
+}
+
 /* ── LLM Report section ── */
 
 .analytics-page__llm-section {

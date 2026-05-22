@@ -434,6 +434,11 @@ const ZH_CN_MESSAGES: MessageDictionary = {
   "attentionBanner.state.failed": "失败",
   "attentionBanner.state.waiting": "等待中",
   "attentionBanner.state.needsFollowUp": "需跟进",
+  "reports.section": "报告",
+  "reports.title": "报告生成",
+  "reports.subtitle": "管理 LLM 驱动的报告生成设置。",
+  "reports.llmEnabled": "启用 LLM 报告生成",
+  "reports.llmDefaultModel": "默认模型",
 };
 
 const EN_MESSAGES: MessageDictionary = {
@@ -866,6 +871,11 @@ const EN_MESSAGES: MessageDictionary = {
   "attentionBanner.state.failed": "Failed",
   "attentionBanner.state.waiting": "Waiting",
   "attentionBanner.state.needsFollowUp": "Needs follow-up",
+  "reports.section": "Reports",
+  "reports.title": "Report Generation",
+  "reports.subtitle": "Manage LLM-powered report generation settings.",
+  "reports.llmEnabled": "Enable LLM report generation",
+  "reports.llmDefaultModel": "Default model",
 };
 
 const MESSAGES: Record<ResolvedLocale, MessageDictionary> = {

@@ -13,6 +13,7 @@ import { AnalyticsPage } from "./components/AnalyticsPage";
 import { AttentionBanner } from "./components/AttentionBanner";
 import { MainUpdateButton } from "./components/MainUpdateButton";
 import { NotificationPreferencesPanel } from "./components/NotificationPreferencesPanel";
+import { ReportPreferencesPanel } from "./components/ReportPreferencesPanel";
 import { ProviderGatewayPanel } from "./components/ProviderGatewayPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SessionList } from "./components/SessionList";
@@ -760,6 +761,18 @@ export function App() {
                       void updateAppSettings({
                         notifications: {
                           ...appSettings.notifications,
+                          ...patch,
+                        },
+                      })
+                    }
+                  />
+                  <ReportPreferencesPanel
+                    showHeader={false}
+                    settings={appSettings.reports}
+                    onUpdate={(patch) =>
+                      void updateAppSettings({
+                        reports: {
+                          ...appSettings.reports,
                           ...patch,
                         },
                       })
