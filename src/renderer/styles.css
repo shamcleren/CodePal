@@ -3519,6 +3519,130 @@ body {
   overflow-y: auto;
 }
 
+/* ── Attention banner ── */
+
+.attention-banner {
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.attention-banner__summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.attention-banner__summary:hover {
+  background: var(--analytics-control-hover-bg);
+}
+
+.attention-banner__summary-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--error);
+  color: var(--text-on-accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.attention-banner__summary-label {
+  flex: 1;
+  text-align: left;
+  color: var(--muted);
+}
+
+.attention-banner__chevron {
+  font-size: 9px;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.attention-banner__chevron--open {
+  transform: rotate(90deg);
+}
+
+.attention-banner__body {
+  border-top: 1px solid var(--border);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.attention-banner__group-label {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.attention-banner__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 10px 4px 14px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.attention-banner__item:hover {
+  background: var(--analytics-row-hover-bg);
+}
+
+.attention-banner__priority-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--muted);
+}
+
+.attention-banner__priority-dot--critical {
+  background: var(--error);
+}
+
+.attention-banner__priority-dot--high {
+  background: color-mix(in srgb, var(--error) 60%, var(--muted));
+}
+
+.attention-banner__item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention-banner__item-action {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
 /* ── Custom date range ── */
 
 .analytics-page__date-range {

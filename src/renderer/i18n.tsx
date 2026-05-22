@@ -430,6 +430,10 @@ const ZH_CN_MESSAGES: MessageDictionary = {
   "tokenStats.range.custom": "自定义",
   "actionBar.jump": "跳转",
   "actionBar.error": "操作失败",
+  "attentionBanner.needAttention": "需要处理",
+  "attentionBanner.state.failed": "失败",
+  "attentionBanner.state.waiting": "等待中",
+  "attentionBanner.state.needsFollowUp": "需跟进",
 };
 
 const EN_MESSAGES: MessageDictionary = {
@@ -858,6 +862,10 @@ const EN_MESSAGES: MessageDictionary = {
   "tokenStats.range.custom": "Custom",
   "actionBar.jump": "Jump",
   "actionBar.error": "Action failed",
+  "attentionBanner.needAttention": "need attention",
+  "attentionBanner.state.failed": "Failed",
+  "attentionBanner.state.waiting": "Waiting",
+  "attentionBanner.state.needsFollowUp": "Needs follow-up",
 };
 
 const MESSAGES: Record<ResolvedLocale, MessageDictionary> = {

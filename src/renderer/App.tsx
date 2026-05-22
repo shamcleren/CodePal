@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultAppSettings, type AppSettings, type AppSettingsPatch } from "../shared/appSettings";
 import type { HistoryDiagnostics } from "../shared/historyTypes";
 import type { IntegrationAgentId, IntegrationDiagnostics } from "../shared/integrationTypes";
@@ -10,6 +10,7 @@ import { DisplayPreferencesPanel } from "./components/DisplayPreferencesPanel";
 import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
 import { AnalyticsPage } from "./components/AnalyticsPage";
+import { AttentionBanner } from "./components/AttentionBanner";
 import { MainUpdateButton } from "./components/MainUpdateButton";
 import { NotificationPreferencesPanel } from "./components/NotificationPreferencesPanel";
 import { ProviderGatewayPanel } from "./components/ProviderGatewayPanel";
@@ -19,6 +20,7 @@ import { UpdatePanel } from "./components/UpdatePanel";
 import { UsageStatusStrip } from "./components/UsageStatusStrip";
 import { SupportPanel } from "./components/SupportPanel";
 import type { MonitorSessionRow } from "./monitorSession";
+import { deriveWorkItems, attentionCount } from "../shared/workItems";
 import { createI18nValue, I18nProvider, resolveLocale } from "./i18n";
 import { formatSettingsPathForDisplay } from "./settingsPath";
 import { SUPPORT_LINKS } from "./supportLinks";
@@ -83,6 +85,8 @@ export function App() {
   const [homeDir, setHomeDir] = useState("");
   const [updateState, setUpdateState] = useState<AppUpdateState | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [jumpToSessionId, setJumpToSessionId] = useState<string | undefined>(undefined);
+  const workItemList = useMemo(() => deriveWorkItems(rows), [rows]);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const resolvedLocale = resolveLocale(
@@ -535,6 +539,12 @@ export function App() {
       ) : null}
       {activeView === "sessions" ? (
         <>
+          {attentionCount(workItemList) > 0 ? (
+            <AttentionBanner
+              workItemList={workItemList}
+              onJumpToSession={setJumpToSessionId}
+            />
+          ) : null}
           {rows.length === 0 ? (
             <p className="app-hint" style={{ padding: "0 12px", opacity: 0.75 }}>
               {i18n.t("app.waitingForSessions")}
@@ -544,6 +554,7 @@ export function App() {
             sessions={rows}
             historyVersion={historyStoreVersion}
             onRespond={handleRespond}
+            initiallyExpandedSessionId={jumpToSessionId}
           />
         </>
       ) : (
