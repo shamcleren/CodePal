@@ -33,12 +33,17 @@ describe("preload history bridge", () => {
 
     expect(typeof api.getHistoryDiagnostics).toBe("function");
     expect(typeof api.getSessionHistoryPage).toBe("function");
+    expect(typeof api.getSessionHistorySummaries).toBe("function");
     expect(typeof api.clearHistoryStore).toBe("function");
 
     (api.getHistoryDiagnostics as () => Promise<unknown>)();
     (api.getSessionHistoryPage as (input: unknown) => Promise<unknown>)({
       sessionId: "session-1",
       limit: 25,
+    });
+    (api.getSessionHistorySummaries as (input: unknown) => Promise<unknown>)({
+      maxAgeMs: 86_400_000,
+      limit: 50,
     });
     (api.clearHistoryStore as () => Promise<unknown>)();
 
@@ -47,7 +52,11 @@ describe("preload history bridge", () => {
       sessionId: "session-1",
       limit: 25,
     });
-    expect(invoke).toHaveBeenNthCalledWith(3, "codepal:clear-history-store");
+    expect(invoke).toHaveBeenNthCalledWith(3, "codepal:get-session-history-summaries", {
+      maxAgeMs: 86_400_000,
+      limit: 50,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, "codepal:clear-history-store");
   });
 
   it("exposes onFocusSession listener", async () => {

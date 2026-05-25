@@ -11,6 +11,8 @@ import type {
   HistoryDiagnostics,
   SessionHistoryPage,
   SessionHistoryPageRequest,
+  SessionHistorySummary,
+  SessionHistorySummaryRequest,
 } from "../../shared/historyTypes";
 import type { SessionRecord, SessionJumpTarget } from "../../shared/sessionTypes";
 import type { SessionCapabilityManifest, SessionActionType } from "../../shared/capabilityTypes";
@@ -179,6 +181,12 @@ contextBridge.exposeInMainWorld("codepal", {
       "codepal:get-session-history-page",
       input,
     ) as Promise<SessionHistoryPage>;
+  },
+  getSessionHistorySummaries(input?: SessionHistorySummaryRequest) {
+    return ipcRenderer.invoke(
+      "codepal:get-session-history-summaries",
+      input ?? {},
+    ) as Promise<SessionHistorySummary[]>;
   },
   clearHistoryStore() {
     return ipcRenderer.invoke("codepal:clear-history-store") as Promise<HistoryDiagnostics>;

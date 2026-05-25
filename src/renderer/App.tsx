@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultAppSettings, type AppSettings, type AppSettingsPatch } from "../shared/appSettings";
-import type { HistoryDiagnostics } from "../shared/historyTypes";
+import type { HistoryDiagnostics, SessionHistorySummary } from "../shared/historyTypes";
 import type { IntegrationAgentId, IntegrationDiagnostics } from "../shared/integrationTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview } from "../shared/usageTypes";
@@ -20,6 +20,7 @@ import { SessionList } from "./components/SessionList";
 import { UpdatePanel } from "./components/UpdatePanel";
 import { UsageStatusStrip } from "./components/UsageStatusStrip";
 import { SupportPanel } from "./components/SupportPanel";
+import { WorkReviewPage } from "./components/WorkReviewPage";
 import type { MonitorSessionRow } from "./monitorSession";
 import { deriveWorkItems, attentionCount } from "../shared/workItems";
 import { createI18nValue, I18nProvider, resolveLocale } from "./i18n";
@@ -44,6 +45,9 @@ type SettingsSection = {
   summary: string;
 };
 
+const WORK_REVIEW_HISTORY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const WORK_REVIEW_HISTORY_LIMIT = 500;
+
 export function buildFallbackHistoryDiagnostics(enabled: boolean): HistoryDiagnostics {
   return {
     enabled,
@@ -63,7 +67,8 @@ export function App() {
   const [installingAgentId, setInstallingAgentId] = useState<IntegrationAgentId | null>(null);
   const [integrationFeedback, setIntegrationFeedback] = useState<string | null>(null);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<"sessions" | "analytics">("sessions");
+  const [activeView, setActiveView] =
+    useState<"sessions" | "analytics" | "review">("sessions");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("overview");
@@ -80,6 +85,9 @@ export function App() {
   const [historyDiagnostics, setHistoryDiagnostics] = useState<HistoryDiagnostics | null>(null);
   const [historyStoreClearing, setHistoryStoreClearing] = useState(false);
   const [historyStoreVersion, setHistoryStoreVersion] = useState(0);
+  const [workReviewHistorySessions, setWorkReviewHistorySessions] = useState<
+    SessionHistorySummary[]
+  >([]);
   const [sessionHistoryClearing, setSessionHistoryClearing] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [appSettingsPath, setAppSettingsPath] = useState("");
@@ -374,6 +382,28 @@ export function App() {
 
   useEffect(() => {
     let active = true;
+    void window.codepal
+      .getSessionHistorySummaries({
+        maxAgeMs: WORK_REVIEW_HISTORY_MAX_AGE_MS,
+        limit: WORK_REVIEW_HISTORY_LIMIT,
+      })
+      .then((sessions) => {
+        if (active) {
+          setWorkReviewHistorySessions(sessions);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setWorkReviewHistorySessions([]);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [historyStoreVersion]);
+
+  useEffect(() => {
+    let active = true;
     const unsub = window.codepal.onUsageOverview((overview) => {
       setUsageOverview(overview);
     });
@@ -431,6 +461,7 @@ export function App() {
       .clearHistoryStore()
       .then((diagnostics) => {
         setHistoryDiagnostics(diagnostics);
+        setWorkReviewHistorySessions([]);
         setHistoryStoreVersion((current) => current + 1);
         return diagnostics;
       })
@@ -532,6 +563,13 @@ export function App() {
         >
           {i18n.t("nav.analytics")}
         </button>
+        <button
+          type="button"
+          className={`app-view-tab ${activeView === "review" ? "app-view-tab--active" : ""}`}
+          onClick={() => setActiveView("review")}
+        >
+          {i18n.t("nav.workReview")}
+        </button>
       </div>
       {activeView === "sessions" ? (
         <StatusBar
@@ -558,11 +596,20 @@ export function App() {
             initiallyExpandedSessionId={jumpToSessionId}
           />
         </>
-      ) : (
+      ) : activeView === "analytics" ? (
         <AnalyticsPage
           appSettings={appSettings}
           workItemList={workItemList}
           usageOverview={usageOverview}
+          onFocusSession={(sessionId) => {
+            setActiveView("sessions");
+            setJumpToSessionId(sessionId);
+          }}
+        />
+      ) : (
+        <WorkReviewPage
+          sessions={rows}
+          historySessions={workReviewHistorySessions}
           onFocusSession={(sessionId) => {
             setActiveView("sessions");
             setJumpToSessionId(sessionId);

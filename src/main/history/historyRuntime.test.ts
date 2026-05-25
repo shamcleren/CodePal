@@ -195,6 +195,17 @@ describe("historyRuntime", () => {
         nextCursor: request.cursor ?? null,
         hasMore: false,
       })),
+      getRecentSessions: vi.fn(() => [
+        {
+          id: "history-1",
+          tool: "codex",
+          status: "usage-only",
+          title: "Older title",
+          latestTask: "Older task",
+          updatedAt: 1_000,
+          lastUserMessageAt: 900,
+        },
+      ]),
       clearAll: vi.fn(() => diagnostics),
     };
 
@@ -206,14 +217,17 @@ describe("historyRuntime", () => {
 
     expect(handlers.has("codepal:get-history-diagnostics")).toBe(true);
     expect(handlers.has("codepal:get-session-history-page")).toBe(true);
+    expect(handlers.has("codepal:get-session-history-summaries")).toBe(true);
     expect(handlers.has("codepal:clear-history-store")).toBe(true);
 
     const getDiagnostics = handlers.get("codepal:get-history-diagnostics");
     const getPage = handlers.get("codepal:get-session-history-page");
+    const getSummaries = handlers.get("codepal:get-session-history-summaries");
     const clearStore = handlers.get("codepal:clear-history-store");
 
     expect(getDiagnostics).toBeTruthy();
     expect(getPage).toBeTruthy();
+    expect(getSummaries).toBeTruthy();
     expect(clearStore).toBeTruthy();
 
     expect(getDiagnostics?.()).toEqual({ ...diagnostics, enabled: false });
@@ -223,6 +237,21 @@ describe("historyRuntime", () => {
       items: [],
       nextCursor: "next",
       hasMore: false,
+    });
+    expect(getSummaries?.({}, { maxAgeMs: 14 * 24 * 60 * 60 * 1000, limit: 300 })).toEqual([
+      {
+        id: "history-1",
+        tool: "codex",
+        status: "completed",
+        title: "Older title",
+        task: "Older task",
+        updatedAt: 1_000,
+        lastUserMessageAt: 900,
+      },
+    ]);
+    expect(historyStore.getRecentSessions).toHaveBeenCalledWith({
+      maxAgeMs: 14 * 24 * 60 * 60 * 1000,
+      limit: 300,
     });
     expect(await clearStore?.()).toEqual({ ...diagnostics, enabled: false });
   });
@@ -256,6 +285,7 @@ describe("historyRuntime", () => {
       nextCursor: null,
       hasMore: false,
     });
+    expect(handlers.get("codepal:get-session-history-summaries")?.({}, {})).toEqual([]);
     expect(handlers.get("codepal:clear-history-store")?.()).toEqual({
       enabled: false,
       dbPath: "",

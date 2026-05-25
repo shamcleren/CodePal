@@ -10,6 +10,8 @@ import type {
   HistoryDiagnostics,
   SessionHistoryPage,
   SessionHistoryPageRequest,
+  SessionHistorySummary,
+  SessionHistorySummaryRequest,
 } from "../shared/historyTypes";
 import type { SessionJumpTarget, SessionRecord } from "../shared/sessionTypes";
 import type { SessionActionType, SessionCapabilityManifest } from "../shared/capabilityTypes";
@@ -76,6 +78,9 @@ export type CodePalApi = {
   getIntegrationDiagnostics: () => Promise<IntegrationDiagnostics>;
   getHistoryDiagnostics: () => Promise<HistoryDiagnostics>;
   getSessionHistoryPage: (input: SessionHistoryPageRequest) => Promise<SessionHistoryPage>;
+  getSessionHistorySummaries: (
+    input?: SessionHistorySummaryRequest,
+  ) => Promise<SessionHistorySummary[]>;
   getSessionTokenUsage: (sessionId: string) => Promise<SessionTokenUsageResult>;
   clearHistoryStore: () => Promise<HistoryDiagnostics>;
   installIntegrationHooks: (

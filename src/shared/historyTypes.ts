@@ -1,4 +1,4 @@
-import type { ActivityItem } from "./sessionTypes";
+import type { ActivityItem, SessionStatus } from "./sessionTypes";
 
 export type SessionHistoryPageRequest = {
   sessionId: string;
@@ -10,6 +10,21 @@ export type SessionHistoryPage = {
   items: ActivityItem[];
   nextCursor: string | null;
   hasMore: boolean;
+};
+
+export type SessionHistorySummaryRequest = {
+  maxAgeMs?: number;
+  limit?: number;
+};
+
+export type SessionHistorySummary = {
+  id: string;
+  tool: string;
+  status: SessionStatus;
+  title?: string;
+  task?: string;
+  updatedAt: number;
+  lastUserMessageAt?: number;
 };
 
 export type HistoryDiagnostics = {

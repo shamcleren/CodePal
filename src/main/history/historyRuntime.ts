@@ -1,10 +1,15 @@
 import path from "node:path";
 import type { IpcMain } from "electron";
 import type { AppSettings } from "../../shared/appSettings";
-import type { HistoryDiagnostics, SessionHistoryPageRequest } from "../../shared/historyTypes";
-import type { SessionRecord } from "../../shared/sessionTypes";
+import type {
+  HistoryDiagnostics,
+  SessionHistoryPageRequest,
+  SessionHistorySummary,
+  SessionHistorySummaryRequest,
+} from "../../shared/historyTypes";
+import { isSessionStatus, type SessionRecord, type SessionStatus } from "../../shared/sessionTypes";
 import type { SessionEvent } from "../session/sessionStore";
-import { createHistoryStore, type PersistedSessionWrite } from "./historyStore";
+import { createHistoryStore, type PersistedSessionWrite, type SessionSeedRecord } from "./historyStore";
 
 type HistoryStore = ReturnType<typeof createHistoryStore>;
 
@@ -15,7 +20,10 @@ type HistoryStoreLike = Pick<
 
 type RegisterHistoryIpcHandlersOptions = {
   ipcMain: Pick<IpcMain, "handle">;
-  historyStore: Pick<HistoryStore, "clearAll" | "getDiagnostics" | "getSessionHistoryPage"> | null;
+  historyStore: Pick<
+    HistoryStore,
+    "clearAll" | "getDiagnostics" | "getRecentSessions" | "getSessionHistoryPage"
+  > | null;
   getPersistenceEnabled: () => boolean;
 };
 
@@ -37,6 +45,39 @@ type CreateDeferredHistoryWriterOptions = {
   scheduleFlush?: (flush: () => void) => unknown;
   cancelFlush?: (handle: unknown) => void;
 };
+
+const DEFAULT_SUMMARY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const MAX_SUMMARY_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+const DEFAULT_SUMMARY_LIMIT = 300;
+const MAX_SUMMARY_LIMIT = 500;
+
+function normalizeSummaryMaxAgeMs(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.min(Math.trunc(value), MAX_SUMMARY_MAX_AGE_MS)
+    : DEFAULT_SUMMARY_MAX_AGE_MS;
+}
+
+function normalizeSummaryLimit(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.min(Math.trunc(value), MAX_SUMMARY_LIMIT)
+    : DEFAULT_SUMMARY_LIMIT;
+}
+
+function normalizeSummaryStatus(status: string): SessionStatus {
+  return isSessionStatus(status) ? status : "completed";
+}
+
+function toSessionHistorySummary(record: SessionSeedRecord): SessionHistorySummary {
+  return {
+    id: record.id,
+    tool: record.tool,
+    status: normalizeSummaryStatus(record.status),
+    ...(record.title ? { title: record.title } : {}),
+    ...(record.latestTask ? { task: record.latestTask } : {}),
+    updatedAt: record.updatedAt,
+    ...(record.lastUserMessageAt !== null ? { lastUserMessageAt: record.lastUserMessageAt } : {}),
+  };
+}
 
 export function createAppHistoryStore(options: { userDataPath: string; now?: () => number }) {
   return createHistoryStore({
@@ -194,6 +235,18 @@ export function registerHistoryIpcHandlers(options: RegisterHistoryIpcHandlersOp
       throw new Error("e2e first history load fails");
     }
     return options.historyStore.getSessionHistoryPage(request);
+  });
+  options.ipcMain.handle("codepal:get-session-history-summaries", (_event, payload: unknown) => {
+    if (!options.historyStore) {
+      return [];
+    }
+    const request = (payload ?? {}) as SessionHistorySummaryRequest;
+    return options.historyStore
+      .getRecentSessions({
+        maxAgeMs: normalizeSummaryMaxAgeMs(request.maxAgeMs),
+        limit: normalizeSummaryLimit(request.limit),
+      })
+      .map(toSessionHistorySummary);
   });
   options.ipcMain.handle("codepal:clear-history-store", () => {
     if (!options.historyStore) {

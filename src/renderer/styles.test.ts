@@ -287,6 +287,16 @@ describe("renderer layout styles", () => {
     );
   });
 
+  it("keeps the work review source summary aligned as compact pills", () => {
+    const css = fs.readFileSync(stylesPath, "utf8");
+
+    expect(cssBlock(css, ".work-review__detail-head")).toContain("align-items: center;");
+    expect(cssBlock(css, ".work-review__sources")).toContain("display: inline-flex;");
+    expect(cssBlock(css, ".work-review__sources")).toContain("align-items: center;");
+    expect(cssBlock(css, ".work-review__source-pill")).toContain("display: inline-flex;");
+    expect(cssBlock(css, ".work-review__source-pill")).toContain("height: 22px;");
+  });
+
   it("keeps component styles on semantic theme tokens instead of raw colors", () => {
     const css = fs.readFileSync(stylesPath, "utf8");
     const rawColorLines = componentCss(css)
