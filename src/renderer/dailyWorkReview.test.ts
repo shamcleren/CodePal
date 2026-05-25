@@ -340,6 +340,32 @@ describe("buildDailyWorkReview", () => {
     });
   });
 
+  it("lets running duration grow when the review clock advances", () => {
+    const rows = [
+      row({
+        id: "active-timed-session",
+        status: "running",
+        titleLabel: "观察自动增长的时长",
+        updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+        startedAt: Date.parse("2026-05-25T09:00:00+08:00"),
+        latestRunningStartedAt: Date.parse("2026-05-25T09:00:00+08:00"),
+      }),
+    ];
+
+    const first = buildDailyWorkReview(rows, {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T10:00:00+08:00"),
+    });
+    const later = buildDailyWorkReview(rows, {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T10:30:00+08:00"),
+    });
+
+    expect(first[0].ongoing[0]?.latestRunningDurationLabel).toBe("1 小时");
+    expect(later[0].ongoing[0]?.latestRunningDurationLabel).toBe("1 小时 30 分钟");
+    expect(later[0].ongoing[0]?.sessionDurationLabel).toBe("1 小时 30 分钟");
+  });
+
   it("keeps in-progress sessions only for today", () => {
     const days = buildDailyWorkReview([
       row({

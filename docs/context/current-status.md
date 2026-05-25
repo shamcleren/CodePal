@@ -358,12 +358,13 @@ The main product shift is:
 Recommended next implementation sequence:
 
 1. Keep per-session deterministic metrics at the footer level; do not grow the ReviewCard into a primary surface unless there is a proven user action it enables.
-2. Define the Report Facts schema for daily / weekly / monthly summaries before calling any LLM.
-3. Shift the next product layer toward work item flow and CLI operation flow: handoff state, preflight, dry-run, execution, and local operation logs.
-4. Add manual LLM-generated reports only on top of Report Facts and operation logs. Gate generation behind a settings switch, provide model selection, default to the cheapest capable configured model, and keep background generation opt-in with quota warnings.
-5. Treat data-source transparency as factual provenance, not subjective "confidence" badges; show source / missing fields only when it changes user decisions.
-6. Revisit ambient presence only after there are work item, operation, or report signals worth compressing into a smaller surface.
-7. Revisit team, billing, cloud sync, or remote analytics only after the privacy and support contracts are redesigned.
+2. Move the Work Review surface from `session = work item` to `session as evidence`: split a single session into user-intent work items, preserve source session links, and show per-item summaries before relying on LLM prose.
+3. Define the Report Facts schema for daily / weekly / monthly summaries before calling any LLM.
+4. Shift the next product layer toward work item flow and CLI operation flow: handoff state, preflight, dry-run, execution, and local operation logs.
+5. Add manual LLM-generated reports only on top of Report Facts and operation logs. Gate generation behind a settings switch, provide model selection, default to the cheapest capable configured model, and keep background generation opt-in with quota warnings.
+6. Treat data-source transparency as factual provenance, not subjective "confidence" badges; show source / missing fields only when it changes user decisions.
+7. Revisit ambient presence only after there are work item, operation, or report signals worth compressing into a smaller surface.
+8. Revisit team, billing, cloud sync, or remote analytics only after the privacy and support contracts are redesigned.
 
 Documentation handoff for future edits:
 

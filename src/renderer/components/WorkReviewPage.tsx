@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildDailyWorkReview, type DailyWorkReviewDay, type DailyWorkReviewEntry } from "../dailyWorkReview";
 import type { MonitorSessionRow } from "../monitorSession";
 import type { SessionHistorySummary } from "../../shared/historyTypes";
@@ -12,6 +12,27 @@ type WorkReviewPageProps = {
 };
 
 const SUMMARY_PREVIEW_LIMIT = 4;
+const WORK_REVIEW_CLOCK_INTERVAL_MS = 30_000;
+
+function useWorkReviewNow(explicitNow?: number): number {
+  const [liveNow, setLiveNow] = useState(() => explicitNow ?? Date.now());
+
+  useEffect(() => {
+    if (explicitNow !== undefined) {
+      setLiveNow(explicitNow);
+      return;
+    }
+    setLiveNow(Date.now());
+    const intervalId = window.setInterval(() => {
+      setLiveNow(Date.now());
+    }, WORK_REVIEW_CLOCK_INTERVAL_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [explicitNow]);
+
+  return explicitNow ?? liveNow;
+}
 
 function sourceLabel(entry: DailyWorkReviewEntry, t: (key: string) => string): string {
   return entry.source === "managed"
@@ -130,9 +151,10 @@ export function WorkReviewPage({
   onFocusSession,
 }: WorkReviewPageProps) {
   const { t, locale } = useI18n();
+  const reviewNow = useWorkReviewNow(now);
   const days = useMemo(
-    () => buildDailyWorkReview([...historySessions, ...sessions], { locale, now }),
-    [historySessions, sessions, locale, now],
+    () => buildDailyWorkReview([...historySessions, ...sessions], { locale, now: reviewNow }),
+    [historySessions, sessions, locale, reviewNow],
   );
   const [selectedKey, setSelectedKey] = useState<string | null>(days[0]?.key ?? null);
   const selected = days.find((day) => day.key === selectedKey) ?? days[0] ?? null;
