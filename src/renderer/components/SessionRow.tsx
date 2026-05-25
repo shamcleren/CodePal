@@ -107,15 +107,24 @@ type SessionRowProps = {
   historyVersion?: number;
   expanded: boolean;
   deemphasized: boolean;
+  contextPercent?: number;
   onToggleExpanded: (sessionId: string) => void;
   onRespond: (sessionId: string, actionId: string, option: string) => void;
 };
+
+function contextPercentTone(percent: number): "normal" | "notice" | "warning" | "danger" {
+  if (percent >= 95) return "danger";
+  if (percent >= 85) return "warning";
+  if (percent >= 70) return "notice";
+  return "normal";
+}
 
 export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function SessionRow({
   session,
   historyVersion = 0,
   expanded,
   deemphasized,
+  contextPercent,
   onToggleExpanded,
   onRespond,
 }, ref) {
@@ -164,6 +173,17 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
               </span>
             ) : null}
             <span className="session-row__meta-item">{session.durationLabel}</span>
+            {typeof contextPercent === "number" ? (
+              <span
+                className={[
+                  "session-row__meta-item",
+                  "session-row__meta-item--context",
+                  `session-row__meta-item--context-${contextPercentTone(contextPercent)}`,
+                ].join(" ")}
+              >
+                {i18n.t("session.meta.context", { percent: contextPercent })}
+              </span>
+            ) : null}
             <span className="session-row__meta-item">#{session.shortId}</span>
           </span>
         </span>

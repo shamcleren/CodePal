@@ -81,6 +81,42 @@ describe("SessionList", () => {
     expect(html).toContain("live run");
   });
 
+  it("renders live running duration and context percent at the session layer", () => {
+    const html = renderToStaticMarkup(
+      <SessionList
+        historyVersion={0}
+        now={71_000}
+        usageOverview={{
+          summary: { rateLimits: [], contextMode: "single-session" },
+          sessions: [
+            {
+              agent: "codex",
+              sessionId: "current-1",
+              updatedAt: 70_000,
+              sources: ["session-derived"],
+              completeness: "partial",
+              context: { percent: 88 },
+            },
+          ],
+        }}
+        sessions={[
+          row({
+            id: "current-1",
+            status: "running",
+            latestRunningStartedAt: 1_000,
+            updatedAt: 70_000,
+            titleLabel: "Codex · repo audit",
+            collapsedSummary: "live run",
+          }),
+        ]}
+        onRespond={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("Run 1m 10s");
+    expect(html).toContain("Context 88%");
+  });
+
   it("marks non-expanded rows as deemphasized when one session is expanded", () => {
     const html = renderToStaticMarkup(
       <SessionList

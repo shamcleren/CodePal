@@ -592,6 +592,7 @@ export function App() {
           <SessionList
             sessions={rows}
             historyVersion={historyStoreVersion}
+            usageOverview={usageOverview}
             onRespond={handleRespond}
             initiallyExpandedSessionId={jumpToSessionId}
           />

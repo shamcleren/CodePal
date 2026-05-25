@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { UsageContext, UsageOverview } from "../../shared/usageTypes";
+import { formatSessionDuration } from "../../shared/sessionTiming";
+import { useI18n } from "../i18n";
 import type { MonitorSessionRow } from "../monitorSession";
 import { SessionRow } from "./SessionRow";
 
@@ -6,20 +9,98 @@ type SessionListProps = {
   sessions: MonitorSessionRow[];
   historyVersion: number;
   initiallyExpandedSessionId?: string;
+  now?: number;
+  usageOverview?: UsageOverview | null;
   onRespond: (sessionId: string, actionId: string, option: string) => void;
 };
+
+const SESSION_LIST_CLOCK_INTERVAL_MS = 1_000;
+
+function normalizeContextPercent(context: UsageContext | undefined): number | undefined {
+  const percent =
+    typeof context?.percent === "number"
+      ? context.percent
+      : typeof context?.used === "number" && typeof context.max === "number" && context.max > 0
+        ? (context.used / context.max) * 100
+        : undefined;
+  if (typeof percent !== "number" || !Number.isFinite(percent)) {
+    return undefined;
+  }
+  return Math.max(0, Math.min(100, Math.round(percent)));
+}
+
+function useSessionListNow(sessions: MonitorSessionRow[], explicitNow?: number): number {
+  const [liveNow, setLiveNow] = useState(() => explicitNow ?? Date.now());
+  const hasRunningTimer = sessions.some(
+    (session) => session.status === "running" && typeof session.latestRunningStartedAt === "number",
+  );
+
+  useEffect(() => {
+    if (explicitNow !== undefined) {
+      setLiveNow(explicitNow);
+      return;
+    }
+    if (!hasRunningTimer) {
+      return;
+    }
+    setLiveNow(Date.now());
+    const intervalId = window.setInterval(() => {
+      setLiveNow(Date.now());
+    }, SESSION_LIST_CLOCK_INTERVAL_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [explicitNow, hasRunningTimer]);
+
+  return explicitNow ?? liveNow;
+}
+
+function sessionDurationLabel(
+  session: MonitorSessionRow,
+  now: number,
+  locale: ReturnType<typeof useI18n>["locale"],
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  if (session.status === "running" && typeof session.latestRunningStartedAt === "number") {
+    const duration = formatSessionDuration(now - session.latestRunningStartedAt, locale, {
+      includeSeconds: true,
+    });
+    return duration ? t("session.meta.runningDuration", { duration }) : session.durationLabel;
+  }
+  if (typeof session.latestRunningDurationMs === "number") {
+    const duration = formatSessionDuration(session.latestRunningDurationMs, locale, {
+      includeSeconds: true,
+    });
+    return duration ? t("session.meta.runningDuration", { duration }) : session.durationLabel;
+  }
+  return session.durationLabel;
+}
 
 export function SessionList({
   sessions,
   historyVersion,
   initiallyExpandedSessionId,
+  now,
+  usageOverview,
   onRespond,
 }: SessionListProps) {
+  const { locale, t } = useI18n();
+  const clockNow = useSessionListNow(sessions, now);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
     initiallyExpandedSessionId ?? null,
   );
   const rowRefs = useRef(new Map<string, HTMLElement>());
   const hasExpandedSession = expandedSessionId !== null;
+  const contextPercentBySession = useMemo(() => {
+    const next = new Map<string, number>();
+    for (const session of usageOverview?.sessions ?? []) {
+      const percent = normalizeContextPercent(session.context);
+      if (percent !== undefined) {
+        next.set(session.sessionId, percent);
+      }
+    }
+    return next;
+  }, [usageOverview]);
 
   const toggleExpanded = useCallback((sessionId: string) => {
     setExpandedSessionId((current) => (current === sessionId ? null : sessionId));
@@ -111,18 +192,24 @@ export function SessionList({
       aria-label="Session tasks"
     >
       <div className="session-list__header">Sessions</div>
-      {sessions.map((session) => (
-        <SessionRow
-          key={session.id}
-          ref={registerRow(session.id)}
-          session={session}
-          historyVersion={historyVersion}
-          expanded={expandedSessionId === session.id}
-          deemphasized={hasExpandedSession && expandedSessionId !== session.id}
-          onToggleExpanded={toggleExpanded}
-          onRespond={onRespond}
-        />
-      ))}
+      {sessions.map((session) => {
+        const durationLabel = sessionDurationLabel(session, clockNow, locale, t);
+        const displaySession =
+          durationLabel === session.durationLabel ? session : { ...session, durationLabel };
+        return (
+          <SessionRow
+            key={session.id}
+            ref={registerRow(session.id)}
+            session={displaySession}
+            contextPercent={contextPercentBySession.get(session.id)}
+            historyVersion={historyVersion}
+            expanded={expandedSessionId === session.id}
+            deemphasized={hasExpandedSession && expandedSessionId !== session.id}
+            onToggleExpanded={toggleExpanded}
+            onRespond={onRespond}
+          />
+        );
+      })}
     </section>
   );
 }

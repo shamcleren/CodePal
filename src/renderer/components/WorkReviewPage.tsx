@@ -12,7 +12,7 @@ type WorkReviewPageProps = {
 };
 
 const SUMMARY_PREVIEW_LIMIT = 4;
-const WORK_REVIEW_CLOCK_INTERVAL_MS = 30_000;
+const WORK_REVIEW_CLOCK_INTERVAL_MS = 1_000;
 
 function useWorkReviewNow(explicitNow?: number): number {
   const [liveNow, setLiveNow] = useState(() => explicitNow ?? Date.now());

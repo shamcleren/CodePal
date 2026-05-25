@@ -20,6 +20,10 @@ export type SessionTiming = {
   latestRunningDurationMs?: number;
 };
 
+type FormatSessionDurationOptions = {
+  includeSeconds?: boolean;
+};
+
 const RUNNING_END_TONES = new Set(["completed", "waiting", "idle", "error"]);
 
 function finiteNumber(value: number | null | undefined): number | undefined {
@@ -116,33 +120,54 @@ export function computeSessionTiming(input: SessionTimingInput, now = Date.now()
   };
 }
 
-export function formatSessionDuration(durationMs: number | undefined, locale: ResolvedLocale): string | undefined {
+export function formatSessionDuration(
+  durationMs: number | undefined,
+  locale: ResolvedLocale,
+  options: FormatSessionDurationOptions = {},
+): string | undefined {
   const duration = positiveDuration(durationMs);
   if (duration === undefined) {
     return undefined;
   }
   const totalSeconds = Math.max(1, Math.round(duration / 1000));
+  const seconds = totalSeconds % 60;
   if (locale === "zh-CN") {
     if (totalSeconds < 60) return `${totalSeconds} 秒`;
     const totalMinutes = Math.floor(totalSeconds / 60);
-    if (totalMinutes < 60) return `${totalMinutes} 分钟`;
+    if (totalMinutes < 60) {
+      return options.includeSeconds && seconds > 0
+        ? `${totalMinutes} 分钟 ${seconds} 秒`
+        : `${totalMinutes} 分钟`;
+    }
     const totalHours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     if (totalHours < 24) {
-      return minutes > 0 ? `${totalHours} 小时 ${minutes} 分钟` : `${totalHours} 小时`;
+      const parts = [`${totalHours} 小时`];
+      if (minutes > 0) parts.push(`${minutes} 分钟`);
+      if (options.includeSeconds && seconds > 0) parts.push(`${seconds} 秒`);
+      return parts.join(" ");
     }
     const days = Math.floor(totalHours / 24);
     const hours = totalHours % 24;
-    return hours > 0 ? `${days} 天 ${hours} 小时` : `${days} 天`;
+    const parts = [`${days} 天`];
+    if (hours > 0) parts.push(`${hours} 小时`);
+    return parts.join(" ");
   }
 
   if (totalSeconds < 60) return `${totalSeconds}s`;
   const totalMinutes = Math.floor(totalSeconds / 60);
-  if (totalMinutes < 60) return `${totalMinutes}m`;
+  if (totalMinutes < 60) {
+    return options.includeSeconds && seconds > 0
+      ? `${totalMinutes}m ${seconds}s`
+      : `${totalMinutes}m`;
+  }
   const totalHours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (totalHours < 24) {
-    return minutes > 0 ? `${totalHours}h ${minutes}m` : `${totalHours}h`;
+    const parts = [`${totalHours}h`];
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (options.includeSeconds && seconds > 0) parts.push(`${seconds}s`);
+    return parts.join(" ");
   }
   const days = Math.floor(totalHours / 24);
   const hours = totalHours % 24;

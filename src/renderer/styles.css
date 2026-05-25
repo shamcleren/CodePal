@@ -1826,6 +1826,32 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.session-row__meta-item--context {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-subtle);
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.session-row__meta-item--context-notice {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line-subtle));
+  background: color-mix(in srgb, var(--surface-info) 58%, transparent);
+}
+
+.session-row__meta-item--context-warning {
+  border-color: color-mix(in srgb, var(--waiting) 42%, var(--line-subtle));
+  background: color-mix(in srgb, var(--surface-warning) 74%, transparent);
+  color: color-mix(in srgb, var(--waiting) 78%, var(--text));
+}
+
+.session-row__meta-item--context-danger {
+  border-color: color-mix(in srgb, var(--error) 48%, var(--line-subtle));
+  background: color-mix(in srgb, var(--surface-danger) 72%, transparent);
+  color: color-mix(in srgb, var(--error) 84%, var(--text));
+}
+
 /* ── Delete session button at list level ── */
 
 .session-row__delete-trigger {

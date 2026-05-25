@@ -358,12 +358,12 @@ describe("buildDailyWorkReview", () => {
     });
     const later = buildDailyWorkReview(rows, {
       locale: "zh-CN",
-      now: Date.parse("2026-05-25T10:30:00+08:00"),
+      now: Date.parse("2026-05-25T10:30:15+08:00"),
     });
 
     expect(first[0].ongoing[0]?.latestRunningDurationLabel).toBe("1 小时");
-    expect(later[0].ongoing[0]?.latestRunningDurationLabel).toBe("1 小时 30 分钟");
-    expect(later[0].ongoing[0]?.sessionDurationLabel).toBe("1 小时 30 分钟");
+    expect(later[0].ongoing[0]?.latestRunningDurationLabel).toBe("1 小时 30 分钟 15 秒");
+    expect(later[0].ongoing[0]?.sessionDurationLabel).toBe("1 小时 30 分钟 15 秒");
   });
 
   it("keeps in-progress sessions only for today", () => {

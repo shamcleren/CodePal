@@ -187,6 +187,7 @@ function fallbackDetail(row: DailyWorkReviewSource, title: string): string {
 
 function buildEntry(row: DailyWorkReviewSource, now: number, locale: ResolvedLocale): DailyWorkReviewEntry {
   const title = truncate(fallbackTitle(row), 80);
+  const status = normalizeStatus(row.status);
   const timing = computeSessionTiming({
     status: row.status,
     updatedAt: row.updatedAt,
@@ -197,14 +198,18 @@ function buildEntry(row: DailyWorkReviewSource, now: number, locale: ResolvedLoc
     sessionDurationMs: row.sessionDurationMs,
     latestRunningDurationMs: row.latestRunningDurationMs,
   }, now);
-  const latestRunningDurationLabel = formatSessionDuration(timing.latestRunningDurationMs, locale);
-  const sessionDurationLabel = formatSessionDuration(timing.sessionDurationMs, locale);
+  const latestRunningDurationLabel = formatSessionDuration(timing.latestRunningDurationMs, locale, {
+    includeSeconds: true,
+  });
+  const sessionDurationLabel = formatSessionDuration(timing.sessionDurationMs, locale, {
+    includeSeconds: status === "running",
+  });
   return {
     id: row.id,
     title,
     detail: fallbackDetail(row, title),
     agent: row.tool,
-    status: normalizeStatus(row.status),
+    status,
     source: row.isManaged ? "managed" : "observed",
     timestamp: row.lastUserMessageAt ?? row.updatedAt,
     ...(latestRunningDurationLabel ? { latestRunningDurationLabel } : {}),
