@@ -9,6 +9,7 @@ export type SessionTimingInput = {
   lastUserMessageAt?: number | null;
   activityItems?: TimingActivity[];
   startedAt?: number | null;
+  latestRunningStartedAt?: number | null;
   sessionDurationMs?: number | null;
   latestRunningDurationMs?: number | null;
 };
@@ -62,6 +63,11 @@ function deriveLatestRunningDurationMs(
   activities: TimingActivity[],
   now: number,
 ): number | undefined {
+  const latestRunningStartedAt = finiteNumber(input.latestRunningStartedAt);
+  if (input.status === "running" && latestRunningStartedAt !== undefined) {
+    return positiveDuration(now - latestRunningStartedAt);
+  }
+
   const explicit = positiveDuration(input.latestRunningDurationMs);
   if (explicit !== undefined) {
     return explicit;
@@ -91,9 +97,14 @@ function deriveLatestRunningDurationMs(
 export function computeSessionTiming(input: SessionTimingInput, now = Date.now()): SessionTiming {
   const activities = sortedActivities(input.activityItems);
   const startedAt = deriveStartedAt(input, activities);
-  const explicitSessionDuration = positiveDuration(input.sessionDurationMs);
   const end = sessionEndFor(input, now);
+  const runningSessionDuration =
+    input.status === "running" && startedAt !== undefined
+      ? positiveDuration(now - startedAt)
+      : undefined;
+  const explicitSessionDuration = positiveDuration(input.sessionDurationMs);
   const sessionDurationMs =
+    runningSessionDuration ??
     explicitSessionDuration ??
     (startedAt !== undefined && end !== undefined ? positiveDuration(end - startedAt) : undefined);
   const latestRunningDurationMs = deriveLatestRunningDurationMs(input, activities, now);

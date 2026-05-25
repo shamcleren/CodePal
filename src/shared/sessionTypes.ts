@@ -366,6 +366,10 @@ export interface SessionRecord {
   task?: string;
   updatedAt: number;
   lastUserMessageAt?: number;
+  startedAt?: number;
+  latestRunningStartedAt?: number;
+  latestRunningDurationMs?: number;
+  sessionDurationMs?: number;
   activityItems?: ActivityItem[];
   activities?: string[];
   pendingActions?: PendingAction[];

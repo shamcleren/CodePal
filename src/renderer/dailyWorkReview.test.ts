@@ -307,6 +307,39 @@ describe("buildDailyWorkReview", () => {
     });
   });
 
+  it("uses explicit running start metadata instead of mistaking the latest status tick for the run start", () => {
+    const days = buildDailyWorkReview([
+      row({
+        id: "active-timed-session",
+        status: "running",
+        titleLabel: "继续修正工作回顾时长",
+        updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+        lastUserMessageAt: Date.parse("2026-05-25T09:00:00+08:00"),
+        startedAt: Date.parse("2026-05-25T09:00:00+08:00"),
+        latestRunningStartedAt: Date.parse("2026-05-25T09:00:00+08:00"),
+        activityItems: [
+          {
+            id: "latest-running-tick",
+            kind: "note",
+            source: "system",
+            title: "Running",
+            body: "Running",
+            tone: "running",
+            timestamp: Date.parse("2026-05-25T09:59:59+08:00"),
+          },
+        ],
+      }),
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T10:00:00+08:00"),
+    });
+
+    expect(days[0].ongoing[0]).toMatchObject({
+      latestRunningDurationLabel: "1 小时",
+      sessionDurationLabel: "1 小时",
+    });
+  });
+
   it("keeps in-progress sessions only for today", () => {
     const days = buildDailyWorkReview([
       row({

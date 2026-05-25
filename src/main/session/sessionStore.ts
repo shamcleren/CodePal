@@ -74,6 +74,10 @@ type InternalSessionRecord = {
   meta?: Record<string, unknown>;
   updatedAt: number;
   lastUserMessageAt?: number;
+  startedAt: number;
+  latestRunningStartedAt?: number;
+  latestRunningDurationMs?: number;
+  sessionDurationMs?: number;
   activityItems: ActivityItem[];
   activities: string[];
   pendingById: Map<string, PendingActionRuntimeState>;
@@ -132,6 +136,21 @@ function activityMetaString(item: ActivityItem, key: string): string | undefined
 
 function eventTimestamp(event: SessionEvent): number {
   return event.timestamp;
+}
+
+function minFiniteTimestamp(values: Array<number | undefined>): number | undefined {
+  const finite = values.filter((value): value is number =>
+    typeof value === "number" && Number.isFinite(value),
+  );
+  return finite.length > 0 ? Math.min(...finite) : undefined;
+}
+
+function positiveDurationMs(start: number | undefined, end: number | undefined): number | undefined {
+  if (start === undefined || end === undefined) {
+    return undefined;
+  }
+  const duration = end - start;
+  return Number.isFinite(duration) && duration > 0 ? duration : undefined;
 }
 
 function createActivityItem(
@@ -426,6 +445,16 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
     updatedAt: internal.updatedAt,
     ...(internal.lastUserMessageAt !== undefined
       ? { lastUserMessageAt: internal.lastUserMessageAt }
+      : {}),
+    startedAt: internal.startedAt,
+    ...(internal.latestRunningStartedAt !== undefined
+      ? { latestRunningStartedAt: internal.latestRunningStartedAt }
+      : {}),
+    ...(internal.latestRunningDurationMs !== undefined
+      ? { latestRunningDurationMs: internal.latestRunningDurationMs }
+      : {}),
+    ...(internal.sessionDurationMs !== undefined
+      ? { sessionDurationMs: internal.sessionDurationMs }
       : {}),
     ...(internal.activityItems.length > 0 ? { activityItems: internal.activityItems } : {}),
     ...(internal.activities.length > 0 ? { activities: internal.activities } : {}),
@@ -1232,12 +1261,37 @@ export function createSessionStore(options?: SessionStoreOptions) {
         ? Math.max(prev?.lastUserMessageAt ?? Number.NEGATIVE_INFINITY, event.timestamp)
         : prev?.lastUserMessageAt;
       const preservePreviousStatus = shouldPreservePreviousStatus(prev, event);
+      const nextStatus = preservePreviousStatus && prev ? prev.status : event.status;
       const nextExternalApproval = resolveNextExternalApproval(
         prev,
         event,
         preservePreviousStatus,
       );
       const nextUpdatedAt = Math.max(prev?.updatedAt ?? Number.NEGATIVE_INFINITY, event.timestamp);
+      const nextStartedAt =
+        minFiniteTimestamp([
+          prev?.startedAt,
+          event.timestamp,
+          ...nextActivityItems.map((item) => item.timestamp),
+        ]) ?? event.timestamp;
+      const wasRunning = prev?.status === "running";
+      const enteringRunning = nextStatus === "running" && !wasRunning;
+      const stayingRunning = nextStatus === "running" && wasRunning;
+      const latestRunningStartedAt = enteringRunning
+        ? event.timestamp
+        : stayingRunning
+          ? (prev?.latestRunningStartedAt ?? event.timestamp)
+          : prev?.latestRunningStartedAt;
+      const latestRunningDurationMs =
+        wasRunning && nextStatus !== "running"
+          ? positiveDurationMs(prev?.latestRunningStartedAt, event.timestamp)
+          : nextStatus === "running"
+            ? positiveDurationMs(latestRunningStartedAt, nextUpdatedAt)
+            : prev?.latestRunningDurationMs;
+      const sessionDurationMs =
+        nextStatus === "running"
+          ? undefined
+          : positiveDurationMs(nextStartedAt, nextUpdatedAt);
 
       const prevPendingSize = prev?.pendingById.size ?? 0;
       const nextTerminalContext = mergeTerminalContext(
@@ -1255,7 +1309,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
       const internal: InternalSessionRecord = {
         id: sessionId,
         tool: event.tool,
-        status: preservePreviousStatus && prev ? prev.status : event.status,
+        status: nextStatus,
         title:
           preservePreviousStatus && prev?.title
             ? prev.title
@@ -1267,6 +1321,10 @@ export function createSessionStore(options?: SessionStoreOptions) {
         }),
         updatedAt: nextUpdatedAt,
         lastUserMessageAt: nextLastUserMessageAt,
+        startedAt: nextStartedAt,
+        ...(latestRunningStartedAt !== undefined ? { latestRunningStartedAt } : {}),
+        ...(latestRunningDurationMs !== undefined ? { latestRunningDurationMs } : {}),
+        ...(sessionDurationMs !== undefined ? { sessionDurationMs } : {}),
         activityItems: nextActivityItems,
         activities: toLegacyActivities(nextActivityItems),
         pendingById: nextPendingById,
@@ -1377,6 +1435,9 @@ export function createSessionStore(options?: SessionStoreOptions) {
       latestTask: string | null;
       updatedAt: number;
       lastUserMessageAt: number | null;
+      startedAt?: number | null;
+      sessionDurationMs?: number | null;
+      latestRunningDurationMs?: number | null;
     }) {
       if (sessions.has(record.id)) {
         return;
@@ -1396,6 +1457,13 @@ export function createSessionStore(options?: SessionStoreOptions) {
         meta: undefined,
         updatedAt: record.updatedAt,
         lastUserMessageAt: record.lastUserMessageAt ?? undefined,
+        startedAt: record.startedAt ?? record.lastUserMessageAt ?? record.updatedAt,
+        ...(record.sessionDurationMs !== null && record.sessionDurationMs !== undefined
+          ? { sessionDurationMs: record.sessionDurationMs }
+          : {}),
+        ...(record.latestRunningDurationMs !== null && record.latestRunningDurationMs !== undefined
+          ? { latestRunningDurationMs: record.latestRunningDurationMs }
+          : {}),
         activityItems: [],
         activities: [],
         pendingById: new Map(),

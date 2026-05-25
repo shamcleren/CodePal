@@ -13,6 +13,7 @@ export type DailyWorkReviewSource = {
   lastUserMessageAt?: number | null;
   activityItems?: ActivityItem[];
   startedAt?: number | null;
+  latestRunningStartedAt?: number | null;
   sessionDurationMs?: number | null;
   latestRunningDurationMs?: number | null;
   collapsedSummary?: string;
@@ -192,6 +193,7 @@ function buildEntry(row: DailyWorkReviewSource, now: number, locale: ResolvedLoc
     lastUserMessageAt: row.lastUserMessageAt,
     activityItems: row.activityItems,
     startedAt: row.startedAt,
+    latestRunningStartedAt: row.latestRunningStartedAt,
     sessionDurationMs: row.sessionDurationMs,
     latestRunningDurationMs: row.latestRunningDurationMs,
   }, now);

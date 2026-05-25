@@ -41,6 +41,56 @@ describe("createSessionStore", () => {
     });
   });
 
+  it("tracks session and running durations independently from the truncated activity preview", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      title: "Long running task",
+      task: "start",
+      timestamp: 1_000,
+    });
+
+    for (let index = 0; index < 8; index++) {
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "codex",
+        status: "running",
+        title: "Long running task",
+        task: `tick ${index}`,
+        timestamp: 2_000 + index * 1_000,
+      });
+    }
+
+    const session = store.getSession("s1");
+
+    expect(session?.activityItems?.length).toBe(6);
+    expect(session).toMatchObject({
+      startedAt: 1_000,
+      latestRunningStartedAt: 1_000,
+    });
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "completed",
+      title: "Long running task",
+      task: "done",
+      timestamp: 12_000,
+    });
+
+    expect(store.getSession("s1")).toMatchObject({
+      startedAt: 1_000,
+      latestRunningDurationMs: 11_000,
+      sessionDurationMs: 11_000,
+    });
+  });
+
   it("preserves session title from incoming event payloads", () => {
     const store = createSessionStore();
 
