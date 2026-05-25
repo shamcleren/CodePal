@@ -25,6 +25,9 @@ export type SessionHistorySummary = {
   task?: string;
   updatedAt: number;
   lastUserMessageAt?: number;
+  startedAt?: number;
+  sessionDurationMs?: number;
+  latestRunningDurationMs?: number;
 };
 
 export type HistoryDiagnostics = {

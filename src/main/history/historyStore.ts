@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { HistoryRetentionPreset } from "../../shared/appSettings";
 import type { TokenTrendGranularity, TokenTrendPoint } from "../../shared/analyticsTypes";
 import type { HistoryDiagnostics, SessionHistoryPage, SessionHistoryPageRequest } from "../../shared/historyTypes";
+import { computeSessionTiming } from "../../shared/sessionTiming";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type {
   AgentTokenStats,
@@ -77,6 +78,9 @@ export type SessionSeedRecord = {
   latestTask: string | null;
   updatedAt: number;
   lastUserMessageAt: number | null;
+  startedAt?: number | null;
+  sessionDurationMs?: number | null;
+  latestRunningDurationMs?: number | null;
 };
 
 export type GetRecentSessionsOptions = {
@@ -600,6 +604,12 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     ORDER BY updated_at DESC
     LIMIT ?
   `);
+  const sessionTimingItemsStmt = db.prepare(`
+    SELECT timestamp, tone
+    FROM session_activity_items
+    WHERE session_id = ?
+    ORDER BY timestamp ASC, insert_seq ASC
+  `);
   const deleteActivityBeforeStmt = db.prepare(`DELETE FROM session_activity_items WHERE timestamp < ?`);
   const deleteDebugBeforeStmt = db.prepare(`DELETE FROM session_event_debug WHERE timestamp < ?`);
 
@@ -923,15 +933,37 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       updated_at: number;
       last_user_message_at: number | null;
     }>;
-    return rows.map((row) => ({
-      id: row.id,
-      tool: row.tool,
-      status: row.status,
-      title: row.title,
-      latestTask: row.latest_task,
-      updatedAt: row.updated_at,
-      lastUserMessageAt: row.last_user_message_at,
-    }));
+    return rows.map((row) => {
+      const activityItems = sessionTimingItemsStmt.all(row.id) as Array<{
+        timestamp: number;
+        tone: ActivityItem["tone"] | null;
+      }>;
+      const timing = computeSessionTiming({
+        status: row.status,
+        updatedAt: row.updated_at,
+        lastUserMessageAt: row.last_user_message_at,
+        activityItems: activityItems.map((item) => ({
+          timestamp: item.timestamp,
+          ...(item.tone ? { tone: item.tone } : {}),
+        })),
+      }, now());
+      return {
+        id: row.id,
+        tool: row.tool,
+        status: row.status,
+        title: row.title,
+        latestTask: row.latest_task,
+        updatedAt: row.updated_at,
+        lastUserMessageAt: row.last_user_message_at,
+        ...(timing.startedAt !== undefined ? { startedAt: timing.startedAt } : {}),
+        ...(timing.sessionDurationMs !== undefined
+          ? { sessionDurationMs: timing.sessionDurationMs }
+          : {}),
+        ...(timing.latestRunningDurationMs !== undefined
+          ? { latestRunningDurationMs: timing.latestRunningDurationMs }
+          : {}),
+      };
+    });
   }
 
   function writeTokenUsage(entry: TokenUsageWrite) {

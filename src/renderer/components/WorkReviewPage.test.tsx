@@ -35,6 +35,27 @@ describe("WorkReviewPage", () => {
               id: "managed:mt_1",
               isManaged: true,
               managedTaskTitle: "托管 CLI 体验修复",
+              updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+              activityItems: [
+                {
+                  id: "managed-running",
+                  kind: "note",
+                  source: "system",
+                  title: "Running",
+                  body: "Running",
+                  tone: "running",
+                  timestamp: Date.parse("2026-05-25T09:30:00+08:00"),
+                },
+                {
+                  id: "managed-done",
+                  kind: "note",
+                  source: "system",
+                  title: "Completed",
+                  body: "Completed",
+                  tone: "completed",
+                  timestamp: Date.parse("2026-05-25T09:42:00+08:00"),
+                },
+              ],
             }),
             row({
               id: "running-1",
@@ -78,6 +99,8 @@ describe("WorkReviewPage", () => {
     expect(html).toContain("整理 v1.2.0 发布检查");
     expect(html).not.toContain("无效错误对话");
     expect(html).toContain("完成 1 项，跟进 1 项。重点：托管 CLI 体验修复、推进每日工作回顾。");
+    expect(html).toContain("最近运行 12 分钟");
+    expect(html).toContain("总时长 30 分钟");
     expect(html).not.toContain("<summary");
   });
 

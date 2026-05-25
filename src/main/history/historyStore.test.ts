@@ -834,6 +834,61 @@ describe("createHistoryStore", () => {
       expect(recent[0].id).toBe("s0");
     });
 
+    it("derives session and latest running durations from persisted activity items", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const now = () => 100_000_000;
+      store = createHistoryStore({ dbPath, now });
+
+      store.writeSessionEvent({
+        session: {
+          id: "timed",
+          tool: "codex",
+          status: "completed",
+          title: "Timed session",
+          latestTask: "Timed session",
+          updatedAt: now() - 1_000,
+          lastUserMessageAt: now() - 11_000,
+          hasPendingActions: false,
+        },
+        activityItems: [
+          makeActivityItem({
+            id: "run-1",
+            body: "Running",
+            tone: "running",
+            timestamp: now() - 11_000,
+          }),
+          makeActivityItem({
+            id: "done-1",
+            body: "Completed",
+            tone: "completed",
+            timestamp: now() - 9_500,
+          }),
+          makeActivityItem({
+            id: "run-2",
+            body: "Running",
+            tone: "running",
+            timestamp: now() - 5_000,
+          }),
+          makeActivityItem({
+            id: "waiting-2",
+            body: "Waiting",
+            tone: "waiting",
+            timestamp: now() - 3_000,
+          }),
+        ],
+      });
+
+      const recent = store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 100 });
+
+      expect(recent[0]).toMatchObject({
+        id: "timed",
+        startedAt: now() - 11_000,
+        sessionDurationMs: 10_000,
+        latestRunningDurationMs: 2_000,
+      });
+    });
+
     it("returns empty array when no sessions exist", () => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
       const dbPath = path.join(tmpDir, "history.sqlite");

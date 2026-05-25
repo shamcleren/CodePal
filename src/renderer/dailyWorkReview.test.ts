@@ -250,6 +250,63 @@ describe("buildDailyWorkReview", () => {
     });
   });
 
+  it("adds compact duration labels for the latest running turn and the whole session", () => {
+    const days = buildDailyWorkReview([
+      row({
+        id: "timed-session",
+        titleLabel: "实现工作回顾耗时展示",
+        updatedAt: Date.parse("2026-05-25T11:00:00+08:00"),
+        lastUserMessageAt: Date.parse("2026-05-25T09:00:00+08:00"),
+        activityItems: [
+          {
+            id: "run-1",
+            kind: "note",
+            source: "system",
+            title: "Running",
+            body: "Running",
+            tone: "running",
+            timestamp: Date.parse("2026-05-25T09:00:00+08:00"),
+          },
+          {
+            id: "done-1",
+            kind: "note",
+            source: "system",
+            title: "Completed",
+            body: "Completed",
+            tone: "completed",
+            timestamp: Date.parse("2026-05-25T09:15:00+08:00"),
+          },
+          {
+            id: "run-2",
+            kind: "note",
+            source: "system",
+            title: "Running",
+            body: "Running",
+            tone: "running",
+            timestamp: Date.parse("2026-05-25T10:00:00+08:00"),
+          },
+          {
+            id: "waiting-2",
+            kind: "note",
+            source: "system",
+            title: "Waiting",
+            body: "Waiting",
+            tone: "waiting",
+            timestamp: Date.parse("2026-05-25T10:20:00+08:00"),
+          },
+        ],
+      }),
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T12:00:00+08:00"),
+    });
+
+    expect(days[0].entries[0]).toMatchObject({
+      latestRunningDurationLabel: "20 分钟",
+      sessionDurationLabel: "2 小时",
+    });
+  });
+
   it("keeps in-progress sessions only for today", () => {
     const days = buildDailyWorkReview([
       row({

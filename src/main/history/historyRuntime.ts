@@ -76,6 +76,13 @@ function toSessionHistorySummary(record: SessionSeedRecord): SessionHistorySumma
     ...(record.latestTask ? { task: record.latestTask } : {}),
     updatedAt: record.updatedAt,
     ...(record.lastUserMessageAt !== null ? { lastUserMessageAt: record.lastUserMessageAt } : {}),
+    ...(typeof record.startedAt === "number" ? { startedAt: record.startedAt } : {}),
+    ...(typeof record.sessionDurationMs === "number"
+      ? { sessionDurationMs: record.sessionDurationMs }
+      : {}),
+    ...(typeof record.latestRunningDurationMs === "number"
+      ? { latestRunningDurationMs: record.latestRunningDurationMs }
+      : {}),
   };
 }
 

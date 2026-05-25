@@ -1,5 +1,6 @@
 import type { ResolvedLocale } from "../shared/i18nTypes";
 import { isSessionStatus, type ActivityItem, type SessionStatus } from "../shared/sessionTypes";
+import { computeSessionTiming, formatSessionDuration } from "../shared/sessionTiming";
 import type { MonitorSessionRow } from "./monitorSession";
 
 export type DailyWorkReviewSource = {
@@ -11,6 +12,9 @@ export type DailyWorkReviewSource = {
   updatedAt: number;
   lastUserMessageAt?: number | null;
   activityItems?: ActivityItem[];
+  startedAt?: number | null;
+  sessionDurationMs?: number | null;
+  latestRunningDurationMs?: number | null;
   collapsedSummary?: string;
   titleLabel?: string;
   isManaged?: boolean;
@@ -25,6 +29,8 @@ export type DailyWorkReviewEntry = {
   status: SessionStatus;
   source: "managed" | "observed";
   timestamp: number;
+  latestRunningDurationLabel?: string;
+  sessionDurationLabel?: string;
 };
 
 export type DailyWorkReviewDay = {
@@ -178,8 +184,19 @@ function fallbackDetail(row: DailyWorkReviewSource, title: string): string {
   return body && body !== title ? truncate(body, 128) : "";
 }
 
-function buildEntry(row: DailyWorkReviewSource): DailyWorkReviewEntry {
+function buildEntry(row: DailyWorkReviewSource, now: number, locale: ResolvedLocale): DailyWorkReviewEntry {
   const title = truncate(fallbackTitle(row), 80);
+  const timing = computeSessionTiming({
+    status: row.status,
+    updatedAt: row.updatedAt,
+    lastUserMessageAt: row.lastUserMessageAt,
+    activityItems: row.activityItems,
+    startedAt: row.startedAt,
+    sessionDurationMs: row.sessionDurationMs,
+    latestRunningDurationMs: row.latestRunningDurationMs,
+  }, now);
+  const latestRunningDurationLabel = formatSessionDuration(timing.latestRunningDurationMs, locale);
+  const sessionDurationLabel = formatSessionDuration(timing.sessionDurationMs, locale);
   return {
     id: row.id,
     title,
@@ -188,6 +205,8 @@ function buildEntry(row: DailyWorkReviewSource): DailyWorkReviewEntry {
     status: normalizeStatus(row.status),
     source: row.isManaged ? "managed" : "observed",
     timestamp: row.lastUserMessageAt ?? row.updatedAt,
+    ...(latestRunningDurationLabel ? { latestRunningDurationLabel } : {}),
+    ...(sessionDurationLabel ? { sessionDurationLabel } : {}),
   };
 }
 
@@ -279,7 +298,7 @@ export function buildDailyWorkReview(
       continue;
     }
     const key = dateKey(timestamp);
-    grouped.set(key, [...(grouped.get(key) ?? []), buildEntry(row)]);
+    grouped.set(key, [...(grouped.get(key) ?? []), buildEntry(row, now, locale)]);
   }
 
   return Array.from(grouped.entries())

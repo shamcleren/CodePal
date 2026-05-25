@@ -50,6 +50,12 @@ function EntryList({
           <div className="work-review__item-meta">
             <span>{agentLabel(entry.agent)}</span>
             <span>{sourceLabel(entry, t)}</span>
+            {entry.latestRunningDurationLabel ? (
+              <span>{t("workReview.duration.latestRunning", { duration: entry.latestRunningDurationLabel })}</span>
+            ) : null}
+            {entry.sessionDurationLabel ? (
+              <span>{t("workReview.duration.session", { duration: entry.sessionDurationLabel })}</span>
+            ) : null}
             {onFocusSession ? (
               <button
                 type="button"
