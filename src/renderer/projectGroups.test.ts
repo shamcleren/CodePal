@@ -10,6 +10,14 @@ describe("projectGroups", () => {
     ]);
   });
 
+  it("moves a project key after another project key", () => {
+    expect(moveProjectKey(["CodePal", "gateway", "unknown"], "CodePal", "unknown", "after")).toEqual([
+      "gateway",
+      "unknown",
+      "CodePal",
+    ]);
+  });
+
   it("keeps order stable for missing or identical drag targets", () => {
     const order = ["CodePal", "gateway", "unknown"];
 

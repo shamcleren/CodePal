@@ -6,10 +6,13 @@ export type KeyedItemLike = {
   id: string;
 };
 
+export type DropPlacement = "before" | "after";
+
 export function moveProjectKey(
   order: readonly string[],
   draggedKey: string,
   targetKey: string,
+  placement: DropPlacement = "before",
 ): string[] {
   if (draggedKey === targetKey) {
     return [...order];
@@ -24,7 +27,7 @@ export function moveProjectKey(
   const next = [...order];
   const [dragged] = next.splice(fromIndex, 1);
   const insertIndex = next.indexOf(targetKey);
-  next.splice(insertIndex, 0, dragged);
+  next.splice(placement === "after" ? insertIndex + 1 : insertIndex, 0, dragged);
   return next;
 }
 

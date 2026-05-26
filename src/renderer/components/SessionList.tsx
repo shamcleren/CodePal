@@ -10,6 +10,8 @@ import {
 import { useI18n } from "../i18n";
 import type { MonitorSessionRow } from "../monitorSession";
 import { moveProjectKey, orderKeyedItems, orderProjectGroups } from "../projectGroups";
+import type { DropPlacement } from "../projectGroups";
+import { readSessionListPreferences, writeSessionListPreferences } from "../projectViewPreferences";
 import { SessionRow } from "./SessionRow";
 
 type SessionListProps = {
@@ -30,6 +32,16 @@ type SessionProjectGroup = {
   path?: string;
   sessions: MonitorSessionRow[];
 };
+
+type SessionDragState =
+  | { type: "project"; projectKey: string; overKey?: string; placement?: DropPlacement }
+  | {
+      type: "session";
+      projectKey: string;
+      sessionId: string;
+      overSessionId?: string;
+      placement?: DropPlacement;
+    };
 
 function normalizeContextPercent(context: UsageContext | undefined): number | undefined {
   const percent =
@@ -169,6 +181,15 @@ function visibleSessionsForProject(
   return visibleSessions;
 }
 
+function dragPlacement(event: DragEvent<HTMLElement>): DropPlacement {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+}
+
+function sameOrder(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((key, index) => key === right[index]);
+}
+
 export function SessionList({
   sessions,
   historyVersion,
@@ -179,19 +200,42 @@ export function SessionList({
 }: SessionListProps) {
   const { locale, t } = useI18n();
   const clockNow = useSessionListNow(sessions, now);
+  const initialPreferencesRef = useRef<ReturnType<typeof readSessionListPreferences> | null>(null);
+  if (initialPreferencesRef.current === null) {
+    initialPreferencesRef.current = readSessionListPreferences();
+  }
+  const initialPreferences = initialPreferencesRef.current;
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
     initiallyExpandedSessionId ?? null,
   );
-  const [projectOrder, setProjectOrder] = useState<string[]>([]);
-  const [sessionOrderByProject, setSessionOrderByProject] = useState<Record<string, string[]>>({});
-  const [collapsedProjectKeys, setCollapsedProjectKeys] = useState<Set<string>>(() => new Set());
-  const [expandedProjectSessionKeys, setExpandedProjectSessionKeys] = useState<Set<string>>(
-    () => new Set(),
+  const [projectOrder, setProjectOrder] = useState<string[]>(() => initialPreferences.projectOrder);
+  const [sessionOrderByProject, setSessionOrderByProject] = useState<Record<string, string[]>>(
+    () => initialPreferences.sessionOrderByProject,
   );
+  const [collapsedProjectKeys, setCollapsedProjectKeys] = useState<Set<string>>(
+    () => new Set(initialPreferences.collapsedProjectKeys),
+  );
+  const [expandedProjectSessionKeys, setExpandedProjectSessionKeys] = useState<Set<string>>(
+    () => new Set(initialPreferences.expandedProjectSessionKeys),
+  );
+  const [dragState, setDragState] = useState<SessionDragState | null>(null);
   const rowRefs = useRef(new Map<string, HTMLElement>());
   const draggedProjectKey = useRef<string | null>(null);
   const draggedSession = useRef<{ projectKey: string; sessionId: string } | null>(null);
+  const projectOrderBeforeDrag = useRef<string[] | null>(null);
+  const sessionOrderBeforeDrag = useRef<{ projectKey: string; order: string[] } | null>(null);
+  const dropCommitted = useRef(false);
   const hasExpandedSession = expandedSessionId !== null;
+
+  useEffect(() => {
+    writeSessionListPreferences({
+      projectOrder,
+      sessionOrderByProject,
+      collapsedProjectKeys: [...collapsedProjectKeys],
+      expandedProjectSessionKeys: [...expandedProjectSessionKeys],
+    });
+  }, [projectOrder, sessionOrderByProject, collapsedProjectKeys, expandedProjectSessionKeys]);
+
   const contextPercentBySession = useMemo(() => {
     const next = new Map<string, number>();
     for (const session of usageOverview?.sessions ?? []) {
@@ -210,20 +254,22 @@ export function SessionList({
     }));
   }, [sessions, sessionOrderByProject, projectOrder, t]);
 
-  const moveProjectBefore = useCallback((draggedKey: string, targetKey: string) => {
+  const moveProjectTo = useCallback((draggedKey: string, targetKey: string, placement: DropPlacement) => {
     setProjectOrder((current) => {
       const visibleOrder = orderProjectGroups(
         groupSessionsByProject(sessions, t("tokenStats.unknownProject")),
         current,
       ).map((group) => group.key);
-      return moveProjectKey(visibleOrder, draggedKey, targetKey);
+      const nextOrder = moveProjectKey(visibleOrder, draggedKey, targetKey, placement);
+      return sameOrder(visibleOrder, nextOrder) ? current : nextOrder;
     });
   }, [sessions, t]);
 
-  const moveSessionBefore = useCallback((
+  const moveSessionTo = useCallback((
     projectKey: string,
     draggedSessionId: string,
     targetSessionId: string,
+    placement: DropPlacement,
   ) => {
     setSessionOrderByProject((current) => {
       const group = groupSessionsByProject(sessions, t("tokenStats.unknownProject")).find(
@@ -234,9 +280,18 @@ export function SessionList({
         group.sessions,
         current[projectKey] ?? [],
       ).map((session) => session.id);
+      const nextOrder = moveProjectKey(
+        visibleOrder,
+        draggedSessionId,
+        targetSessionId,
+        placement,
+      );
+      if (sameOrder(visibleOrder, nextOrder)) {
+        return current;
+      }
       return {
         ...current,
-        [projectKey]: moveProjectKey(visibleOrder, draggedSessionId, targetSessionId),
+        [projectKey]: nextOrder,
       };
     });
   }, [sessions, t]);
@@ -252,63 +307,121 @@ export function SessionList({
   const handleProjectDragStart = useCallback((projectKey: string) => {
     return (event: DragEvent<HTMLElement>) => {
       draggedProjectKey.current = projectKey;
+      dropCommitted.current = false;
+      projectOrderBeforeDrag.current = orderProjectGroups(
+        groupSessionsByProject(sessions, t("tokenStats.unknownProject")),
+        projectOrder,
+      ).map((group) => group.key);
+      setDragState({ type: "project", projectKey });
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", projectKey);
     };
-  }, []);
+  }, [projectOrder, sessions, t]);
 
-  const handleProjectDragOver = useCallback((event: DragEvent<HTMLElement>) => {
-    if (draggedProjectKey.current) {
+  const handleProjectDragOver = useCallback((targetProjectKey: string) => {
+    return (event: DragEvent<HTMLElement>) => {
+      const sourceProjectKey = draggedProjectKey.current;
+      if (!sourceProjectKey) {
+        return;
+      }
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
-    }
-  }, []);
+      const placement = dragPlacement(event);
+      setDragState({
+        type: "project",
+        projectKey: sourceProjectKey,
+        overKey: targetProjectKey,
+        placement,
+      });
+      moveProjectTo(sourceProjectKey, targetProjectKey, placement);
+    };
+  }, [moveProjectTo]);
 
   const handleProjectDrop = useCallback((targetProjectKey: string) => {
     return (event: DragEvent<HTMLElement>) => {
       event.preventDefault();
       const sourceProjectKey = draggedProjectKey.current;
+      dropCommitted.current = true;
       draggedProjectKey.current = null;
+      projectOrderBeforeDrag.current = null;
+      setDragState(null);
       if (sourceProjectKey) {
-        moveProjectBefore(sourceProjectKey, targetProjectKey);
+        moveProjectTo(sourceProjectKey, targetProjectKey, dragPlacement(event));
       }
     };
-  }, [moveProjectBefore]);
+  }, [moveProjectTo]);
 
   const handleProjectDragEnd = useCallback(() => {
+    if (!dropCommitted.current && projectOrderBeforeDrag.current) {
+      setProjectOrder(projectOrderBeforeDrag.current);
+    }
+    projectOrderBeforeDrag.current = null;
     draggedProjectKey.current = null;
+    dropCommitted.current = false;
+    setDragState(null);
   }, []);
 
   const handleSessionDragStart = useCallback((projectKey: string, sessionId: string) => {
     return (event: DragEvent<HTMLElement>) => {
       draggedSession.current = { projectKey, sessionId };
+      dropCommitted.current = false;
+      const group = projectGroups.find((candidate) => candidate.key === projectKey);
+      sessionOrderBeforeDrag.current = {
+        projectKey,
+        order: group?.sessions.map((session) => session.id) ?? [],
+      };
+      setDragState({ type: "session", projectKey, sessionId });
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", sessionId);
     };
-  }, []);
+  }, [projectGroups]);
 
-  const handleSessionDragOver = useCallback((projectKey: string) => {
+  const handleSessionDragOver = useCallback((projectKey: string, targetSessionId: string) => {
     return (event: DragEvent<HTMLElement>) => {
-      if (draggedSession.current?.projectKey === projectKey) {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
+      const source = draggedSession.current;
+      if (source?.projectKey !== projectKey) {
+        return;
       }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const placement = dragPlacement(event);
+      setDragState({
+        type: "session",
+        projectKey,
+        sessionId: source.sessionId,
+        overSessionId: targetSessionId,
+        placement,
+      });
+      moveSessionTo(projectKey, source.sessionId, targetSessionId, placement);
     };
-  }, []);
+  }, [moveSessionTo]);
 
   const handleSessionDrop = useCallback((projectKey: string, targetSessionId: string) => {
     return (event: DragEvent<HTMLElement>) => {
       event.preventDefault();
       const source = draggedSession.current;
+      dropCommitted.current = true;
       draggedSession.current = null;
+      sessionOrderBeforeDrag.current = null;
+      setDragState(null);
       if (source?.projectKey === projectKey) {
-        moveSessionBefore(projectKey, source.sessionId, targetSessionId);
+        moveSessionTo(projectKey, source.sessionId, targetSessionId, dragPlacement(event));
       }
     };
-  }, [moveSessionBefore]);
+  }, [moveSessionTo]);
 
   const handleSessionDragEnd = useCallback(() => {
+    const previous = sessionOrderBeforeDrag.current;
+    if (!dropCommitted.current && previous) {
+      setSessionOrderByProject((current) => ({
+        ...current,
+        [previous.projectKey]: previous.order,
+      }));
+    }
+    sessionOrderBeforeDrag.current = null;
     draggedSession.current = null;
+    dropCommitted.current = false;
+    setDragState(null);
   }, []);
 
   const toggleExpanded = useCallback((sessionId: string) => {
@@ -421,9 +534,19 @@ export function SessionList({
             key={group.key}
             className={`session-list__project-group${
               projectCollapsed ? " session-list__project-group--collapsed" : ""
+            }${
+              dragState?.type === "project" && dragState.projectKey === group.key
+                ? " session-list__project-group--dragging"
+                : ""
+            }${
+              dragState?.type === "project" &&
+              dragState.overKey === group.key &&
+              dragState.projectKey !== group.key
+                ? ` session-list__project-group--drop-${dragState.placement}`
+                : ""
             }`}
             aria-label={group.name}
-            onDragOver={handleProjectDragOver}
+            onDragOver={handleProjectDragOver(group.key)}
             onDrop={handleProjectDrop(group.key)}
           >
             <div
@@ -465,10 +588,21 @@ export function SessionList({
                   return (
                     <div
                       key={session.id}
-                      className="session-list__session-shell"
+                      className={`session-list__session-shell${
+                        dragState?.type === "session" && dragState.sessionId === session.id
+                          ? " session-list__session-shell--dragging"
+                          : ""
+                      }${
+                        dragState?.type === "session" &&
+                        dragState.projectKey === group.key &&
+                        dragState.overSessionId === session.id &&
+                        dragState.sessionId !== session.id
+                          ? ` session-list__session-shell--drop-${dragState.placement}`
+                          : ""
+                      }`}
                       draggable
                       onDragStart={handleSessionDragStart(group.key, session.id)}
-                      onDragOver={handleSessionDragOver(group.key)}
+                      onDragOver={handleSessionDragOver(group.key, session.id)}
                       onDrop={handleSessionDrop(group.key, session.id)}
                       onDragEnd={handleSessionDragEnd}
                     >

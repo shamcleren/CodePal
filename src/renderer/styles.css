@@ -1638,6 +1638,38 @@ body {
   flex-direction: column;
   gap: 8px;
   padding-top: 2px;
+  position: relative;
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease,
+    filter 0.14s ease;
+}
+
+.session-list__project-group--dragging {
+  opacity: 0.48;
+  filter: saturate(0.8);
+  transform: scale(0.992);
+}
+
+.session-list__project-group--drop-before::before,
+.session-list__project-group--drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 24px;
+  right: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.session-list__project-group--drop-before::before {
+  top: -5px;
+}
+
+.session-list__project-group--drop-after::after {
+  bottom: -6px;
 }
 
 .session-list__project-heading {
@@ -1654,7 +1686,6 @@ body {
 
 .session-list__project-drag,
 .session-list__project-toggle,
-.work-review__project-drag,
 .work-review__project-toggle {
   display: inline-grid;
   place-items: center;
@@ -1666,8 +1697,7 @@ body {
   cursor: pointer;
 }
 
-.session-list__project-drag,
-.work-review__project-drag {
+.session-list__project-drag {
   width: 18px;
   height: 18px;
   border-radius: 5px;
@@ -1677,8 +1707,7 @@ body {
   cursor: grab;
 }
 
-.session-list__project-drag:active,
-.work-review__project-drag:active {
+.session-list__project-drag:active {
   cursor: grabbing;
 }
 
@@ -1706,7 +1735,6 @@ body {
 
 .session-list__project-drag:hover,
 .session-list__project-toggle:hover,
-.work-review__project-drag:hover,
 .work-review__project-toggle:hover {
   border-color: var(--line-subtle);
   color: var(--text-muted);
@@ -1765,6 +1793,38 @@ body {
   grid-template-columns: 18px minmax(0, 1fr);
   gap: 5px;
   align-items: stretch;
+  position: relative;
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease,
+    filter 0.14s ease;
+}
+
+.session-list__session-shell--dragging {
+  opacity: 0.42;
+  filter: saturate(0.78);
+  transform: scale(0.988);
+}
+
+.session-list__session-shell--drop-before::before,
+.session-list__session-shell--drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  left: 24px;
+  right: 4px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.session-list__session-shell--drop-before::before {
+  top: -5px;
+}
+
+.session-list__session-shell--drop-after::after {
+  bottom: -5px;
 }
 
 .session-list__session-shell > .session-row {
@@ -5998,6 +6058,14 @@ body {
 
 .work-review__project-group + .work-review__project-group {
   border-top: 1px solid var(--line-subtle);
+}
+
+.work-review__project-group {
+  position: relative;
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease,
+    filter 0.14s ease;
 }
 
 .work-review__project-heading {

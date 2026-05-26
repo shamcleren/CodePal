@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnalyticsMetric, TokenTrendGranularity, TokenTrendPoint, TokenTrendResult } from "../../shared/analyticsTypes";
 import type { ModelPricing, TokenStatsResult } from "../../shared/usageTypes";
 import { UNKNOWN_PROJECT_NAME, UNKNOWN_PROJECT_PATH, isUnknownProjectPath, sortProjectRows } from "../../shared/projectAttribution";
 import { useI18n } from "../i18n";
+import { readAnalyticsPagePreferences, writeAnalyticsPagePreferences } from "../projectViewPreferences";
 import { AnalyticsLineChart } from "./AnalyticsLineChart";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
@@ -280,20 +281,53 @@ function weekAgoStr(): string {
 
 export function AnalyticsPage() {
   const i18n = useI18n();
-  const [range, setRange] = useState<RangePreset>("7d");
-  const [customStart, setCustomStart] = useState(weekAgoStr());
-  const [customEnd, setCustomEnd] = useState(todayStr());
-  const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("project");
+  const initialPreferencesRef = useRef<ReturnType<typeof readAnalyticsPagePreferences> | null>(null);
+  if (initialPreferencesRef.current === null) {
+    initialPreferencesRef.current = readAnalyticsPagePreferences();
+  }
+  const initialPreferences = initialPreferencesRef.current;
+  const [range, setRange] = useState<RangePreset>(initialPreferences.range);
+  const [customStart, setCustomStart] = useState(initialPreferences.customStart || weekAgoStr());
+  const [customEnd, setCustomEnd] = useState(initialPreferences.customEnd || todayStr());
+  const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>(initialPreferences.breakdownMode);
   const [data, setData] = useState<TokenStatsResult | null>(null);
   const [trendData, setTrendData] = useState<TokenTrendResult | null>(null);
-  const [granularity, setGranularity] = useState<TokenTrendGranularity>("hour");
-  const [metric, setMetric] = useState<AnalyticsMetric>("tokens");
-  const [projectFilter, setProjectFilter] = useState<string | undefined>(undefined);
-  const [agentFilter, setAgentFilter] = useState<string | undefined>(undefined);
-  const [modelFilter, setModelFilter] = useState<string | undefined>(undefined);
+  const [granularity, setGranularity] = useState<TokenTrendGranularity>(initialPreferences.granularity);
+  const [metric, setMetric] = useState<AnalyticsMetric>(initialPreferences.metric);
+  const [projectFilter, setProjectFilter] = useState<string | undefined>(initialPreferences.projectFilter);
+  const [agentFilter, setAgentFilter] = useState<string | undefined>(initialPreferences.agentFilter);
+  const [modelFilter, setModelFilter] = useState<string | undefined>(initialPreferences.modelFilter);
   const [loading, setLoading] = useState(false);
-  const [redactTitles, setRedactTitles] = useState(false);
-  const [redactModels, setRedactModels] = useState(false);
+  const [redactTitles, setRedactTitles] = useState(initialPreferences.redactTitles);
+  const [redactModels, setRedactModels] = useState(initialPreferences.redactModels);
+
+  useEffect(() => {
+    writeAnalyticsPagePreferences({
+      range,
+      customStart,
+      customEnd,
+      breakdownMode,
+      granularity,
+      metric,
+      projectFilter,
+      agentFilter,
+      modelFilter,
+      redactTitles,
+      redactModels,
+    });
+  }, [
+    range,
+    customStart,
+    customEnd,
+    breakdownMode,
+    granularity,
+    metric,
+    projectFilter,
+    agentFilter,
+    modelFilter,
+    redactTitles,
+    redactModels,
+  ]);
 
   const fetchData = useCallback(async (preset: RangePreset) => {
     setLoading(true);

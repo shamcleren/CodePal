@@ -26,7 +26,7 @@ function row(overrides: Partial<MonitorSessionRow>): MonitorSessionRow {
 }
 
 describe("WorkReviewPage", () => {
-  it("renders a calm daily summary with expandable details", () => {
+  it("renders a calm daily summary with one grouped item list", () => {
     const html = renderToStaticMarkup(
       <I18nProvider locale="zh-CN">
         <WorkReviewPage
@@ -138,8 +138,10 @@ describe("WorkReviewPage", () => {
     expect(html).toContain("今天");
     expect(html).toContain("2026/5/25");
     expect(html).toContain("当天摘要");
-    expect(html).toContain("完成了什么");
-    expect(html).toContain("推进中的事");
+    expect(html).toContain("事项");
+    expect(html).not.toContain("完成了什么");
+    expect(html).not.toContain("推进中的事");
+    expect(html).not.toContain("查看剩余明细");
     expect(html).not.toContain("遇到的问题");
     expect(html).toContain("托管 CLI 体验修复");
     expect(html).toContain("推进每日工作回顾");
@@ -151,7 +153,7 @@ describe("WorkReviewPage", () => {
     expect(html).not.toContain("<summary");
   });
 
-  it("does not show an in-progress block for historical dates", () => {
+  it("renders historical dates with the same grouped item list", () => {
     const html = renderToStaticMarkup(
       <I18nProvider locale="zh-CN">
         <WorkReviewPage
@@ -173,7 +175,8 @@ describe("WorkReviewPage", () => {
     );
 
     expect(html).toContain("整理 v1.2.0 发布检查");
-    expect(html).toContain("完成了什么");
+    expect(html).toContain("事项");
+    expect(html).not.toContain("完成了什么");
     expect(html).not.toContain("推进中的事");
     expect(html).not.toContain("<summary");
   });
@@ -204,9 +207,9 @@ describe("WorkReviewPage", () => {
     expect(html).toContain("work-review__project-group");
     expect(html).toContain("work-review__project-heading");
     expect(html).toContain("work-review__project-toggle");
-    expect(html).toContain("work-review__project-drag");
+    expect(html).not.toContain("work-review__project-drag");
     expect(html).toContain("aria-expanded=\"true\"");
-    expect(html).toContain("draggable=\"true\"");
+    expect(html).not.toContain("draggable=\"true\"");
     expect(html).toContain("CodePal");
     expect(html).toContain("实现会话分组");
     expect(html).toContain("gateway");
@@ -250,7 +253,7 @@ describe("WorkReviewPage", () => {
     expect(html).not.toContain("查看会话");
   });
 
-  it("shows only remaining entries in details when the summary preview is capped", () => {
+  it("shows all entries in the grouped list instead of splitting remaining details", () => {
     const sessions = Array.from({ length: 6 }, (_, index) =>
       row({
         id: `done-${index + 1}`,
@@ -269,10 +272,13 @@ describe("WorkReviewPage", () => {
       </I18nProvider>,
     );
 
-    expect(html).toContain("查看剩余明细");
     expect(html).toContain("完成条目1");
-    expect(html).not.toContain("完成条目2");
-    expect(html).toContain("展开 2 条");
+    expect(html).toContain("完成条目2");
+    expect(html).toContain("完成条目3");
+    expect(html).toContain("完成条目4");
+    expect(html).toContain("完成条目5");
     expect(html).toContain("完成条目6");
+    expect(html).not.toContain("查看剩余明细");
+    expect(html).not.toContain("展开");
   });
 });
