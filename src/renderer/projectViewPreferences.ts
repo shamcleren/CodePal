@@ -14,8 +14,6 @@ export type AnalyticsPagePreferences = {
   projectFilter?: string;
   agentFilter?: string;
   modelFilter?: string;
-  redactTitles: boolean;
-  redactModels: boolean;
 };
 
 const SESSION_LIST_STORAGE_KEY = "codepal.sessions.project-view-preferences.v1";
@@ -37,8 +35,6 @@ const DEFAULT_ANALYTICS_PAGE_PREFERENCES: AnalyticsPagePreferences = {
   projectFilter: undefined,
   agentFilter: undefined,
   modelFilter: undefined,
-  redactTitles: false,
-  redactModels: false,
 };
 
 function localStorageOrNull(): Storage | null {
@@ -122,8 +118,6 @@ export function readAnalyticsPagePreferences(
     projectFilter: optionalString(record.projectFilter),
     agentFilter: optionalString(record.agentFilter),
     modelFilter: optionalString(record.modelFilter),
-    redactTitles: record.redactTitles === true,
-    redactModels: record.redactModels === true,
   };
 }
 

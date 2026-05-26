@@ -47,6 +47,7 @@ CodePal is a dashboard, not a middleman. The agents you already use stay in char
 - **Focused activity timeline**: see what each agent is doing — replies, tool calls, and status changes — without the noise
 - **Per-session usage footer**: expanded sessions can show requests, input, output, cache, and estimated cost without adding a heavy review card
 - **Token usage analytics**: per-model token usage, cache hit rates, and estimated costs across all agents, with daily trends and HTML reports
+- **Daily work review**: recent sessions are grouped by day and project so finished and in-progress work can be reviewed without reading every timeline
 - **Session history persistence**: full activity history stored locally and restored across app restarts
 - **Readable built-in themes**: dark and light templates keep session details, usage footers, and Analytics tables legible
 - **One-click integration repair**: fix supported local agent configurations from inside the app
@@ -77,8 +78,8 @@ Release builds are signed and notarized by Apple. No security prompt on open.
 ## What's Next
 
 - **Session Operations Layer**: capability-gated jump, message, resume, repair, export, list-level delete, and local action logs; always user-triggered, never an autonomous scheduler
-- **Work item flow and CLI operation flow**: move from passive review cards toward actionable item handoff, preflight, dry-run, execution, and local operation logs
-- **LLM reports when useful**: daily, weekly, and monthly summaries should be generated from real work items and logs, with redaction controls, rather than hand-built metric cards
+- **Work item flow and CLI operation flow**: turn review evidence into actionable item handoff, preflight, dry-run, execution, and local operation logs
+- **LLM reports when useful**: daily, weekly, and monthly summaries should be generated from real work items and logs, rather than hand-built metric cards
 - **Free local control tower first**: make the individual local-first workflow valuable enough for daily use before revisiting shared ops visibility, billing, or cloud sync
 
 See [docs/planning/roadmap-next.md](docs/planning/roadmap-next.md) for the full planning direction.

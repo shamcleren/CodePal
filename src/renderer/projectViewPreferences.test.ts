@@ -65,8 +65,6 @@ describe("projectViewPreferences", () => {
       projectFilter: "/repo/CodePal",
       agentFilter: "codex",
       modelFilter: "gpt-5",
-      redactTitles: true,
-      redactModels: true,
     }, storage);
 
     expect(readSessionListPreferences(storage).projectOrder).toEqual(["sessions-project"]);
@@ -80,8 +78,6 @@ describe("projectViewPreferences", () => {
       projectFilter: "/repo/CodePal",
       agentFilter: "codex",
       modelFilter: "gpt-5",
-      redactTitles: true,
-      redactModels: true,
     });
   });
 
@@ -97,8 +93,6 @@ describe("projectViewPreferences", () => {
       projectFilter: "",
       agentFilter: "codex",
       modelFilter: 99,
-      redactTitles: "yes",
-      redactModels: true,
     }));
 
     expect(readAnalyticsPagePreferences(storage)).toEqual({
@@ -111,8 +105,6 @@ describe("projectViewPreferences", () => {
       projectFilter: undefined,
       agentFilter: "codex",
       modelFilter: undefined,
-      redactTitles: false,
-      redactModels: true,
     });
   });
 

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
+  AnalyticsPage,
   BREAKDOWN_MODES,
   TREND_METRICS,
   buildAnalyticsBreakdownRows,
@@ -100,6 +103,22 @@ describe("AnalyticsPage helpers", () => {
 
   it("keeps the daily trend metric choices focused on tokens and cost", () => {
     expect(TREND_METRICS).toEqual(["tokens", "cost"]);
+  });
+
+  it("keeps the daily trend controls visible when filtered trend data is empty", () => {
+    const html = renderToStaticMarkup(createElement(AnalyticsPage));
+
+    expect(html).toContain("Daily Trend");
+    expect(html).toContain("Trend granularity");
+    expect(html).toContain("Trend metric");
+    expect(html).toContain("No trend data");
+  });
+
+  it("does not render temporary report redaction toggles", () => {
+    const html = renderToStaticMarkup(createElement(AnalyticsPage));
+
+    expect(html).not.toContain("Redact session titles");
+    expect(html).not.toContain("Redact model names");
   });
 
   it("builds project breakdown rows sorted by tokens with compact names", () => {
@@ -260,13 +279,13 @@ describe("AnalyticsPage helpers", () => {
     ]);
   });
 
-  it("does not wire small multiple trend cards into the analytics page", () => {
+  it("keeps small multiple trend cards wired into the analytics page", () => {
     const source = fs.readFileSync(
       path.join(__dirname, "AnalyticsPage.tsx"),
       "utf8",
     );
 
-    expect(source).not.toContain("AnalyticsSmallMultiples");
+    expect(source).toContain("AnalyticsSmallMultiples");
   });
 
   it("does not wire low-signal history or health summary sections into the analytics page", () => {

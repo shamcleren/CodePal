@@ -5,6 +5,7 @@ import { UNKNOWN_PROJECT_NAME, UNKNOWN_PROJECT_PATH, isUnknownProjectPath, sortP
 import { useI18n } from "../i18n";
 import { readAnalyticsPagePreferences, writeAnalyticsPagePreferences } from "../projectViewPreferences";
 import { AnalyticsLineChart } from "./AnalyticsLineChart";
+import { AnalyticsSmallMultiples } from "./AnalyticsSmallMultiples";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
 type BreakdownMode = "project" | "model" | "agent";
@@ -298,8 +299,6 @@ export function AnalyticsPage() {
   const [agentFilter, setAgentFilter] = useState<string | undefined>(initialPreferences.agentFilter);
   const [modelFilter, setModelFilter] = useState<string | undefined>(initialPreferences.modelFilter);
   const [loading, setLoading] = useState(false);
-  const [redactTitles, setRedactTitles] = useState(initialPreferences.redactTitles);
-  const [redactModels, setRedactModels] = useState(initialPreferences.redactModels);
 
   useEffect(() => {
     writeAnalyticsPagePreferences({
@@ -312,8 +311,6 @@ export function AnalyticsPage() {
       projectFilter,
       agentFilter,
       modelFilter,
-      redactTitles,
-      redactModels,
     });
   }, [
     range,
@@ -325,8 +322,6 @@ export function AnalyticsPage() {
     projectFilter,
     agentFilter,
     modelFilter,
-    redactTitles,
-    redactModels,
   ]);
 
   const fetchData = useCallback(async (preset: RangePreset) => {
@@ -368,8 +363,6 @@ export function AnalyticsPage() {
   const handleOpenReport = useCallback(async () => {
     const { start, end } = resolveRange(range, customStart, customEnd);
     const opts = {
-      redactSessionTitles: redactTitles,
-      redactModelNames: redactModels,
       trendGranularity: granularity,
       metric,
       projectPath: projectFilter,
@@ -379,7 +372,7 @@ export function AnalyticsPage() {
     };
     const filePath = await window.codepal.generateHtmlReport(start, end, opts);
     await window.codepal.openExternalTarget(filePath);
-  }, [range, customStart, customEnd, redactTitles, redactModels, granularity, metric, projectFilter, agentFilter, modelFilter, i18n.locale]);
+  }, [range, customStart, customEnd, granularity, metric, projectFilter, agentFilter, modelFilter, i18n.locale]);
 
   const pricingMap = new Map<string, ModelPricing>();
   for (const p of data?.pricing ?? []) {
@@ -512,25 +505,6 @@ export function AnalyticsPage() {
         </button>
       </div>
 
-      <div className="analytics-page__redaction-bar">
-        <label className="analytics-page__redaction-toggle">
-          <input
-            type="checkbox"
-            checked={redactTitles}
-            onChange={(e) => setRedactTitles(e.target.checked)}
-          />
-          {i18n.t("tokenStats.redactTitles")}
-        </label>
-        <label className="analytics-page__redaction-toggle">
-          <input
-            type="checkbox"
-            checked={redactModels}
-            onChange={(e) => setRedactModels(e.target.checked)}
-          />
-          {i18n.t("tokenStats.redactModels")}
-        </label>
-      </div>
-
       <div className="analytics-page__hero-grid">
         {heroStats.map((stat) => (
           <div key={stat.label} className="analytics-page__hero-card">
@@ -541,114 +515,117 @@ export function AnalyticsPage() {
         ))}
       </div>
 
-      {(trendData?.points.length ?? 0) > 0 ? (
-        <div className="analytics-page__section analytics-page__trend-section">
-          <div className="analytics-page__section-header">
-            <div className="analytics-page__section-title">{i18n.t("tokenStats.dailyTrend")}</div>
-            <div className="analytics-page__segmented" aria-label="Trend granularity">
-              {(["minute", "hour", "day"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`analytics-page__segment ${granularity === value ? "analytics-page__segment--active" : ""}`}
-                  onClick={() => setGranularity(value)}
-                >
-                  {i18n.t(`tokenStats.granularity.${value}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="analytics-page__trend-controls">
-            <div className="analytics-page__segmented" aria-label="Trend metric">
-              {TREND_METRICS.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`analytics-page__segment ${metric === value ? "analytics-page__segment--active" : ""}`}
-                  onClick={() => setMetric(value)}
-                >
-                  {i18n.t(`tokenStats.metric.${value}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-	          {availableProjects.length > 1 ? (
-	            <div className="analytics-page__filter-chips">
-	              <button
-	                type="button"
-	                className={`analytics-page__filter-chip${projectFilter === undefined ? " analytics-page__filter-chip--active" : ""}`}
-	                onClick={() => setProjectFilter(undefined)}
-	              >
-	                {i18n.t("tokenStats.filterAllProjects")}
-	              </button>
-	              {availableProjects.slice(0, 8).map((project) => (
-	                <button
-	                  key={project.projectPath}
-	                  type="button"
-	                  className={`analytics-page__filter-chip${projectFilter === project.projectPath ? " analytics-page__filter-chip--active" : ""}`}
-	                  title={isUnknownProjectPath(project.projectPath) ? undefined : project.projectPath}
-	                  onClick={() => setProjectFilter((current) => current === project.projectPath ? undefined : project.projectPath)}
-	                >
-	                  {isUnknownProjectPath(project.projectPath) ? i18n.t("tokenStats.unknownProject") : project.projectName}
-	                </button>
-	              ))}
-	            </div>
-	          ) : null}
-	          {availableAgents.length > 1 ? (
-            <div className="analytics-page__filter-chips">
+      <div className="analytics-page__section analytics-page__trend-section">
+        <div className="analytics-page__section-header">
+          <div className="analytics-page__section-title">{i18n.t("tokenStats.dailyTrend")}</div>
+          <div className="analytics-page__segmented" aria-label="Trend granularity">
+            {(["minute", "hour", "day"] as const).map((value) => (
               <button
+                key={value}
                 type="button"
-                className={`analytics-page__filter-chip${agentFilter === undefined ? " analytics-page__filter-chip--active" : ""}`}
-                onClick={() => setAgentFilter(undefined)}
+                className={`analytics-page__segment ${granularity === value ? "analytics-page__segment--active" : ""}`}
+                onClick={() => setGranularity(value)}
               >
-                {i18n.t("tokenStats.filterAllAgents")}
+                {i18n.t(`tokenStats.granularity.${value}`)}
               </button>
-              {availableAgents.map((agent) => (
-                <button
-                  key={agent}
-                  type="button"
-                  className={`analytics-page__filter-chip${agentFilter === agent ? " analytics-page__filter-chip--active" : ""}`}
-                  onClick={() => {
-                    setAgentFilter((current) => current === agent ? undefined : agent);
-                    setModelFilter(undefined);
-                  }}
-                >
-                  {agentLabel(agent)}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {availableModels.length > 1 ? (
-            <div className="analytics-page__filter-chips">
-              <button
-                type="button"
-                className={`analytics-page__filter-chip${modelFilter === undefined ? " analytics-page__filter-chip--active" : ""}`}
-                onClick={() => setModelFilter(undefined)}
-              >
-                {i18n.t("tokenStats.filterAllModels")}
-              </button>
-              {availableModels.slice(0, 8).map((model) => (
-                <button
-                  key={model}
-                  type="button"
-                  className={`analytics-page__filter-chip${modelFilter === model ? " analytics-page__filter-chip--active" : ""}`}
-                  onClick={() => setModelFilter((current) => current === model ? undefined : model)}
-                >
-                  {model}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <AnalyticsLineChart
-            points={trendData?.points ?? []}
-            metric={metric}
-            granularity={granularity}
-            domainStart={currentRange.startMs}
-            domainEnd={currentRange.endMs}
-            pricing={data?.pricing ?? []}
-          />
+            ))}
+          </div>
         </div>
-      ) : null}
+        <div className="analytics-page__trend-controls">
+          <div className="analytics-page__segmented" aria-label="Trend metric">
+            {TREND_METRICS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={`analytics-page__segment ${metric === value ? "analytics-page__segment--active" : ""}`}
+                onClick={() => setMetric(value)}
+              >
+                {i18n.t(`tokenStats.metric.${value}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+        {availableProjects.length > 1 ? (
+          <div className="analytics-page__filter-chips">
+            <button
+              type="button"
+              className={`analytics-page__filter-chip${projectFilter === undefined ? " analytics-page__filter-chip--active" : ""}`}
+              onClick={() => setProjectFilter(undefined)}
+            >
+              {i18n.t("tokenStats.filterAllProjects")}
+            </button>
+            {availableProjects.slice(0, 8).map((project) => (
+              <button
+                key={project.projectPath}
+                type="button"
+                className={`analytics-page__filter-chip${projectFilter === project.projectPath ? " analytics-page__filter-chip--active" : ""}`}
+                title={isUnknownProjectPath(project.projectPath) ? undefined : project.projectPath}
+                onClick={() => setProjectFilter((current) => current === project.projectPath ? undefined : project.projectPath)}
+              >
+                {isUnknownProjectPath(project.projectPath) ? i18n.t("tokenStats.unknownProject") : project.projectName}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {availableAgents.length > 1 ? (
+          <div className="analytics-page__filter-chips">
+            <button
+              type="button"
+              className={`analytics-page__filter-chip${agentFilter === undefined ? " analytics-page__filter-chip--active" : ""}`}
+              onClick={() => setAgentFilter(undefined)}
+            >
+              {i18n.t("tokenStats.filterAllAgents")}
+            </button>
+            {availableAgents.map((agent) => (
+              <button
+                key={agent}
+                type="button"
+                className={`analytics-page__filter-chip${agentFilter === agent ? " analytics-page__filter-chip--active" : ""}`}
+                onClick={() => {
+                  setAgentFilter((current) => current === agent ? undefined : agent);
+                  setModelFilter(undefined);
+                }}
+              >
+                {agentLabel(agent)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {availableModels.length > 1 ? (
+          <div className="analytics-page__filter-chips">
+            <button
+              type="button"
+              className={`analytics-page__filter-chip${modelFilter === undefined ? " analytics-page__filter-chip--active" : ""}`}
+              onClick={() => setModelFilter(undefined)}
+            >
+              {i18n.t("tokenStats.filterAllModels")}
+            </button>
+            {availableModels.slice(0, 8).map((model) => (
+              <button
+                key={model}
+                type="button"
+                className={`analytics-page__filter-chip${modelFilter === model ? " analytics-page__filter-chip--active" : ""}`}
+                onClick={() => setModelFilter((current) => current === model ? undefined : model)}
+              >
+                {model}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <AnalyticsLineChart
+          points={trendData?.points ?? []}
+          metric={metric}
+          granularity={granularity}
+          domainStart={currentRange.startMs}
+          domainEnd={currentRange.endMs}
+          pricing={data?.pricing ?? []}
+        />
+        <AnalyticsSmallMultiples
+          points={trendData?.points ?? []}
+          selectedAgent={agentFilter}
+          formatValue={formatTokens}
+        />
+      </div>
 
       {breakdownRows.length > 0 ? (
         <div className="analytics-page__section">

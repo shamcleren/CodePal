@@ -14,7 +14,7 @@ Its shipped V1 foundation is simple:
 
 CodePal is intentionally stronger on visibility than on control.
 
-As of the v1.1.11 baseline, CodePal also has enough local history, usage, analytics, reporting, notification, terminal-navigation, capability-gated message delivery, integration repair, and Provider Gateway infrastructure to support the next product layer: personal AI coding operations memory plus a bounded Session Operations Layer. Current post-v1.1.11 development keeps deterministic session stats at the footer level and adds a semantic visual theme system on top of that foundation.
+As of the v1.3.0 baseline, CodePal also has enough local history, usage, analytics, reporting, daily work review, project attribution, notification, terminal-navigation, capability-gated message delivery, integration repair, and Provider Gateway infrastructure to support the next product layer: personal AI coding operations memory plus a bounded Session Operations Layer.
 
 ## Product Goal
 

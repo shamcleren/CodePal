@@ -3685,29 +3685,6 @@ body {
   background: var(--surface-success);
 }
 
-.analytics-page__redaction-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 0;
-}
-
-.analytics-page__redaction-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.analytics-page__redaction-toggle input[type="checkbox"] {
-  width: 12px;
-  height: 12px;
-  cursor: pointer;
-}
-
 /* ── Report preferences ── */
 
 .report-prefs__model-input {

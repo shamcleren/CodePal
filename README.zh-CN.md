@@ -46,6 +46,7 @@ CodePal 是一个 dashboard，不是"中间层"。你原本用的 agent 仍然�
 - **统一 session 视图**：所有代理的活跃、等待、完成、异常会话汇聚在同一列表
 - **聚焦的活动时间线**：看到每个代理在做什么 — 回复、工具调用、状态变化 — 去掉多余噪音
 - **Token 用量分析**：按模型统计 token 用量、cache 命中率和估算费用，支持每日趋势和 HTML 报告
+- **每日工作回顾**：按天和项目整理最近 session，不必逐条翻时间线也能复盘已完成和仍在进行的工作
 - **历史持久化**：完整活动历史本地存储，重启后也能随时回溯
 - **一键修复接入**：直接在应用内修复受支持的本地代理配置
 - **本地 Provider Gateway**：让 Claude Desktop 和 Codex Desktop 通过 CodePal 接入第三方模型，真实 provider token 不进入客户端配置，并保留客户端原有默认模型
@@ -75,7 +76,7 @@ CodePal 是一个 dashboard，不是"中间层"。你原本用的 agent 仍然�
 ## 接下来
 
 - **Session Operations Layer**：按 capability 门控的 jump、message、resume、repair、export、outcome 标记和本地 action log；全部由用户触发，不做 autonomous scheduler
-- **个人 AI 工作记忆**：session review card、day digest、本地报告，让用户看懂多个 agent 今天到底做了什么
+- **个人 AI 工作记忆**：从每日工作回顾继续走向更明确的 work item、day digest 和本地报告
 - **Workflow health 与可信度**：等待时长、异常恢复、配额压力、上下文压力、异常 cost、attention queue、观测可信度等流程质量信号
 - **先做强免费的本地控制塔**：先把个人本地工作流做到值得每天打开，再回头评估共享运营可见性、付费实现或云同步
 
