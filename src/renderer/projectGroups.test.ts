@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveProjectKey, orderKeyedItems, orderProjectGroups } from "./projectGroups";
+import { moveProjectKey, orderProjectGroups } from "./projectGroups";
 
 describe("projectGroups", () => {
   it("moves a project key before another project key", () => {
@@ -38,15 +38,4 @@ describe("projectGroups", () => {
     ]);
   });
 
-  it("orders keyed items inside a project while keeping new sessions visible", () => {
-    expect(orderKeyedItems([
-      { id: "a" },
-      { id: "b" },
-      { id: "c" },
-    ], ["b", "a"])).toEqual([
-      { id: "b" },
-      { id: "a" },
-      { id: "c" },
-    ]);
-  });
 });

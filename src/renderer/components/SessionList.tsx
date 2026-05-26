@@ -9,7 +9,7 @@ import {
 } from "../../shared/projectAttribution";
 import { useI18n } from "../i18n";
 import type { MonitorSessionRow } from "../monitorSession";
-import { moveProjectKey, orderKeyedItems, orderProjectGroups } from "../projectGroups";
+import { moveProjectKey, orderProjectGroups } from "../projectGroups";
 import type { DropPlacement } from "../projectGroups";
 import { readSessionListPreferences, writeSessionListPreferences } from "../projectViewPreferences";
 import { SessionRow } from "./SessionRow";
@@ -33,15 +33,11 @@ type SessionProjectGroup = {
   sessions: MonitorSessionRow[];
 };
 
-type SessionDragState =
-  | { type: "project"; projectKey: string; overKey?: string; placement?: DropPlacement }
-  | {
-      type: "session";
-      projectKey: string;
-      sessionId: string;
-      overSessionId?: string;
-      placement?: DropPlacement;
-    };
+type SessionDragState = {
+  projectKey: string;
+  overKey?: string;
+  placement?: DropPlacement;
+};
 
 function normalizeContextPercent(context: UsageContext | undefined): number | undefined {
   const percent =
@@ -209,9 +205,6 @@ export function SessionList({
     initiallyExpandedSessionId ?? null,
   );
   const [projectOrder, setProjectOrder] = useState<string[]>(() => initialPreferences.projectOrder);
-  const [sessionOrderByProject, setSessionOrderByProject] = useState<Record<string, string[]>>(
-    () => initialPreferences.sessionOrderByProject,
-  );
   const [collapsedProjectKeys, setCollapsedProjectKeys] = useState<Set<string>>(
     () => new Set(initialPreferences.collapsedProjectKeys),
   );
@@ -221,20 +214,17 @@ export function SessionList({
   const [dragState, setDragState] = useState<SessionDragState | null>(null);
   const rowRefs = useRef(new Map<string, HTMLElement>());
   const draggedProjectKey = useRef<string | null>(null);
-  const draggedSession = useRef<{ projectKey: string; sessionId: string } | null>(null);
   const projectOrderBeforeDrag = useRef<string[] | null>(null);
-  const sessionOrderBeforeDrag = useRef<{ projectKey: string; order: string[] } | null>(null);
   const dropCommitted = useRef(false);
   const hasExpandedSession = expandedSessionId !== null;
 
   useEffect(() => {
     writeSessionListPreferences({
       projectOrder,
-      sessionOrderByProject,
       collapsedProjectKeys: [...collapsedProjectKeys],
       expandedProjectSessionKeys: [...expandedProjectSessionKeys],
     });
-  }, [projectOrder, sessionOrderByProject, collapsedProjectKeys, expandedProjectSessionKeys]);
+  }, [projectOrder, collapsedProjectKeys, expandedProjectSessionKeys]);
 
   const contextPercentBySession = useMemo(() => {
     const next = new Map<string, number>();
@@ -248,11 +238,8 @@ export function SessionList({
   }, [usageOverview]);
   const projectGroups = useMemo(() => {
     const groups = groupSessionsByProject(sessions, t("tokenStats.unknownProject"));
-    return orderProjectGroups(groups, projectOrder).map((group) => ({
-      ...group,
-      sessions: orderKeyedItems(group.sessions, sessionOrderByProject[group.key] ?? []),
-    }));
-  }, [sessions, sessionOrderByProject, projectOrder, t]);
+    return orderProjectGroups(groups, projectOrder);
+  }, [sessions, projectOrder, t]);
 
   const moveProjectTo = useCallback((draggedKey: string, targetKey: string, placement: DropPlacement) => {
     setProjectOrder((current) => {
@@ -262,37 +249,6 @@ export function SessionList({
       ).map((group) => group.key);
       const nextOrder = moveProjectKey(visibleOrder, draggedKey, targetKey, placement);
       return sameOrder(visibleOrder, nextOrder) ? current : nextOrder;
-    });
-  }, [sessions, t]);
-
-  const moveSessionTo = useCallback((
-    projectKey: string,
-    draggedSessionId: string,
-    targetSessionId: string,
-    placement: DropPlacement,
-  ) => {
-    setSessionOrderByProject((current) => {
-      const group = groupSessionsByProject(sessions, t("tokenStats.unknownProject")).find(
-        (candidate) => candidate.key === projectKey,
-      );
-      if (!group) return current;
-      const visibleOrder = orderKeyedItems(
-        group.sessions,
-        current[projectKey] ?? [],
-      ).map((session) => session.id);
-      const nextOrder = moveProjectKey(
-        visibleOrder,
-        draggedSessionId,
-        targetSessionId,
-        placement,
-      );
-      if (sameOrder(visibleOrder, nextOrder)) {
-        return current;
-      }
-      return {
-        ...current,
-        [projectKey]: nextOrder,
-      };
     });
   }, [sessions, t]);
 
@@ -312,7 +268,7 @@ export function SessionList({
         groupSessionsByProject(sessions, t("tokenStats.unknownProject")),
         projectOrder,
       ).map((group) => group.key);
-      setDragState({ type: "project", projectKey });
+      setDragState({ projectKey });
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", projectKey);
     };
@@ -328,7 +284,6 @@ export function SessionList({
       event.dataTransfer.dropEffect = "move";
       const placement = dragPlacement(event);
       setDragState({
-        type: "project",
         projectKey: sourceProjectKey,
         overKey: targetProjectKey,
         placement,
@@ -357,69 +312,6 @@ export function SessionList({
     }
     projectOrderBeforeDrag.current = null;
     draggedProjectKey.current = null;
-    dropCommitted.current = false;
-    setDragState(null);
-  }, []);
-
-  const handleSessionDragStart = useCallback((projectKey: string, sessionId: string) => {
-    return (event: DragEvent<HTMLElement>) => {
-      draggedSession.current = { projectKey, sessionId };
-      dropCommitted.current = false;
-      const group = projectGroups.find((candidate) => candidate.key === projectKey);
-      sessionOrderBeforeDrag.current = {
-        projectKey,
-        order: group?.sessions.map((session) => session.id) ?? [],
-      };
-      setDragState({ type: "session", projectKey, sessionId });
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", sessionId);
-    };
-  }, [projectGroups]);
-
-  const handleSessionDragOver = useCallback((projectKey: string, targetSessionId: string) => {
-    return (event: DragEvent<HTMLElement>) => {
-      const source = draggedSession.current;
-      if (source?.projectKey !== projectKey) {
-        return;
-      }
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      const placement = dragPlacement(event);
-      setDragState({
-        type: "session",
-        projectKey,
-        sessionId: source.sessionId,
-        overSessionId: targetSessionId,
-        placement,
-      });
-      moveSessionTo(projectKey, source.sessionId, targetSessionId, placement);
-    };
-  }, [moveSessionTo]);
-
-  const handleSessionDrop = useCallback((projectKey: string, targetSessionId: string) => {
-    return (event: DragEvent<HTMLElement>) => {
-      event.preventDefault();
-      const source = draggedSession.current;
-      dropCommitted.current = true;
-      draggedSession.current = null;
-      sessionOrderBeforeDrag.current = null;
-      setDragState(null);
-      if (source?.projectKey === projectKey) {
-        moveSessionTo(projectKey, source.sessionId, targetSessionId, dragPlacement(event));
-      }
-    };
-  }, [moveSessionTo]);
-
-  const handleSessionDragEnd = useCallback(() => {
-    const previous = sessionOrderBeforeDrag.current;
-    if (!dropCommitted.current && previous) {
-      setSessionOrderByProject((current) => ({
-        ...current,
-        [previous.projectKey]: previous.order,
-      }));
-    }
-    sessionOrderBeforeDrag.current = null;
-    draggedSession.current = null;
     dropCommitted.current = false;
     setDragState(null);
   }, []);
@@ -535,12 +427,11 @@ export function SessionList({
             className={`session-list__project-group${
               projectCollapsed ? " session-list__project-group--collapsed" : ""
             }${
-              dragState?.type === "project" && dragState.projectKey === group.key
+              dragState?.projectKey === group.key
                 ? " session-list__project-group--dragging"
                 : ""
             }${
-              dragState?.type === "project" &&
-              dragState.overKey === group.key &&
+              dragState?.overKey === group.key &&
               dragState.projectKey !== group.key
                 ? ` session-list__project-group--drop-${dragState.placement}`
                 : ""
@@ -588,31 +479,8 @@ export function SessionList({
                   return (
                     <div
                       key={session.id}
-                      className={`session-list__session-shell${
-                        dragState?.type === "session" && dragState.sessionId === session.id
-                          ? " session-list__session-shell--dragging"
-                          : ""
-                      }${
-                        dragState?.type === "session" &&
-                        dragState.projectKey === group.key &&
-                        dragState.overSessionId === session.id &&
-                        dragState.sessionId !== session.id
-                          ? ` session-list__session-shell--drop-${dragState.placement}`
-                          : ""
-                      }`}
-                      draggable
-                      onDragStart={handleSessionDragStart(group.key, session.id)}
-                      onDragOver={handleSessionDragOver(group.key, session.id)}
-                      onDrop={handleSessionDrop(group.key, session.id)}
-                      onDragEnd={handleSessionDragEnd}
+                      className="session-list__session-shell"
                     >
-                      <span
-                        className="session-list__session-drag"
-                        title={t("projectGroup.dragSession")}
-                        aria-label={t("projectGroup.dragSession")}
-                      >
-                        ::
-                      </span>
                       <SessionRow
                         ref={registerRow(session.id)}
                         session={displaySession}

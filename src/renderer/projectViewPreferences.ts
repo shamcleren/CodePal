@@ -1,6 +1,5 @@
 export type SessionListPreferences = {
   projectOrder: string[];
-  sessionOrderByProject: Record<string, string[]>;
   collapsedProjectKeys: string[];
   expandedProjectSessionKeys: string[];
 };
@@ -24,7 +23,6 @@ const ANALYTICS_PAGE_STORAGE_KEY = "codepal.analytics.local-preferences.v1";
 
 const EMPTY_SESSION_LIST_PREFERENCES: SessionListPreferences = {
   projectOrder: [],
-  sessionOrderByProject: {},
   collapsedProjectKeys: [],
   expandedProjectSessionKeys: [],
 };
@@ -74,17 +72,6 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
-function stringArrayRecord(value: unknown): Record<string, string[]> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  const entries = Object.entries(value)
-    .map(([key, item]) => [key, stringArray(item)] as const)
-    .filter(([, item]) => item.length > 0);
-  return Object.fromEntries(entries);
-}
-
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return typeof value === "string" && (allowed as readonly string[]).includes(value)
     ? value as T
@@ -105,7 +92,6 @@ export function readSessionListPreferences(
   const record = raw as Record<string, unknown>;
   return {
     projectOrder: stringArray(record.projectOrder),
-    sessionOrderByProject: stringArrayRecord(record.sessionOrderByProject),
     collapsedProjectKeys: stringArray(record.collapsedProjectKeys),
     expandedProjectSessionKeys: stringArray(record.expandedProjectSessionKeys),
   };

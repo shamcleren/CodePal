@@ -157,7 +157,7 @@ describe("SessionList", () => {
     expect(html).toContain("session-list__project-more");
     expect(html).toContain("Show 2 more");
     expect(html).toContain("session-list__session-shell");
-    expect(html).toContain("session-list__session-drag");
+    expect(html).not.toContain("session-list__session-drag");
   });
 
   it("renders live running duration and context percent at the session layer", () => {

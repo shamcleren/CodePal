@@ -253,11 +253,12 @@ describe("WorkReviewPage", () => {
     expect(html).not.toContain("查看会话");
   });
 
-  it("shows all entries in the grouped list instead of splitting remaining details", () => {
+  it("shows three entries per project by default and keeps active entries visible", () => {
     const sessions = Array.from({ length: 6 }, (_, index) =>
       row({
         id: `done-${index + 1}`,
-        titleLabel: `完成条目${index + 1}`,
+        status: index === 0 ? "running" : "completed",
+        titleLabel: index === 0 ? "运行中的条目" : `完成条目${index + 1}`,
         updatedAt: Date.parse(`2026-05-25T${String(9 + index).padStart(2, "0")}:00:00+08:00`),
       }),
     );
@@ -272,13 +273,14 @@ describe("WorkReviewPage", () => {
       </I18nProvider>,
     );
 
-    expect(html).toContain("完成条目1");
-    expect(html).toContain("完成条目2");
-    expect(html).toContain("完成条目3");
     expect(html).toContain("完成条目4");
     expect(html).toContain("完成条目5");
     expect(html).toContain("完成条目6");
+    expect(html).toContain("运行中的条目");
+    expect(html).not.toContain("完成条目2");
+    expect(html).not.toContain("完成条目3");
+    expect(html).toContain("work-review__project-more");
+    expect(html).toContain("展开 2 条");
     expect(html).not.toContain("查看剩余明细");
-    expect(html).not.toContain("展开");
   });
 });

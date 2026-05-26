@@ -1789,71 +1789,11 @@ body {
 }
 
 .session-list__session-shell {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 5px;
-  align-items: stretch;
-  position: relative;
-  transition:
-    opacity 0.14s ease,
-    transform 0.14s ease,
-    filter 0.14s ease;
-}
-
-.session-list__session-shell--dragging {
-  opacity: 0.42;
-  filter: saturate(0.78);
-  transform: scale(0.988);
-}
-
-.session-list__session-shell--drop-before::before,
-.session-list__session-shell--drop-after::after {
-  content: "";
-  position: absolute;
-  z-index: 3;
-  left: 24px;
-  right: 4px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
-}
-
-.session-list__session-shell--drop-before::before {
-  top: -5px;
-}
-
-.session-list__session-shell--drop-after::after {
-  bottom: -5px;
+  display: block;
 }
 
 .session-list__session-shell > .session-row {
   min-width: 0;
-}
-
-.session-list__session-drag {
-  display: grid;
-  place-items: center;
-  align-self: center;
-  width: 18px;
-  height: 28px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  color: var(--text-faint);
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1;
-  cursor: grab;
-}
-
-.session-list__session-shell:active .session-list__session-drag {
-  cursor: grabbing;
-}
-
-.session-list__session-shell:hover .session-list__session-drag {
-  border-color: var(--line-subtle);
-  color: var(--text-muted);
-  background: var(--surface-hover);
 }
 
 .session-list__project-more,

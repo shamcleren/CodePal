@@ -47,6 +47,7 @@ type SettingsSection = {
 
 const WORK_REVIEW_HISTORY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const WORK_REVIEW_HISTORY_LIMIT = 500;
+const WORK_REVIEW_USAGE_REFRESH_DELAY_MS = 500;
 
 function workReviewTokenRange(now = Date.now()): { start: number; end: number } {
   const start = new Date(now - WORK_REVIEW_HISTORY_MAX_AGE_MS);
@@ -55,6 +56,16 @@ function workReviewTokenRange(now = Date.now()): { start: number; end: number } 
   end.setDate(end.getDate() + 1);
   end.setHours(0, 0, 0, 0);
   return { start: start.getTime(), end: end.getTime() };
+}
+
+export function workReviewUsageRefreshKey(overview: UsageOverview | null): number {
+  if (!overview) return 0;
+  const candidates = [
+    overview.updatedAt,
+    overview.summary.updatedAt,
+    ...overview.sessions.map((session) => session.updatedAt),
+  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  return candidates.length > 0 ? Math.max(...candidates) : 0;
 }
 
 export function buildFallbackHistoryDiagnostics(enabled: boolean): HistoryDiagnostics {
@@ -109,6 +120,7 @@ export function App() {
   const [updateBusy, setUpdateBusy] = useState(false);
   const [jumpToSessionId, setJumpToSessionId] = useState<string | undefined>(undefined);
   const workItemList = useMemo(() => deriveWorkItems(rows), [rows]);
+  const workReviewTokenRefreshKey = workReviewUsageRefreshKey(usageOverview);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const resolvedLocale = resolveLocale(
@@ -417,29 +429,32 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    const { start, end } = workReviewTokenRange();
-    void Promise.all([
-      window.codepal.getTokenTrend(start, end, "day"),
-      window.codepal.getModelPricing(),
-    ])
-      .then(([trend, pricing]) => {
-        if (!active) {
-          return;
-        }
-        setWorkReviewTokenTrendPoints(trend.points);
-        setWorkReviewPricing(pricing);
-      })
-      .catch(() => {
-        if (!active) {
-          return;
-        }
-        setWorkReviewTokenTrendPoints([]);
-        setWorkReviewPricing([]);
-      });
+    const timeoutId = window.setTimeout(() => {
+      const { start, end } = workReviewTokenRange();
+      void Promise.all([
+        window.codepal.getTokenTrend(start, end, "day"),
+        window.codepal.getModelPricing(),
+      ])
+        .then(([trend, pricing]) => {
+          if (!active) {
+            return;
+          }
+          setWorkReviewTokenTrendPoints(trend.points);
+          setWorkReviewPricing(pricing);
+        })
+        .catch(() => {
+          if (!active) {
+            return;
+          }
+          setWorkReviewTokenTrendPoints([]);
+          setWorkReviewPricing([]);
+        });
+    }, WORK_REVIEW_USAGE_REFRESH_DELAY_MS);
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
     };
-  }, [historyStoreVersion]);
+  }, [historyStoreVersion, workReviewTokenRefreshKey]);
 
   useEffect(() => {
     let active = true;

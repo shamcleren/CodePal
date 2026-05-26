@@ -2,10 +2,6 @@ export type ProjectGroupLike = {
   key: string;
 };
 
-export type KeyedItemLike = {
-  id: string;
-};
-
 export type DropPlacement = "before" | "after";
 
 export function moveProjectKey(
@@ -51,32 +47,6 @@ export function orderProjectGroups<T extends ProjectGroupLike>(
   for (const group of groups) {
     if (!seen.has(group.key)) {
       ordered.push(group);
-    }
-  }
-
-  return ordered;
-}
-
-export function orderKeyedItems<T extends KeyedItemLike>(
-  items: readonly T[],
-  preferredOrder: readonly string[],
-): T[] {
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const ordered: T[] = [];
-  const seen = new Set<string>();
-
-  for (const id of preferredOrder) {
-    const item = byId.get(id);
-    if (!item || seen.has(id)) {
-      continue;
-    }
-    ordered.push(item);
-    seen.add(id);
-  }
-
-  for (const item of items) {
-    if (!seen.has(item.id)) {
-      ordered.push(item);
     }
   }
 

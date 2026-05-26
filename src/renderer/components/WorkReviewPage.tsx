@@ -22,6 +22,7 @@ type WorkReviewPageProps = {
 };
 
 const WORK_REVIEW_CLOCK_INTERVAL_MS = 1_000;
+const DEFAULT_VISIBLE_REVIEW_ITEMS_PER_PROJECT = 3;
 
 type ReviewProjectGroup = {
   key: string;
@@ -109,6 +110,31 @@ function projectContentId(prefix: string, key: string): string {
   return `${prefix}-${hash.toString(36)}`;
 }
 
+function isPriorityReviewEntry(entry: DailyWorkReviewEntry): boolean {
+  return entry.status === "running" || entry.status === "waiting" || entry.status === "offline";
+}
+
+function visibleReviewItemsForProject(
+  items: DailyWorkReviewEntry[],
+  expanded: boolean,
+): DailyWorkReviewEntry[] {
+  if (expanded || items.length <= DEFAULT_VISIBLE_REVIEW_ITEMS_PER_PROJECT) {
+    return items;
+  }
+
+  const visibleIds = new Set<string>();
+  const visibleItems: DailyWorkReviewEntry[] = [];
+  const addVisibleItem = (entry: DailyWorkReviewEntry) => {
+    if (visibleIds.has(entry.id)) return;
+    visibleIds.add(entry.id);
+    visibleItems.push(entry);
+  };
+
+  items.slice(0, DEFAULT_VISIBLE_REVIEW_ITEMS_PER_PROJECT).forEach(addVisibleItem);
+  items.filter(isPriorityReviewEntry).forEach(addVisibleItem);
+  return visibleItems;
+}
+
 function EntryList({
   items,
   emptyLabel,
@@ -120,6 +146,9 @@ function EntryList({
 }) {
   const { t } = useI18n();
   const [collapsedProjectKeys, setCollapsedProjectKeys] = useState<Set<string>>(() => new Set());
+  const [expandedProjectItemKeys, setExpandedProjectItemKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const groups = useMemo(
     () => groupReviewEntriesByProject(items, t("tokenStats.unknownProject")),
     [items, t],
@@ -129,6 +158,10 @@ function EntryList({
     setCollapsedProjectKeys((current) => toggleSetValue(current, projectKey));
   }, []);
 
+  const toggleProjectItemsExpanded = useCallback((projectKey: string) => {
+    setExpandedProjectItemKeys((current) => toggleSetValue(current, projectKey));
+  }, []);
+
   if (items.length === 0) {
     return <p className="work-review__empty-line">{emptyLabel}</p>;
   }
@@ -136,6 +169,9 @@ function EntryList({
     <div className="work-review__project-groups">
       {groups.map((group) => {
         const projectCollapsed = collapsedProjectKeys.has(group.key);
+        const itemsExpanded = expandedProjectItemKeys.has(group.key);
+        const visibleItems = visibleReviewItemsForProject(group.items, itemsExpanded);
+        const hiddenItemCount = group.items.length - visibleItems.length;
         const contentId = projectContentId("work-review-project", group.key);
 
         return (
@@ -165,7 +201,7 @@ function EntryList({
           {!projectCollapsed ? (
             <div id={contentId} className="work-review__project-items">
               <ul className="work-review__item-list">
-            {group.items.map((entry) => (
+            {visibleItems.map((entry) => (
               <li key={entry.id} className="work-review__item">
                 <div className="work-review__item-main">
                   <span className="work-review__item-title">{entry.title}</span>
@@ -198,6 +234,18 @@ function EntryList({
               </li>
             ))}
               </ul>
+              {hiddenItemCount > 0 || itemsExpanded ? (
+                <button
+                  type="button"
+                  className="work-review__project-more"
+                  aria-expanded={itemsExpanded}
+                  onClick={() => toggleProjectItemsExpanded(group.key)}
+                >
+                  {itemsExpanded
+                    ? t("projectGroup.showLess")
+                    : t("projectGroup.showMore", { count: hiddenItemCount })}
+                </button>
+              ) : null}
             </div>
           ) : null}
         </section>

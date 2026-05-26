@@ -31,23 +31,17 @@ function fakeStorage(): Storage {
 }
 
 describe("projectViewPreferences", () => {
-  it("persists project order separately from per-project session order", () => {
+  it("persists project order and project visibility state", () => {
     const storage = fakeStorage();
 
     writeSessionListPreferences({
       projectOrder: ["CodePal", "gateway"],
-      sessionOrderByProject: {
-        CodePal: ["s2", "s1"],
-      },
       collapsedProjectKeys: ["gateway"],
       expandedProjectSessionKeys: ["CodePal"],
     }, storage);
 
     expect(readSessionListPreferences(storage)).toEqual({
       projectOrder: ["CodePal", "gateway"],
-      sessionOrderByProject: {
-        CodePal: ["s2", "s1"],
-      },
       collapsedProjectKeys: ["gateway"],
       expandedProjectSessionKeys: ["CodePal"],
     });
@@ -58,7 +52,6 @@ describe("projectViewPreferences", () => {
 
     writeSessionListPreferences({
       projectOrder: ["sessions-project"],
-      sessionOrderByProject: {},
       collapsedProjectKeys: [],
       expandedProjectSessionKeys: [],
     }, storage);
@@ -129,7 +122,6 @@ describe("projectViewPreferences", () => {
 
     expect(readSessionListPreferences(storage)).toEqual({
       projectOrder: [],
-      sessionOrderByProject: {},
       collapsedProjectKeys: [],
       expandedProjectSessionKeys: [],
     });

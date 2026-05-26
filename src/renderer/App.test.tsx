@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { App, buildFallbackHistoryDiagnostics } from "./App";
+import { App, buildFallbackHistoryDiagnostics, workReviewUsageRefreshKey } from "./App";
 
 describe("App", () => {
   it("renders sessions and the in-app settings drawer shell together", () => {
@@ -50,6 +50,19 @@ describe("App", () => {
     });
 
     expect(buildFallbackHistoryDiagnostics(false).enabled).toBe(false);
+  });
+
+  it("refreshes work review analytics when usage overview changes", () => {
+    expect(workReviewUsageRefreshKey(null)).toBe(0);
+    expect(workReviewUsageRefreshKey({
+      updatedAt: 200,
+      summary: { rateLimits: [], contextMode: "none" },
+      sessions: [{ agent: "codex", sessionId: "s1", updatedAt: 100, sources: [], completeness: "minimal" }],
+    })).toBe(200);
+    expect(workReviewUsageRefreshKey({
+      summary: { rateLimits: [], contextMode: "none", updatedAt: 150 },
+      sessions: [{ agent: "codex", sessionId: "s1", updatedAt: 300, sources: [], completeness: "minimal" }],
+    })).toBe(300);
   });
 
   it("does not expose unfinished LLM report settings", () => {
