@@ -157,34 +157,42 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
           <ToolGlyph tool={meta.key} />
         </span>
         <span className="session-row__main">
-          <span className="session-row__topline">
-            <span className={`tool-name tool-name--${meta.key}`}>{meta.label}</span>
-            <span className="session-row__title">{session.titleLabel}</span>
-            <span className={`state ${stateClass}`}>{stateLabel}</span>
-            <span className="session-row__time">{session.updatedLabel}</span>
+          <span className="session-row__content">
+            <span className="session-row__topline">
+              <span className={`tool-name tool-name--${meta.key}`}>{meta.label}</span>
+              <span className="session-row__title">{session.titleLabel}</span>
+            </span>
+            <span className="session-row__meta">
+              {showCollapsedSummary ? (
+                <span className="session-row__summary-text">{session.collapsedSummary}</span>
+              ) : null}
+              {session.pendingCount > 0 ? (
+                <span className="session-row__pending">
+                  {i18n.t("session.pending", { count: session.pendingCount })}
+                </span>
+              ) : null}
+            </span>
           </span>
-          <span className="session-row__meta">
-            {showCollapsedSummary ? (
-              <span className="session-row__summary-text">{session.collapsedSummary}</span>
-            ) : null}
-            {session.pendingCount > 0 ? (
-              <span className="session-row__pending">
-                {i18n.t("session.pending", { count: session.pendingCount })}
-              </span>
-            ) : null}
-            <span className="session-row__meta-item">{session.durationLabel}</span>
-            {typeof contextPercent === "number" ? (
-              <span
-                className={[
-                  "session-row__meta-item",
-                  "session-row__meta-item--context",
-                  `session-row__meta-item--context-${contextPercentTone(contextPercent)}`,
-                ].join(" ")}
-              >
-                {i18n.t("session.meta.context", { percent: contextPercent })}
-              </span>
-            ) : null}
-            <span className="session-row__meta-item">#{session.shortId}</span>
+          <span className="session-row__rail">
+            <span className="session-row__rail-top">
+              <span className={`state ${stateClass}`}>{stateLabel}</span>
+              <span className="session-row__time">{session.updatedLabel}</span>
+            </span>
+            <span className="session-row__stats">
+              <span className="session-row__meta-item">{session.durationLabel}</span>
+              {typeof contextPercent === "number" ? (
+                <span
+                  className={[
+                    "session-row__meta-item",
+                    "session-row__meta-item--context",
+                    `session-row__meta-item--context-${contextPercentTone(contextPercent)}`,
+                  ].join(" ")}
+                >
+                  {i18n.t("session.meta.context", { percent: contextPercent })}
+                </span>
+              ) : null}
+              <span className="session-row__meta-item">#{session.shortId}</span>
+            </span>
           </span>
         </span>
       </button>

@@ -5,7 +5,9 @@ import type { SessionEvent } from "../session/sessionStore";
 import { ACTIVE_SESSION_STALENESS_MS } from "../session/sessionStore";
 import { isSessionStatus, type ActivityItem } from "../../shared/sessionTypes";
 import type { UsageSnapshot, TokenUsageWrite } from "../../shared/usageTypes";
+import type { ProjectAttribution } from "../../shared/projectAttribution";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
+import { resolveProjectAttribution } from "../history/projectAttribution";
 
 type ClaudeSessionWatcherOptions = {
   projectsRoot: string;
@@ -67,9 +69,33 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function projectFields(project: ProjectAttribution | null | undefined) {
+  return project
+    ? { projectPath: project.projectPath, projectName: project.projectName }
+    : {};
+}
+
+function decodedClaudeProjectPath(root: string, filePath: string): string | undefined {
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return undefined;
+  }
+  const projectDir = relative.split(path.sep).find(Boolean);
+  if (!projectDir?.startsWith("-")) {
+    return undefined;
+  }
+  const decoded = `/${projectDir.slice(1).replace(/-/g, "/")}`;
+  return decoded === "/" ? undefined : decoded;
+}
+
 function extractUsageSnapshot(
   line: string,
   sourcePath: string,
+  projectsRoot: string,
 ): { snapshot: UsageSnapshot; tokenWrite: TokenUsageWrite } | null {
   const entry = parseLine(line);
   if (!entry || entry.type !== "assistant") {
@@ -101,6 +127,9 @@ function extractUsageSnapshot(
   const messageId =
     (typeof message?.id === "string" && message.id.trim()) ||
     (typeof entry.uuid === "string" && entry.uuid.trim());
+  const project =
+    resolveProjectAttribution({ cwd: stringValue(entry.cwd) }) ??
+    resolveProjectAttribution({ cwd: decodedClaudeProjectPath(projectsRoot, sourcePath) });
 
   return {
     snapshot: {
@@ -132,6 +161,7 @@ function extractUsageSnapshot(
       sourceKey: messageId
         ? `claude:${messageId}`
         : `claude:${path.resolve(sourcePath)}:${timestamp}:${input ?? 0}:${output ?? 0}:${cachedInput ?? 0}:${cacheCreation ?? 0}`,
+      ...projectFields(project),
     },
   };
 }
@@ -223,7 +253,7 @@ export function createClaudeSessionWatcher(options: ClaudeSessionWatcherOptions)
         }
       }
 
-      const usageResult = extractUsageSnapshot(trimmed, filePath);
+      const usageResult = extractUsageSnapshot(trimmed, filePath, options.projectsRoot);
       if (usageResult) {
         options.onUsageSnapshot?.(usageResult.snapshot);
         options.onTokenUsage?.(usageResult.tokenWrite);

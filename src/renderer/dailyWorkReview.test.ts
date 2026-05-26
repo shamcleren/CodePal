@@ -56,6 +56,29 @@ describe("buildDailyWorkReview", () => {
     ], {
       locale: "zh-CN",
       now: Date.parse("2026-05-25T14:00:00+08:00"),
+      usageOverview: {
+        summary: { rateLimits: [], contextMode: "multi-session" },
+        sessions: [
+          {
+            agent: "codex",
+            sessionId: "today-completed",
+            updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+            sources: ["session-derived"],
+            completeness: "partial",
+            tokens: { total: 1_500 },
+            cost: { estimated: 0.03, currency: "USD" },
+          },
+          {
+            agent: "codex",
+            sessionId: "today-running",
+            updatedAt: Date.parse("2026-05-25T11:00:00+08:00"),
+            sources: ["session-derived"],
+            completeness: "partial",
+            tokens: { input: 1_000, output: 1_500 },
+            cost: { estimated: 0.04, currency: "USD" },
+          },
+        ],
+      },
     });
 
     expect(days).toHaveLength(2);
@@ -67,7 +90,10 @@ describe("buildDailyWorkReview", () => {
       ongoingCount: 1,
       managedCount: 1,
       observedCount: 1,
-      summaryText: "完成 1 项，跟进 1 项。重点：托管 CLI 体验修复、整理每日工作回顾。",
+      totalTokens: 4_000,
+      estimatedCost: 0.07,
+      costCurrency: "USD",
+      summaryText: "2 个事项：完成 1、跟进 1；1 个 agent；消耗 4K token，预估花费 US$0.07。",
     });
     expect(days[0].completed[0]?.title).toBe("托管 CLI 体验修复");
     expect(days[0].completed[0]?.detail).toBe("");
@@ -77,6 +103,290 @@ describe("buildDailyWorkReview", () => {
       key: "2026-05-24",
       relativeLabel: "昨天",
       completedCount: 1,
+    });
+  });
+
+  it("estimates summary cost from pricing when usage sessions do not carry explicit cost", () => {
+    const days = buildDailyWorkReview([
+      row({
+        id: "priced-codex",
+        titleLabel: "整理当天摘要统计",
+        status: "completed",
+      }),
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T14:00:00+08:00"),
+      usageOverview: {
+        summary: { rateLimits: [], contextMode: "multi-session" },
+        sessions: [
+          {
+            agent: "codex",
+            sessionId: "priced-codex",
+            updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+            sources: ["session-derived"],
+            completeness: "partial",
+            tokens: { total: 1_600_000, input: 1_000_000, output: 500_000, cachedInput: 100_000 },
+          },
+        ],
+        pricing: [
+          {
+            modelId: "codex-default",
+            displayName: "Codex (default)",
+            inputPerMillion: "1.50",
+            outputPerMillion: "6",
+            cacheReadPerMillion: "0.375",
+            cacheCreationPerMillion: "0",
+          },
+        ],
+      },
+    });
+
+    expect(days[0]).toMatchObject({
+      totalTokens: 1_600_000,
+      estimatedCost: 4.5375,
+      costCurrency: "USD",
+      summaryText: "1 个事项：完成 1；1 个 agent；消耗 1.6M token，预估花费 US$4.54。",
+    });
+  });
+
+  it("uses historical daily token trend points when live session usage has already aged out", () => {
+    const days = buildDailyWorkReview([
+      row({
+        id: "history-codex",
+        titleLabel: "复盘历史日报",
+        status: "completed",
+        updatedAt: Date.parse("2026-05-20T18:00:00+08:00"),
+        lastUserMessageAt: Date.parse("2026-05-20T17:50:00+08:00"),
+      }),
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T14:00:00+08:00"),
+      tokenTrendPoints: [
+        {
+          bucketStart: Date.parse("2026-05-20T00:00:00+08:00"),
+          agent: "codex",
+          model: "codex-default",
+          inputTokens: 100_000,
+          outputTokens: 50_000,
+          cacheReadTokens: 20_000,
+          cacheCreationTokens: 0,
+          reasoningTokens: 0,
+          totalTokens: 170_000,
+          requestCount: 3,
+        },
+      ],
+      pricing: [
+        {
+          modelId: "codex-default",
+          displayName: "Codex (default)",
+          inputPerMillion: "1.50",
+          outputPerMillion: "6",
+          cacheReadPerMillion: "0.375",
+          cacheCreationPerMillion: "0",
+        },
+      ],
+    });
+
+    expect(days[0]).toMatchObject({
+      key: "2026-05-20",
+      totalTokens: 170_000,
+      estimatedCost: 0.4575,
+      costCurrency: "USD",
+      summaryText: "1 个事项：完成 1；1 个 agent；消耗 170K token，预估花费 US$0.46。",
+    });
+  });
+
+  it("prefers historical analytics totals over live usage so review matches analytics", () => {
+    const days = buildDailyWorkReview([
+      row({
+        id: "today-live",
+        titleLabel: "校准当天统计口径",
+        status: "completed",
+      }),
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T14:00:00+08:00"),
+      usageOverview: {
+        summary: { rateLimits: [], contextMode: "multi-session" },
+        sessions: [
+          {
+            agent: "codex",
+            sessionId: "today-live",
+            updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+            sources: ["session-derived"],
+            completeness: "partial",
+            tokens: { total: 431_000, input: 300_000, output: 100_000, cachedInput: 31_000 },
+            cost: { estimated: 3.5, currency: "USD" },
+          },
+        ],
+      },
+      tokenTrendPoints: [
+        {
+          bucketStart: Date.parse("2026-05-25T00:00:00+08:00"),
+          agent: "codex",
+          model: "codex-default",
+          inputTokens: 500_000,
+          outputTokens: 200_000,
+          cacheReadTokens: 50_000,
+          cacheCreationTokens: 0,
+          reasoningTokens: 0,
+          totalTokens: 750_000,
+          requestCount: 6,
+        },
+      ],
+      pricing: [
+        {
+          modelId: "codex-default",
+          displayName: "Codex (default)",
+          inputPerMillion: "1.50",
+          outputPerMillion: "6",
+          cacheReadPerMillion: "0.375",
+          cacheCreationPerMillion: "0",
+        },
+      ],
+    });
+
+    expect(days[0]).toMatchObject({
+      totalTokens: 750_000,
+      estimatedCost: 1.96875,
+      costCurrency: "USD",
+      summaryText: "1 个事项：完成 1；1 个 agent；消耗 750K token，预估花费 US$1.97。",
+    });
+  });
+
+  it("does not estimate historical trend cost from agent fallback when analytics has no model match", () => {
+    const days = buildDailyWorkReview([
+      row({
+        id: "unknown-model-history",
+        titleLabel: "检查未知模型历史统计",
+        status: "completed",
+      }),
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T14:00:00+08:00"),
+      tokenTrendPoints: [
+        {
+          bucketStart: Date.parse("2026-05-25T00:00:00+08:00"),
+          agent: "codex",
+          model: "unknown",
+          inputTokens: 500_000,
+          outputTokens: 200_000,
+          cacheReadTokens: 50_000,
+          cacheCreationTokens: 0,
+          reasoningTokens: 0,
+          totalTokens: 750_000,
+          requestCount: 6,
+        },
+      ],
+      pricing: [
+        {
+          modelId: "codex-default",
+          displayName: "Codex (default)",
+          inputPerMillion: "1.50",
+          outputPerMillion: "6",
+          cacheReadPerMillion: "0.375",
+          cacheCreationPerMillion: "0",
+        },
+      ],
+    });
+
+    expect(days[0]).toMatchObject({
+      totalTokens: 750_000,
+      summaryText: "1 个事项：完成 1；1 个 agent；消耗 750K token。",
+    });
+    expect(days[0]?.estimatedCost).toBeUndefined();
+  });
+
+  it("splits a session into work items from meaningful user prompts", () => {
+    const days = buildDailyWorkReview([
+      row({
+        id: "multi-prompt",
+        titleLabel: "旧 session 标题不应该主导工作回顾",
+        status: "completed",
+        activityItems: [
+          {
+            id: "u1",
+            kind: "message",
+            source: "user",
+            title: "User",
+            body: "把工作回顾按照 user prompt 拆成多个工作项",
+            timestamp: Date.parse("2026-05-25T09:00:00+08:00"),
+          },
+          {
+            id: "u2",
+            kind: "message",
+            source: "user",
+            title: "User",
+            body: "可以",
+            timestamp: Date.parse("2026-05-25T09:10:00+08:00"),
+          },
+          {
+            id: "u3",
+            kind: "message",
+            source: "user",
+            title: "User",
+            body: "再给历史 session 增加不可打开的状态标记",
+            timestamp: Date.parse("2026-05-25T10:00:00+08:00"),
+          },
+        ],
+      }),
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T14:00:00+08:00"),
+    });
+
+    expect(days[0]).toMatchObject({
+      sessionCount: 2,
+      completedCount: 2,
+      summaryText: "2 个事项：完成 2；1 个 agent。",
+    });
+    expect(days[0].entries.map((entry) => entry.title)).toEqual([
+      "再给历史 session 增加不可打开的状态标记",
+      "把工作回顾按照 user prompt 拆成多个工作项",
+    ]);
+    expect(days[0].entries.map((entry) => entry.sessionId)).toEqual([
+      "multi-prompt",
+      "multi-prompt",
+    ]);
+    expect(days[0].entries.map((entry) => entry.id)).toEqual([
+      "multi-prompt:prompt:u3",
+      "multi-prompt:prompt:u1",
+    ]);
+  });
+
+  it("uses persisted user prompt summaries for historical sessions", () => {
+    const days = buildDailyWorkReview([
+      {
+        id: "history-prompts",
+        tool: "codex",
+        status: "completed",
+        title: "历史 session 旧标题",
+        updatedAt: Date.parse("2026-05-20T18:00:00+08:00"),
+        lastUserMessageAt: Date.parse("2026-05-20T17:50:00+08:00"),
+        userPrompts: [
+          {
+            id: "hp1",
+            body: "整理历史会话的工作回顾标题",
+            timestamp: Date.parse("2026-05-20T16:00:00+08:00"),
+          },
+          {
+            id: "hp2",
+            body: "嗯",
+            timestamp: Date.parse("2026-05-20T16:05:00+08:00"),
+          },
+        ],
+      },
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T14:00:00+08:00"),
+    });
+
+    expect(days[0].entries).toHaveLength(1);
+    expect(days[0].entries[0]).toMatchObject({
+      id: "history-prompts:prompt:hp1",
+      sessionId: "history-prompts",
+      title: "整理历史会话的工作回顾标题",
+      availability: "history",
     });
   });
 
@@ -166,12 +476,12 @@ describe("buildDailyWorkReview", () => {
     expect(days[1]).toMatchObject({
       relativeLabel: "上周",
       completedCount: 1,
-      summaryText: "完成 1 项。重点：周末整理托管 CLI 设计。",
+      summaryText: "1 个事项：完成 1；1 个 agent。",
     });
     expect(days[2]).toMatchObject({
       relativeLabel: "上周",
       completedCount: 1,
-      summaryText: "完成 1 项。重点：整理 v1.2.0 发布检查。",
+      summaryText: "1 个事项：完成 1；1 个 agent。",
     });
   });
 
@@ -195,7 +505,7 @@ describe("buildDailyWorkReview", () => {
     expect(days[0]).toMatchObject({
       key: "2026-05-24",
       relativeLabel: "昨天",
-      summaryText: "完成 1 项。重点：周日验证托管 CLI。",
+      summaryText: "1 个事项：完成 1；1 个 agent。",
     });
   });
 
@@ -250,7 +560,7 @@ describe("buildDailyWorkReview", () => {
     });
   });
 
-  it("adds compact duration labels for the latest running turn and the whole session", () => {
+  it("adds compact duration labels for the latest running turn and accumulated running time", () => {
     const days = buildDailyWorkReview([
       row({
         id: "timed-session",
@@ -303,7 +613,7 @@ describe("buildDailyWorkReview", () => {
 
     expect(days[0].entries[0]).toMatchObject({
       latestRunningDurationLabel: "20 分钟",
-      sessionDurationLabel: "2 小时",
+      sessionDurationLabel: "35 分钟",
     });
   });
 
@@ -409,7 +719,7 @@ describe("buildDailyWorkReview", () => {
       completedCount: 1,
       ongoingCount: 0,
       sessionCount: 1,
-      summaryText: "完成 1 项。重点：历史已完成事项。",
+      summaryText: "1 个事项：完成 1；1 个 agent。",
     });
     expect(days[1].entries.map((entry) => entry.id)).toEqual(["old-completed"]);
   });
@@ -435,8 +745,6 @@ describe("buildDailyWorkReview", () => {
       now: Date.parse("2026-05-25T14:00:00+08:00"),
     });
 
-    expect(days[0].summaryText).toBe(
-      "完成 3 项。重点：整理日报体验、查一下正式环境的版本 resource_version_info 这个… 等 3 项。",
-    );
+    expect(days[0].summaryText).toBe("3 个事项：完成 3；1 个 agent。");
   });
 });

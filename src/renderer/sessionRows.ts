@@ -92,6 +92,25 @@ function looksLikeCommandJson(text: string): boolean {
   }
 }
 
+function looksLikeJsonBlob(text: string): boolean {
+  const trimmed = text.trim();
+  if (
+    !(
+      (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+      (trimmed.startsWith("[") && trimmed.endsWith("]"))
+    )
+  ) {
+    return false;
+  }
+
+  try {
+    JSON.parse(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function looksLikeCodeSnippetSummary(text: string): boolean {
   const compact = text.trim();
   if (!compact) {
@@ -140,6 +159,7 @@ function isLowValueSummaryText(text: string | undefined): boolean {
     isLowSignalSurfaceText(trimmed) ||
     looksLikeRejectedToolUseText(trimmed) ||
     looksLikeCommandJson(trimmed) ||
+    looksLikeJsonBlob(trimmed) ||
     looksLikeCodeSnippetSummary(trimmed) ||
     looksLikeCodexToolRunOutput(trimmed)
   );
@@ -178,12 +198,28 @@ function latestMeaningfulMessage(
   timelineItems: TimelineItem[],
   source: "user" | "assistant",
 ): TimelineItem | undefined {
-  return timelineItems.find(
-    (item) =>
-      item.kind === "message" &&
-      item.source === source &&
-      !isLowValueSummaryText(item.body),
-  );
+  return timelineItems
+    .filter(
+      (item) =>
+        item.kind === "message" &&
+        item.source === source &&
+        !isLowValueSummaryText(item.body),
+    )
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
+}
+
+function firstMeaningfulMessage(
+  timelineItems: TimelineItem[],
+  source: "user" | "assistant",
+): TimelineItem | undefined {
+  return timelineItems
+    .filter(
+      (item) =>
+        item.kind === "message" &&
+        item.source === source &&
+        !isLowValueSummaryText(item.body),
+    )
+    .sort((a, b) => a.timestamp - b.timestamp)[0];
 }
 
 function buildTitleLabel(
@@ -192,9 +228,14 @@ function buildTitleLabel(
   locale: ResolvedLocale,
 ): string {
   const i18n = createI18nValue(locale);
-  const latestUserMessage = latestMeaningfulMessage(timelineItems, "user");
-  if (latestUserMessage) {
-    return lastMeaningfulSentence(latestUserMessage.body);
+  const frozenUserPrompt = record.firstUserPrompt?.trim();
+  if (frozenUserPrompt && !isLowValueSummaryText(frozenUserPrompt)) {
+    return lastMeaningfulSentence(frozenUserPrompt);
+  }
+
+  const firstUserMessage = firstMeaningfulMessage(timelineItems, "user");
+  if (firstUserMessage) {
+    return lastMeaningfulSentence(firstUserMessage.body);
   }
 
   if (record.title?.trim() && !isLowValueSummaryText(record.title)) {

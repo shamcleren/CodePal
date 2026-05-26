@@ -81,6 +81,85 @@ describe("SessionList", () => {
     expect(html).toContain("live run");
   });
 
+  it("groups sessions by project without repeating project notes on each row", () => {
+    const html = renderToStaticMarkup(
+      <SessionList
+        historyVersion={0}
+        sessions={[
+          row({
+            id: "codepal",
+            titleLabel: "Implement grouped sessions",
+            collapsedSummary: "renderer work",
+            projectPath: "/repo/CodePal",
+            projectName: "CodePal",
+          }),
+          row({
+            id: "gateway",
+            titleLabel: "Calibrate provider metrics",
+            collapsedSummary: "gateway work",
+            projectPath: "/repo/gateway",
+            projectName: "gateway",
+          }),
+          row({
+            id: "unknown",
+            titleLabel: "Unknown project task",
+            collapsedSummary: "unknown project work",
+          }),
+        ]}
+        onRespond={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("session-list__project-group");
+    expect(html).toContain("session-list__project-heading");
+    expect(html).toContain("session-list__project-toggle");
+    expect(html).toContain("session-list__project-drag");
+    expect(html).toContain("aria-expanded=\"true\"");
+    expect(html).toContain("draggable=\"true\"");
+    expect(html).not.toContain("session-row__project-note");
+    expect(html).toContain("CodePal");
+    expect(html).toContain("Implement grouped sessions");
+    expect(html).toContain("gateway");
+    expect(html).toContain("Calibrate provider metrics");
+    expect(html).toContain("Unknown project task");
+    expect(html).toContain("Unidentified Project");
+    expect(html.indexOf("CodePal")).toBeLessThan(html.indexOf("Implement grouped sessions"));
+    expect(html.indexOf("gateway")).toBeLessThan(html.indexOf("Calibrate provider metrics"));
+    expect(html.indexOf("Implement grouped sessions")).toBeLessThan(html.indexOf("gateway"));
+  });
+
+  it("shows three sessions per project by default and keeps active sessions visible", () => {
+    const sessions = Array.from({ length: 6 }, (_, index) =>
+      row({
+        id: `codepal-${index + 1}`,
+        titleLabel:
+          index === 3
+            ? "Running session marker"
+            : index === 5
+              ? "Hidden session marker"
+              : `Visible session ${index + 1}`,
+        status: index === 3 ? "running" : "completed",
+        collapsedSummary: "project session",
+        projectPath: "/repo/CodePal",
+        projectName: "CodePal",
+      }),
+    );
+
+    const html = renderToStaticMarkup(
+      <SessionList historyVersion={0} sessions={sessions} onRespond={vi.fn()} />,
+    );
+
+    expect(html).toContain("Visible session 1");
+    expect(html).toContain("Visible session 3");
+    expect(html).toContain("Running session marker");
+    expect(html).not.toContain("Visible session 5");
+    expect(html).not.toContain("Hidden session marker");
+    expect(html).toContain("session-list__project-more");
+    expect(html).toContain("Show 2 more");
+    expect(html).toContain("session-list__session-shell");
+    expect(html).toContain("session-list__session-drag");
+  });
+
   it("renders live running duration and context percent at the session layer", () => {
     const html = renderToStaticMarkup(
       <SessionList
@@ -117,7 +196,7 @@ describe("SessionList", () => {
     expect(html).toContain("Context 88%");
   });
 
-  it("marks non-expanded rows as deemphasized when one session is expanded", () => {
+  it("does not deemphasize non-expanded rows when one session is expanded", () => {
     const html = renderToStaticMarkup(
       <SessionList
         historyVersion={0}
@@ -142,6 +221,6 @@ describe("SessionList", () => {
 
     expect(html).toContain("session-list session-list--focus");
     expect(html).toContain("session-row--expanded");
-    expect(html).toContain("session-row--backgrounded");
+    expect(html).not.toContain("session-row--backgrounded");
   });
 });

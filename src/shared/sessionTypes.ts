@@ -363,7 +363,10 @@ export interface SessionRecord {
   tool: string;
   status: SessionStatus;
   title?: string;
+  firstUserPrompt?: string;
   task?: string;
+  projectPath?: string;
+  projectName?: string;
   updatedAt: number;
   lastUserMessageAt?: number;
   startedAt?: number;

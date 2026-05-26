@@ -29,6 +29,8 @@ export type ReportRedactionOptions = {
   agent?: string;
   /** Match the in-app model filter when opened from Analytics */
   model?: string;
+  /** Match the in-app project filter when opened from Analytics */
+  projectPath?: string;
   /** Resolved UI locale at the time the report is opened */
   locale?: ResolvedLocale;
 };

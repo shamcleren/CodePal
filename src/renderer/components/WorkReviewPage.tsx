@@ -1,18 +1,38 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent } from "react";
 import { buildDailyWorkReview, type DailyWorkReviewDay, type DailyWorkReviewEntry } from "../dailyWorkReview";
 import type { MonitorSessionRow } from "../monitorSession";
 import type { SessionHistorySummary } from "../../shared/historyTypes";
+import type { TokenTrendPoint } from "../../shared/analyticsTypes";
+import type { ModelPricing, UsageOverview } from "../../shared/usageTypes";
+import {
+  UNKNOWN_PROJECT_PATH,
+  isUnknownProjectPath,
+  projectDisplayName,
+} from "../../shared/projectAttribution";
+import { moveProjectKey, orderProjectGroups } from "../projectGroups";
 import { useI18n } from "../i18n";
 
 type WorkReviewPageProps = {
   sessions: MonitorSessionRow[];
   historySessions?: SessionHistorySummary[];
+  usageOverview?: UsageOverview | null;
+  tokenTrendPoints?: TokenTrendPoint[];
+  pricing?: ModelPricing[];
   now?: number;
   onFocusSession?: (sessionId: string) => void;
 };
 
-const SUMMARY_PREVIEW_LIMIT = 4;
+const SUMMARY_PREVIEW_LIMIT = 5;
+const DEFAULT_VISIBLE_REVIEW_ITEMS_PER_PROJECT = 3;
 const WORK_REVIEW_CLOCK_INTERVAL_MS = 1_000;
+
+type ReviewProjectGroup = {
+  key: string;
+  name: string;
+  path?: string;
+  items: DailyWorkReviewEntry[];
+};
 
 function useWorkReviewNow(explicitNow?: number): number {
   const [liveNow, setLiveNow] = useState(() => explicitNow ?? Date.now());
@@ -45,6 +65,79 @@ function agentLabel(agent: string): string {
   return agent.charAt(0).toUpperCase() + agent.slice(1);
 }
 
+function groupReviewEntriesByProject(
+  items: DailyWorkReviewEntry[],
+  unknownProjectLabel: string,
+): ReviewProjectGroup[] {
+  const groups: ReviewProjectGroup[] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const item of items) {
+    const projectPath = item.projectPath?.trim() || UNKNOWN_PROJECT_PATH;
+    const key = isUnknownProjectPath(projectPath) ? UNKNOWN_PROJECT_PATH : projectPath;
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex !== undefined) {
+      groups[existingIndex].items.push(item);
+      continue;
+    }
+
+    indexByKey.set(key, groups.length);
+    groups.push({
+      key,
+      name: isUnknownProjectPath(projectPath)
+        ? unknownProjectLabel
+        : item.projectName?.trim() || projectDisplayName(projectPath),
+      ...(isUnknownProjectPath(projectPath) ? {} : { path: projectPath }),
+      items: [item],
+    });
+  }
+
+  return groups;
+}
+
+function toggleSetValue(current: ReadonlySet<string>, key: string): Set<string> {
+  const next = new Set(current);
+  if (next.has(key)) {
+    next.delete(key);
+  } else {
+    next.add(key);
+  }
+  return next;
+}
+
+function projectContentId(prefix: string, key: string): string {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  }
+  return `${prefix}-${hash.toString(36)}`;
+}
+
+function isPriorityReviewEntry(entry: DailyWorkReviewEntry): boolean {
+  return entry.status === "running" || entry.status === "waiting" || entry.status === "error";
+}
+
+function visibleReviewItemsForProject(
+  items: DailyWorkReviewEntry[],
+  expanded: boolean,
+): DailyWorkReviewEntry[] {
+  if (expanded || items.length <= DEFAULT_VISIBLE_REVIEW_ITEMS_PER_PROJECT) {
+    return items;
+  }
+
+  const visibleIds = new Set<string>();
+  const visibleItems: DailyWorkReviewEntry[] = [];
+  const addVisibleItem = (entry: DailyWorkReviewEntry) => {
+    if (visibleIds.has(entry.id)) return;
+    visibleIds.add(entry.id);
+    visibleItems.push(entry);
+  };
+
+  items.slice(0, DEFAULT_VISIBLE_REVIEW_ITEMS_PER_PROJECT).forEach(addVisibleItem);
+  items.filter(isPriorityReviewEntry).forEach(addVisibleItem);
+  return visibleItems;
+}
+
 function EntryList({
   items,
   emptyLabel,
@@ -55,41 +148,169 @@ function EntryList({
   onFocusSession?: (sessionId: string) => void;
 }) {
   const { t } = useI18n();
+  const [projectOrder, setProjectOrder] = useState<string[]>([]);
+  const [collapsedProjectKeys, setCollapsedProjectKeys] = useState<Set<string>>(() => new Set());
+  const [expandedProjectItemKeys, setExpandedProjectItemKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const draggedProjectKey = useRef<string | null>(null);
+  const rawGroups = useMemo(
+    () => groupReviewEntriesByProject(items, t("tokenStats.unknownProject")),
+    [items, t],
+  );
+  const groups = useMemo(
+    () => orderProjectGroups(rawGroups, projectOrder),
+    [rawGroups, projectOrder],
+  );
+
+  const moveProjectBefore = useCallback((draggedKey: string, targetKey: string) => {
+    setProjectOrder((current) => {
+      const visibleOrder = orderProjectGroups(rawGroups, current).map((group) => group.key);
+      return moveProjectKey(visibleOrder, draggedKey, targetKey);
+    });
+  }, [rawGroups]);
+
+  const toggleProjectCollapsed = useCallback((projectKey: string) => {
+    setCollapsedProjectKeys((current) => toggleSetValue(current, projectKey));
+  }, []);
+
+  const toggleProjectItemsExpanded = useCallback((projectKey: string) => {
+    setExpandedProjectItemKeys((current) => toggleSetValue(current, projectKey));
+  }, []);
+
+  const handleProjectDragStart = useCallback((projectKey: string) => {
+    return (event: DragEvent<HTMLElement>) => {
+      draggedProjectKey.current = projectKey;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", projectKey);
+    };
+  }, []);
+
+  const handleProjectDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    if (draggedProjectKey.current) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    }
+  }, []);
+
+  const handleProjectDrop = useCallback((targetProjectKey: string) => {
+    return (event: DragEvent<HTMLElement>) => {
+      event.preventDefault();
+      const sourceProjectKey = draggedProjectKey.current;
+      draggedProjectKey.current = null;
+      if (sourceProjectKey) {
+        moveProjectBefore(sourceProjectKey, targetProjectKey);
+      }
+    };
+  }, [moveProjectBefore]);
+
+  const handleProjectDragEnd = useCallback(() => {
+    draggedProjectKey.current = null;
+  }, []);
+
   if (items.length === 0) {
     return <p className="work-review__empty-line">{emptyLabel}</p>;
   }
   return (
-    <ul className="work-review__item-list">
-      {items.map((entry) => (
-        <li key={entry.id} className="work-review__item">
-          <div className="work-review__item-main">
-            <span className="work-review__item-title">{entry.title}</span>
-            {entry.detail ? (
-              <span className="work-review__item-detail">{entry.detail}</span>
-            ) : null}
+    <div className="work-review__project-groups">
+      {groups.map((group) => {
+        const projectCollapsed = collapsedProjectKeys.has(group.key);
+        const itemsExpanded = expandedProjectItemKeys.has(group.key);
+        const visibleItems = visibleReviewItemsForProject(group.items, itemsExpanded);
+        const hiddenItemCount = group.items.length - visibleItems.length;
+        const contentId = projectContentId("work-review-project", group.key);
+
+        return (
+        <section
+          key={group.key}
+          className={`work-review__project-group${
+            projectCollapsed ? " work-review__project-group--collapsed" : ""
+          }`}
+          aria-label={group.name}
+          onDragOver={handleProjectDragOver}
+          onDrop={handleProjectDrop(group.key)}
+        >
+          <div className="work-review__project-heading" title={group.path}>
+            <button
+              type="button"
+              className="work-review__project-drag"
+              draggable
+              aria-label={t("projectGroup.dragProject")}
+              title={t("projectGroup.dragProject")}
+              onDragStart={handleProjectDragStart(group.key)}
+              onDragEnd={handleProjectDragEnd}
+            >
+              <span aria-hidden="true">::</span>
+            </button>
+            <button
+              type="button"
+              className="work-review__project-toggle"
+              aria-expanded={!projectCollapsed}
+              aria-controls={contentId}
+              aria-label={projectCollapsed ? t("projectGroup.expand") : t("projectGroup.collapse")}
+              title={projectCollapsed ? t("projectGroup.expand") : t("projectGroup.collapse")}
+              onClick={() => toggleProjectCollapsed(group.key)}
+            >
+              <span aria-hidden="true" />
+            </button>
+            <span className="work-review__project-marker" aria-hidden="true" />
+            <span className="work-review__project-name">{group.name}</span>
+            <strong>{group.items.length}</strong>
           </div>
-          <div className="work-review__item-meta">
-            <span>{agentLabel(entry.agent)}</span>
-            <span>{sourceLabel(entry, t)}</span>
-            {entry.latestRunningDurationLabel ? (
-              <span>{t("workReview.duration.latestRunning", { duration: entry.latestRunningDurationLabel })}</span>
-            ) : null}
-            {entry.sessionDurationLabel ? (
-              <span>{t("workReview.duration.session", { duration: entry.sessionDurationLabel })}</span>
-            ) : null}
-            {onFocusSession ? (
-              <button
-                type="button"
-                className="work-review__link-button"
-                onClick={() => onFocusSession(entry.id)}
-              >
-                {t("workReview.openSession")}
-              </button>
-            ) : null}
-          </div>
-        </li>
-      ))}
-    </ul>
+          {!projectCollapsed ? (
+            <div id={contentId} className="work-review__project-items">
+              <ul className="work-review__item-list">
+            {visibleItems.map((entry) => (
+              <li key={entry.id} className="work-review__item">
+                <div className="work-review__item-main">
+                  <span className="work-review__item-title">{entry.title}</span>
+                  {entry.detail ? (
+                    <span className="work-review__item-detail">{entry.detail}</span>
+                  ) : null}
+                </div>
+                <div className="work-review__item-meta">
+                  <span>{agentLabel(entry.agent)}</span>
+                  <span>{sourceLabel(entry, t)}</span>
+                  {entry.availability === "history" ? (
+                    <span>{t("workReview.availability.history")}</span>
+                  ) : null}
+                  {entry.latestRunningDurationLabel ? (
+                    <span>{t("workReview.duration.latestRunning", { duration: entry.latestRunningDurationLabel })}</span>
+                  ) : null}
+                  {entry.sessionDurationLabel ? (
+                    <span>{t("workReview.duration.session", { duration: entry.sessionDurationLabel })}</span>
+                  ) : null}
+                  {onFocusSession && entry.availability === "current" ? (
+                    <button
+                      type="button"
+                      className="work-review__link-button"
+                      onClick={() => onFocusSession(entry.sessionId)}
+                    >
+                      {t("workReview.openSession")}
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+              </ul>
+              {hiddenItemCount > 0 || itemsExpanded ? (
+                <button
+                  type="button"
+                  className="work-review__project-more"
+                  aria-expanded={itemsExpanded}
+                  onClick={() => toggleProjectItemsExpanded(group.key)}
+                >
+                  {itemsExpanded
+                    ? t("projectGroup.showLess")
+                    : t("projectGroup.showMore", { count: hiddenItemCount })}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+        );
+      })}
+    </div>
   );
 }
 
@@ -147,14 +368,24 @@ function DayButton({
 export function WorkReviewPage({
   sessions,
   historySessions = [],
+  usageOverview,
+  tokenTrendPoints,
+  pricing,
   now,
   onFocusSession,
 }: WorkReviewPageProps) {
   const { t, locale } = useI18n();
   const reviewNow = useWorkReviewNow(now);
+  const reviewSources = useMemo(() => [...historySessions, ...sessions], [historySessions, sessions]);
   const days = useMemo(
-    () => buildDailyWorkReview([...historySessions, ...sessions], { locale, now: reviewNow }),
-    [historySessions, sessions, locale, reviewNow],
+    () => buildDailyWorkReview(reviewSources, {
+      locale,
+      now: reviewNow,
+      usageOverview,
+      tokenTrendPoints,
+      pricing,
+    }),
+    [reviewSources, locale, reviewNow, usageOverview, tokenTrendPoints, pricing],
   );
   const [selectedKey, setSelectedKey] = useState<string | null>(days[0]?.key ?? null);
   const selected = days.find((day) => day.key === selectedKey) ?? days[0] ?? null;

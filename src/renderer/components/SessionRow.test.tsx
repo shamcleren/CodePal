@@ -25,13 +25,17 @@ function baseRow(overrides: Partial<MonitorSessionRow> = {}): MonitorSessionRow 
   };
 }
 
-function renderRow(row: MonitorSessionRow, options?: { expanded?: boolean }) {
+function renderRow(
+  row: MonitorSessionRow,
+  options?: { expanded?: boolean; contextPercent?: number },
+) {
   return renderToStaticMarkup(
     <I18nProvider locale="en">
       <SessionRow
         session={row}
         expanded={options?.expanded ?? false}
         deemphasized={false}
+        contextPercent={options?.contextPercent}
         onToggleExpanded={vi.fn()}
         onRespond={vi.fn()}
       />
@@ -162,6 +166,30 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("9af3");
     expect(html).toContain("04-02 16:01");
     expect(html).toContain("14m");
+  });
+
+  it("keeps context usage and short id in a dedicated metrics rail", () => {
+    const html = renderRow(
+      baseRow({
+          titleLabel:
+            "不要让很长的 Codex 会话标题把右侧状态和上下文 chip 挤到摘要流里面",
+          tool: "codex",
+          collapsedSummary:
+            "这是一段很长的摘要，用来复现主列表在窄宽度里被长文本撑乱的情况。",
+          durationLabel: "2s",
+          shortId: "2235",
+          updatedLabel: "05/25 17:39",
+        }),
+      { contextPercent: 59 },
+    );
+
+    expect(html).toContain("session-row__content");
+    expect(html).toContain("session-row__rail");
+    expect(html).toContain("session-row__stats");
+    expect(html).toContain("Context 59%");
+    expect(html.indexOf("session-row__summary-text")).toBeLessThan(
+      html.indexOf("session-row__rail"),
+    );
   });
 
   it("omits the collapsed summary line when it duplicates the title text", () => {

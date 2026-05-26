@@ -33,8 +33,8 @@ export type CodePalApi = {
   getTokenTrend: (
     startMs: number,
     endMs: number,
-    granularity: TokenTrendGranularity,
-    filters?: { agent?: string; model?: string },
+	    granularity: TokenTrendGranularity,
+	    filters?: { agent?: string; model?: string; projectPath?: string },
   ) => Promise<TokenTrendResult>;
   getSessionStats: (startMs: number, endMs: number) => Promise<SessionStatsEntry[]>;
   generateHtmlReport: (
@@ -45,6 +45,7 @@ export type CodePalApi = {
       redactModelNames?: boolean;
       trendGranularity?: TokenTrendGranularity;
       metric?: AnalyticsMetric;
+      projectPath?: string;
       agent?: string;
       model?: string;
       locale?: ResolvedLocale;

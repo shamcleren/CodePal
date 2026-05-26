@@ -25,6 +25,10 @@ describe("runUsageBackfill", () => {
     const codexRoot = path.join(tmpDir, ".codex", "sessions");
     fs.mkdirSync(path.join(claudeRoot, "project-a"), { recursive: true });
     fs.mkdirSync(path.join(codexRoot, "2026", "05"), { recursive: true });
+    const claudeProjectPath = path.join(tmpDir, "workspaces", "claude-app");
+    const codexProjectPath = path.join(tmpDir, "workspaces", "codex-app");
+    fs.mkdirSync(claudeProjectPath, { recursive: true });
+    fs.mkdirSync(codexProjectPath, { recursive: true });
 
     fs.writeFileSync(
       path.join(claudeRoot, "project-a", "claude-session.jsonl"),
@@ -32,6 +36,7 @@ describe("runUsageBackfill", () => {
         JSON.stringify({
           type: "user",
           sessionId: "claude-session",
+          cwd: claudeProjectPath,
           timestamp: "2026-05-12T09:59:00.000Z",
           message: {
             role: "user",
@@ -46,6 +51,7 @@ describe("runUsageBackfill", () => {
         JSON.stringify({
           type: "assistant",
           sessionId: "claude-session",
+          cwd: claudeProjectPath,
           timestamp: "2026-05-12T10:00:00.000Z",
           message: {
             id: "msg_1",
@@ -69,7 +75,7 @@ describe("runUsageBackfill", () => {
         JSON.stringify({
           type: "turn_context",
           timestamp: "2026-05-12T11:00:00.000Z",
-          payload: { model: "gpt-5.5" },
+          payload: { model: "gpt-5.5", cwd: codexProjectPath },
         }),
         JSON.stringify({
           type: "event_msg",
@@ -167,6 +173,18 @@ describe("runUsageBackfill", () => {
         }),
       ]),
     );
+    expect(store.getTokenUsageByProject(0, Date.parse("2026-05-13T00:00:00.000Z"))).toEqual([
+      expect.objectContaining({
+        projectPath: codexProjectPath,
+        projectName: "codex-app",
+        totalTokens: 275,
+      }),
+      expect.objectContaining({
+        projectPath: claudeProjectPath,
+        projectName: "claude-app",
+        totalTokens: 180,
+      }),
+    ]);
   });
 
   it("dedupes repeated Codex token_count snapshots and stores cached input once", () => {

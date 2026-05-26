@@ -383,6 +383,25 @@ describe("sessionRecordToRow", () => {
     expect(row.collapsedSummary).toBe("帮我找一下 package.json");
   });
 
+  it("does not surface structured json blobs as title or collapsed summary", () => {
+    const riskJson =
+      '{"risk_level":"medium","user_authorization":"high","outcome":"allow","rationale":"This unsandboxed Blender run is a narrow local export."}';
+    const row = sessionRecordToRow({
+      id: "codex-approval-json",
+      tool: "codex",
+      status: "running",
+      title: riskJson,
+      task: riskJson,
+      updatedAt: 1_700_000_000_000,
+      activities: [riskJson],
+    });
+
+    expect(row.titleLabel).toMatch(/^Session /);
+    expect(row.collapsedSummary).toBe("running");
+    expect(row.titleLabel).not.toContain("risk_level");
+    expect(row.collapsedSummary).not.toContain("risk_level");
+  });
+
   it("does not surface code-first snippets as title or collapsed summary", () => {
     const row = sessionRecordToRow({
       id: "agent-code-snippet",
@@ -401,7 +420,7 @@ describe("sessionRecordToRow", () => {
     expect(row.collapsedSummary).toBe("给这个文件补测试");
   });
 
-  it("uses the latest user message as title and latest assistant message as summary across agents", () => {
+  it("uses the first meaningful user message as title and latest assistant message as summary across agents", () => {
     const row = sessionRecordToRow({
       id: "codebuddy-overview",
       tool: "codebuddy",
@@ -419,12 +438,20 @@ describe("sessionRecordToRow", () => {
           timestamp: 1_700_000_000_200,
         },
         {
+          id: "user-followup",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "再补一个 follow-up",
+          timestamp: 1_700_000_000_300,
+        },
+        {
           id: "user-1",
           kind: "message",
           source: "user",
           title: "User",
           body: "给我一句话",
-          timestamp: 1_700_000_000_300,
+          timestamp: 1_700_000_000_100,
         },
         {
           id: "system-1",
@@ -439,6 +466,38 @@ describe("sessionRecordToRow", () => {
 
     expect(row.titleLabel).toBe("给我一句话");
     expect(row.collapsedSummary).toBe("你好，我已经处理完了。");
+  });
+
+  it("keeps the frozen first user prompt as title while the collapsed summary updates", () => {
+    const row = sessionRecordToRow({
+      id: "stable-session-title",
+      tool: "codex",
+      status: "running",
+      title: "实现稳定的 session 标题",
+      firstUserPrompt: "实现稳定的 session 标题",
+      updatedAt: 1_700_000_000_000,
+      activityItems: [
+        {
+          id: "assistant-latest",
+          kind: "message",
+          source: "assistant",
+          title: "Assistant",
+          body: "我已经把副标题更新到最新进展。",
+          timestamp: 1_700_000_000_300,
+        },
+        {
+          id: "user-followup",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "再把副标题更新成最新进展",
+          timestamp: 1_700_000_000_200,
+        },
+      ],
+    });
+
+    expect(row.titleLabel).toBe("实现稳定的 session 标题");
+    expect(row.collapsedSummary).toBe("我已经把副标题更新到最新进展。");
   });
 
   it("keeps Codex Chunk ID tool output out of the main title and collapsed summary", () => {

@@ -91,6 +91,49 @@ describe("createSessionStore", () => {
     });
   });
 
+  it("accumulates total session duration from concrete running intervals", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      task: "first run",
+      timestamp: 1_000,
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "waiting",
+      task: "approval",
+      timestamp: 4_000,
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      task: "second run",
+      timestamp: 10_000,
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "completed",
+      task: "done",
+      timestamp: 12_000,
+    });
+
+    expect(store.getSession("s1")).toMatchObject({
+      startedAt: 1_000,
+      latestRunningDurationMs: 2_000,
+      sessionDurationMs: 5_000,
+    });
+  });
+
   it("preserves session title from incoming event payloads", () => {
     const store = createSessionStore();
 
@@ -107,6 +150,90 @@ describe("createSessionStore", () => {
     expect(store.getSessions()[0]).toMatchObject({
       id: "s1",
       title: "Repo audit",
+    });
+  });
+
+  it("freezes the first meaningful user prompt as the session title", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "stable-title",
+      tool: "codex",
+      status: "running",
+      title: "startup",
+      task: "实现稳定的 session 标题",
+      timestamp: 10,
+      meta: {
+        codex_event_type: "user_message",
+      },
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "stable-title",
+      tool: "codex",
+      status: "running",
+      title: "latest user title",
+      task: "再把副标题更新成最新进展",
+      timestamp: 20,
+      meta: {
+        codex_event_type: "user_message",
+      },
+    });
+
+    expect(store.getSession("stable-title")).toMatchObject({
+      title: "实现稳定的 session 标题",
+      firstUserPrompt: "实现稳定的 session 标题",
+    });
+  });
+
+  it("skips short confirmation prompts before freezing the session title", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "meaningful-title",
+      tool: "codex",
+      status: "running",
+      task: "可以",
+      timestamp: 10,
+      meta: {
+        codex_event_type: "user_message",
+      },
+    });
+    store.applyEvent({
+      sessionId: "meaningful-title",
+      tool: "codex",
+      status: "running",
+      task: "把主标题固定成第一条有意义 prompt",
+      timestamp: 20,
+      meta: {
+        codex_event_type: "user_message",
+      },
+    });
+
+    expect(store.getSession("meaningful-title")).toMatchObject({
+      title: "把主标题固定成第一条有意义 prompt",
+      firstUserPrompt: "把主标题固定成第一条有意义 prompt",
+    });
+  });
+
+  it("freezes hook user prompt tasks even when no activity item is provided", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "hook-title",
+      tool: "cursor",
+      status: "running",
+      task: "检查并修复 session 标题漂移",
+      timestamp: 10,
+      meta: {
+        hook_event_name: "UserPromptSubmit",
+      },
+    });
+
+    expect(store.getSession("hook-title")).toMatchObject({
+      title: "检查并修复 session 标题漂移",
+      firstUserPrompt: "检查并修复 session 标题漂移",
     });
   });
 
@@ -2161,6 +2288,37 @@ describe("createSessionStore", () => {
         }),
       );
     });
+
+    it("includes project attribution", () => {
+      const onChange = vi.fn();
+      const store = createSessionStore({ onStatusChange: onChange });
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "codex",
+        status: "running",
+        timestamp: 1,
+        projectPath: "/repo/CodePal",
+        projectName: "CodePal",
+      });
+      onChange.mockClear();
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "codex",
+        status: "completed",
+        timestamp: 2,
+      });
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prevStatus: "running",
+          nextStatus: "completed",
+          projectPath: "/repo/CodePal",
+          projectName: "CodePal",
+        }),
+      );
+    });
   });
 
   describe("seedFromHistory", () => {
@@ -2253,6 +2411,28 @@ describe("createSessionStore", () => {
       expect(onPendingActionCreated).toHaveBeenCalledTimes(1);
       expect(onPendingActionCreated).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: "s1", tool: "cursor", pendingCount: 1 }),
+      );
+    });
+
+    it("includes project attribution", () => {
+      const onPendingActionCreated = vi.fn();
+      const store = createSessionStore({ onPendingActionCreated });
+      store.applyEvent({
+        type: "status_change",
+        sessionId: "s1",
+        tool: "cursor",
+        status: "waiting",
+        timestamp: 1,
+        projectPath: "/repo/CodePal",
+        projectName: "CodePal",
+        pendingAction: { id: "act-1", type: "approval", title: "Run?", options: ["Allow", "Deny"] },
+      });
+      expect(onPendingActionCreated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: "s1",
+          projectPath: "/repo/CodePal",
+          projectName: "CodePal",
+        }),
       );
     });
 

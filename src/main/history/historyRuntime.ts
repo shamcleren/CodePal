@@ -10,6 +10,7 @@ import type {
 import { isSessionStatus, type SessionRecord, type SessionStatus } from "../../shared/sessionTypes";
 import type { SessionEvent } from "../session/sessionStore";
 import { createHistoryStore, type PersistedSessionWrite, type SessionSeedRecord } from "./historyStore";
+import { resolveProjectAttribution } from "./projectAttribution";
 
 type HistoryStore = ReturnType<typeof createHistoryStore>;
 
@@ -74,6 +75,8 @@ function toSessionHistorySummary(record: SessionSeedRecord): SessionHistorySumma
     status: normalizeSummaryStatus(record.status),
     ...(record.title ? { title: record.title } : {}),
     ...(record.latestTask ? { task: record.latestTask } : {}),
+    ...(record.projectPath ? { projectPath: record.projectPath } : {}),
+    ...(record.projectName ? { projectName: record.projectName } : {}),
     updatedAt: record.updatedAt,
     ...(record.lastUserMessageAt !== null ? { lastUserMessageAt: record.lastUserMessageAt } : {}),
     ...(typeof record.startedAt === "number" ? { startedAt: record.startedAt } : {}),
@@ -82,6 +85,9 @@ function toSessionHistorySummary(record: SessionSeedRecord): SessionHistorySumma
       : {}),
     ...(typeof record.latestRunningDurationMs === "number"
       ? { latestRunningDurationMs: record.latestRunningDurationMs }
+      : {}),
+    ...(record.userPrompts && record.userPrompts.length > 0
+      ? { userPrompts: record.userPrompts }
       : {}),
   };
 }
@@ -124,11 +130,29 @@ function disabledHistoryDiagnostics(): HistoryDiagnostics {
   };
 }
 
+function firstString(record: Record<string, unknown> | undefined, keys: string[]): string | undefined {
+  if (!record) return undefined;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
 export function buildPersistedSessionWrite(
   event: SessionEvent,
   session?: SessionRecord,
 ): PersistedSessionWrite {
   const activityItems = event.activityItems ?? session?.activityItems ?? [];
+  const project = resolveProjectAttribution({
+    workspacePath:
+      session?.projectPath ??
+      session?.externalApproval?.jumpTarget?.workspacePath ??
+      firstString(event.meta, ["workspacePath", "workspace_path", "projectPath"]),
+    cwd: firstString(event.meta, ["cwd"]),
+  });
 
   return {
     session: {
@@ -140,6 +164,7 @@ export function buildPersistedSessionWrite(
       updatedAt: session?.updatedAt ?? event.timestamp,
       lastUserMessageAt: session?.lastUserMessageAt,
       hasPendingActions: (session?.pendingActions?.length ?? 0) > 0,
+      ...(project ? { projectPath: project.projectPath, projectName: project.projectName } : {}),
     },
     activityItems,
     debugEvent: {

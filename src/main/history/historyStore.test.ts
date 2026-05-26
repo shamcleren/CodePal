@@ -647,6 +647,167 @@ describe("createHistoryStore", () => {
     ]);
   });
 
+  it("summarizes token usage by project with unknown projects last", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath });
+
+    store.writeTokenUsage({
+      sessionId: "s-codepal",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: 100,
+      inputTokens: 100,
+      outputTokens: 50,
+      projectPath: "/Users/demo/code/CodePal",
+      projectName: "CodePal",
+      sourceKind: "test",
+      sourceKey: "project-1",
+    });
+    store.writeTokenUsage({
+      sessionId: "s-codepal-2",
+      agent: "claude",
+      model: "sonnet",
+      timestamp: 200,
+      inputTokens: 200,
+      outputTokens: 100,
+      projectPath: "/Users/demo/code/CodePal",
+      projectName: "CodePal",
+      sourceKind: "test",
+      sourceKey: "project-2",
+    });
+    store.writeTokenUsage({
+      sessionId: "s-gateway",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: 300,
+      inputTokens: 1_000,
+      outputTokens: 100,
+      projectPath: "/Users/demo/code/gateway",
+      projectName: "gateway",
+      sourceKind: "test",
+      sourceKey: "project-3",
+    });
+    store.writeTokenUsage({
+      sessionId: "s-unknown",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: 400,
+      inputTokens: 5_000,
+      outputTokens: 100,
+      sourceKind: "test",
+      sourceKey: "project-unknown",
+    });
+
+    expect(store.getTokenUsageByProject(0, 1_000)).toEqual([
+      expect.objectContaining({
+        projectPath: "/Users/demo/code/gateway",
+        projectName: "gateway",
+        totalTokens: 1_100,
+        requestCount: 1,
+      }),
+      expect.objectContaining({
+        projectPath: "/Users/demo/code/CodePal",
+        projectName: "CodePal",
+        totalTokens: 450,
+        requestCount: 2,
+      }),
+      expect.objectContaining({
+        projectPath: "unknown",
+        projectName: "unknown",
+        totalTokens: 5_100,
+        requestCount: 1,
+      }),
+    ]);
+  });
+
+  it("reconciles token usage project fields from existing sessions", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath });
+
+    store.writeSessionEvent({
+      session: {
+        id: "s-project",
+        tool: "codex",
+        status: "completed",
+        title: "Project session",
+        updatedAt: 100,
+        hasPendingActions: false,
+        projectPath: "/Users/demo/code/CodePal",
+        projectName: "CodePal",
+      },
+      activityItems: [],
+    });
+    store.writeTokenUsage({
+      sessionId: "s-project",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: 200,
+      inputTokens: 100,
+      outputTokens: 50,
+      sourceKind: "test",
+      sourceKey: "session-project-fallback",
+    });
+
+    expect(store.getTokenUsageByProject(0, 1_000)).toEqual([
+      expect.objectContaining({
+        projectPath: "/Users/demo/code/CodePal",
+        projectName: "CodePal",
+        totalTokens: 150,
+      }),
+    ]);
+  });
+
+  it("repairs persisted session project fields from token usage attribution", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath, now: () => 1_000 });
+
+    store.writeSessionEvent({
+      session: {
+        id: "s-project-from-token",
+        tool: "codex",
+        status: "completed",
+        title: "Project recovered from token usage",
+        updatedAt: 100,
+        lastUserMessageAt: 90,
+        hasPendingActions: false,
+      },
+      activityItems: [],
+    });
+    store.writeTokenUsage({
+      sessionId: "s-project-from-token",
+      agent: "codex",
+      model: "gpt-5.5",
+      timestamp: 200,
+      inputTokens: 100,
+      outputTokens: 50,
+      sourceKind: "test",
+      sourceKey: "session-project-repair",
+    });
+    store.close();
+    store = null;
+
+    const db = new DatabaseSync(dbPath);
+    db.exec(`
+      UPDATE token_usage
+      SET project_path = '/Users/demo/code/CodePal', project_name = 'CodePal'
+      WHERE session_id = 's-project-from-token'
+    `);
+    db.close();
+
+    store = createHistoryStore({ dbPath, now: () => 1_000 });
+    expect(store.repairTokenUsageProjectAttribution()).toBe(1);
+    expect(store.getRecentSessions({ maxAgeMs: 2_000, limit: 5 })).toEqual([
+      expect.objectContaining({
+        id: "s-project-from-token",
+        projectPath: "/Users/demo/code/CodePal",
+        projectName: "CodePal",
+      }),
+    ]);
+  });
+
   it("returns bucketed token trends with agent and model filters", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
     const dbPath = path.join(tmpDir, "history.sqlite");
@@ -661,6 +822,8 @@ describe("createHistoryStore", () => {
       inputTokens: 100,
       outputTokens: 10,
       cacheReadTokens: 20,
+      projectPath: "/Users/demo/code/CodePal",
+      projectName: "CodePal",
       sourceKind: "test",
       sourceKey: "trend-1",
     });
@@ -671,6 +834,8 @@ describe("createHistoryStore", () => {
       timestamp: base + 35 * 60_000,
       inputTokens: 200,
       outputTokens: 20,
+      projectPath: "/Users/demo/code/gateway",
+      projectName: "gateway",
       sourceKind: "test",
       sourceKey: "trend-2",
     });
@@ -681,6 +846,8 @@ describe("createHistoryStore", () => {
       timestamp: base + 65 * 60_000,
       inputTokens: 300,
       outputTokens: 30,
+      projectPath: "/Users/demo/code/CodePal",
+      projectName: "CodePal",
       sourceKind: "test",
       sourceKey: "trend-3",
     });
@@ -690,6 +857,8 @@ describe("createHistoryStore", () => {
         bucketStart: base,
         agent: "codex",
         model: "gpt-5.4",
+        projectPath: "/Users/demo/code/gateway",
+        projectName: "gateway",
         totalTokens: 220,
         requestCount: 1,
       }),
@@ -697,6 +866,8 @@ describe("createHistoryStore", () => {
         bucketStart: base,
         agent: "codex",
         model: "gpt-5.5",
+        projectPath: "/Users/demo/code/CodePal",
+        projectName: "CodePal",
         totalTokens: 130,
         requestCount: 1,
       }),
@@ -704,6 +875,8 @@ describe("createHistoryStore", () => {
         bucketStart: base + 60 * 60_000,
         agent: "claude",
         model: "sonnet",
+        projectPath: "/Users/demo/code/CodePal",
+        projectName: "CodePal",
         totalTokens: 330,
         requestCount: 1,
       }),
@@ -719,6 +892,23 @@ describe("createHistoryStore", () => {
         model: "gpt-5.5",
         inputTokens: 100,
         totalTokens: 130,
+      }),
+    ]);
+
+    expect(store.getTokenUsageTrend(base, base + 2 * 60 * 60_000, "hour", {
+      projectPath: "/Users/demo/code/CodePal",
+    })).toEqual([
+      expect.objectContaining({
+        bucketStart: base,
+        agent: "codex",
+        model: "gpt-5.5",
+        projectName: "CodePal",
+      }),
+      expect.objectContaining({
+        bucketStart: base + 60 * 60_000,
+        agent: "claude",
+        model: "sonnet",
+        projectName: "CodePal",
       }),
     ]);
   });
@@ -834,7 +1024,7 @@ describe("createHistoryStore", () => {
       expect(recent[0].id).toBe("s0");
     });
 
-    it("derives session and latest running durations from persisted activity items", () => {
+    it("derives accumulated running and latest running durations from persisted activity items", () => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
       const dbPath = path.join(tmpDir, "history.sqlite");
       const now = () => 100_000_000;
@@ -884,9 +1074,53 @@ describe("createHistoryStore", () => {
       expect(recent[0]).toMatchObject({
         id: "timed",
         startedAt: now() - 11_000,
-        sessionDurationMs: 10_000,
+        sessionDurationMs: 3_500,
         latestRunningDurationMs: 2_000,
       });
+    });
+
+    it("returns persisted user prompt summaries for review titles", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const now = () => 100_000_000;
+      store = createHistoryStore({ dbPath, now });
+
+      store.writeSessionEvent({
+        session: {
+          id: "prompted",
+          tool: "codex",
+          status: "completed",
+          title: "Old title",
+          latestTask: "Old title",
+          updatedAt: now() - 1_000,
+          lastUserMessageAt: now() - 5_000,
+          hasPendingActions: false,
+        },
+        activityItems: [
+          makeActivityItem({
+            id: "assistant-1",
+            body: "Done",
+            timestamp: now() - 4_000,
+          }),
+          makeActivityItem({
+            id: "user-1",
+            source: "user",
+            title: "User",
+            body: "按 user prompt 生成工作回顾标题",
+            timestamp: now() - 5_000,
+          }),
+        ],
+      });
+
+      const recent = store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 100 });
+
+      expect(recent[0]?.userPrompts).toEqual([
+        {
+          id: "user-1",
+          body: "按 user prompt 生成工作回顾标题",
+          timestamp: now() - 5_000,
+        },
+      ]);
     });
 
     it("returns empty array when no sessions exist", () => {

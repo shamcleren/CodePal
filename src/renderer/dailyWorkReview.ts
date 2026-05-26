@@ -1,6 +1,14 @@
 import type { ResolvedLocale } from "../shared/i18nTypes";
+import type { TokenTrendPoint } from "../shared/analyticsTypes";
+import type { UserPromptSummary } from "../shared/historyTypes";
 import { isSessionStatus, type ActivityItem, type SessionStatus } from "../shared/sessionTypes";
 import { computeSessionTiming, formatSessionDuration } from "../shared/sessionTiming";
+import type { ModelPricing, SessionUsage, UsageOverview, UsageTokens } from "../shared/usageTypes";
+import {
+  UNKNOWN_PROJECT_NAME,
+  UNKNOWN_PROJECT_PATH,
+  isUnknownProjectPath,
+} from "../shared/projectAttribution";
 import type { MonitorSessionRow } from "./monitorSession";
 
 export type DailyWorkReviewSource = {
@@ -9,6 +17,8 @@ export type DailyWorkReviewSource = {
   status: SessionStatus | string;
   title?: string | null;
   task?: string | null;
+  projectPath?: string | null;
+  projectName?: string | null;
   updatedAt: number;
   lastUserMessageAt?: number | null;
   activityItems?: ActivityItem[];
@@ -20,15 +30,22 @@ export type DailyWorkReviewSource = {
   titleLabel?: string;
   isManaged?: boolean;
   managedTaskTitle?: string;
+  userPrompts?: UserPromptSummary[];
+  shortId?: string;
+  timelineItems?: unknown[];
 };
 
 export type DailyWorkReviewEntry = {
   id: string;
+  sessionId: string;
   title: string;
   detail: string;
   agent: string;
+  projectPath?: string;
+  projectName?: string;
   status: SessionStatus;
   source: "managed" | "observed";
+  availability: "current" | "history";
   timestamp: number;
   latestRunningDurationLabel?: string;
   sessionDurationLabel?: string;
@@ -46,6 +63,10 @@ export type DailyWorkReviewDay = {
   ongoingCount: number;
   managedCount: number;
   observedCount: number;
+  totalTokens?: number;
+  reportedCost?: number;
+  estimatedCost?: number;
+  costCurrency?: string;
   agents: string[];
   completed: DailyWorkReviewEntry[];
   ongoing: DailyWorkReviewEntry[];
@@ -56,6 +77,9 @@ type BuildDailyWorkReviewOptions = {
   locale?: ResolvedLocale;
   now?: number;
   maxDays?: number;
+  usageOverview?: UsageOverview | null;
+  tokenTrendPoints?: TokenTrendPoint[];
+  pricing?: ModelPricing[];
 };
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -155,6 +179,28 @@ function isLowValueReviewText(value: string | undefined): boolean {
   );
 }
 
+const LOW_VALUE_USER_PROMPTS = new Set([
+  "ok",
+  "okay",
+  "yes",
+  "y",
+  "嗯",
+  "嗯嗯",
+  "好",
+  "好的",
+  "可以",
+  "继续",
+  "继续吧",
+  "收到",
+]);
+
+function isLowValueUserPrompt(value: string | undefined): boolean {
+  const text = cleanText(value);
+  if (isLowValueReviewText(text)) return true;
+  if (LOW_VALUE_USER_PROMPTS.has(text.toLowerCase())) return true;
+  return text.length <= 1;
+}
+
 function truncate(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength - 1)}…`;
@@ -185,8 +231,56 @@ function fallbackDetail(row: DailyWorkReviewSource, title: string): string {
   return body && body !== title ? truncate(body, 128) : "";
 }
 
-function buildEntry(row: DailyWorkReviewSource, now: number, locale: ResolvedLocale): DailyWorkReviewEntry {
-  const title = truncate(fallbackTitle(row), 80);
+function promptDetail(row: DailyWorkReviewSource, title: string): string {
+  const summary = cleanText(row.collapsedSummary);
+  if (summary && summary !== title && !isLowValueReviewText(summary)) {
+    return truncate(summary, 128);
+  }
+  return "";
+}
+
+function promptSummaries(row: DailyWorkReviewSource): UserPromptSummary[] {
+  const persistedPrompts = row.userPrompts ?? [];
+  const activityPrompts = row.activityItems
+    ?.filter((activity) => activity.kind === "message" && activity.source === "user")
+    .map((activity) => ({
+      id: activity.id,
+      body: activity.body,
+      timestamp: activity.timestamp,
+    })) ?? [];
+  const prompts = persistedPrompts.length > 0 ? persistedPrompts : activityPrompts;
+  return prompts
+    .map((prompt, index) => ({
+      id: cleanText(prompt.id) || String(index + 1),
+      body: cleanText(prompt.body),
+      timestamp: prompt.timestamp,
+    }))
+    .filter((prompt) => Number.isFinite(prompt.timestamp) && !isLowValueUserPrompt(prompt.body));
+}
+
+function entryAvailability(row: DailyWorkReviewSource): DailyWorkReviewEntry["availability"] {
+  return row.shortId || row.timelineItems ? "current" : "history";
+}
+
+function entryProjectPath(row: DailyWorkReviewSource): string {
+  return row.projectPath?.trim() || UNKNOWN_PROJECT_PATH;
+}
+
+function entryProjectName(row: DailyWorkReviewSource): string {
+  const projectPath = entryProjectPath(row);
+  if (isUnknownProjectPath(projectPath)) {
+    return UNKNOWN_PROJECT_NAME;
+  }
+  return row.projectName?.trim() || projectPath;
+}
+
+function buildEntry(
+  row: DailyWorkReviewSource,
+  now: number,
+  locale: ResolvedLocale,
+  override?: { id: string; title: string; timestamp: number; promptBased?: boolean },
+): DailyWorkReviewEntry {
+  const title = truncate(cleanText(override?.title ?? fallbackTitle(row)), override?.promptBased ? 96 : 80);
   const status = normalizeStatus(row.status);
   const timing = computeSessionTiming({
     status: row.status,
@@ -205,16 +299,44 @@ function buildEntry(row: DailyWorkReviewSource, now: number, locale: ResolvedLoc
     includeSeconds: status === "running",
   });
   return {
-    id: row.id,
+    id: override?.id ?? row.id,
+    sessionId: row.id,
     title,
-    detail: fallbackDetail(row, title),
+    detail: override?.promptBased ? promptDetail(row, title) : fallbackDetail(row, title),
     agent: row.tool,
+    projectPath: entryProjectPath(row),
+    projectName: entryProjectName(row),
     status,
     source: row.isManaged ? "managed" : "observed",
-    timestamp: row.lastUserMessageAt ?? row.updatedAt,
+    availability: entryAvailability(row),
+    timestamp: override?.timestamp ?? row.lastUserMessageAt ?? row.updatedAt,
     ...(latestRunningDurationLabel ? { latestRunningDurationLabel } : {}),
     ...(sessionDurationLabel ? { sessionDurationLabel } : {}),
   };
+}
+
+function buildEntries(
+  row: DailyWorkReviewSource,
+  now: number,
+  locale: ResolvedLocale,
+): DailyWorkReviewEntry[] {
+  const prompts = promptSummaries(row);
+  if (prompts.length > 0) {
+    return prompts.map((prompt) =>
+      buildEntry(row, now, locale, {
+        id: `${row.id}:prompt:${prompt.id}`,
+        title: prompt.body,
+        timestamp: prompt.timestamp,
+        promptBased: true,
+      }),
+    );
+  }
+
+  const title = fallbackTitle(row);
+  if (isLowValueReviewText(title)) {
+    return [];
+  }
+  return [buildEntry(row, now, locale)];
 }
 
 function isCompleted(status: SessionStatus): boolean {
@@ -229,49 +351,353 @@ function sortEntries(entries: DailyWorkReviewEntry[]): DailyWorkReviewEntry[] {
   return [...entries].sort((a, b) => b.timestamp - a.timestamp);
 }
 
-function titleList(entries: DailyWorkReviewEntry[], locale: ResolvedLocale): string {
-  const maxSummaryTitleLength = locale === "zh-CN" ? 36 : 52;
-  const titles = entries
-    .slice(0, 2)
-    .map((entry) => truncate(entry.title, maxSummaryTitleLength));
-  if (entries.length <= 2) {
-    return locale === "zh-CN" ? titles.join("、") : titles.join(", ");
+function tokenTotal(tokens?: UsageTokens): number {
+  if (!tokens) return 0;
+  if (typeof tokens.total === "number" && Number.isFinite(tokens.total)) {
+    return tokens.total;
   }
-  if (locale === "zh-CN") {
-    return `${titles.join("、")} 等 ${entries.length} 项`;
+  return [tokens.input, tokens.output, tokens.cachedInput, tokens.reasoningOutput]
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+    .reduce((sum, value) => sum + value, 0);
+}
+
+function formatTokenCount(value: number, locale: ResolvedLocale): string {
+  const absValue = Math.abs(value);
+  if (absValue >= 1_000_000) {
+    return `${new Intl.NumberFormat(locale, {
+      maximumFractionDigits: absValue >= 10_000_000 ? 0 : 1,
+    }).format(value / 1_000_000)}M`;
   }
-  return `${titles.join(", ")}, and ${entries.length - 2} more`;
+  if (absValue >= 1_000) {
+    return `${new Intl.NumberFormat(locale, {
+      maximumFractionDigits: absValue >= 10_000 ? 0 : 1,
+    }).format(value / 1_000)}K`;
+  }
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+}
+
+function formatCost(value: number, currency: string | undefined, locale: ResolvedLocale): string {
+  if (!currency) {
+    return new Intl.NumberFormat(locale, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function parsePricePerMillion(value: string): number | null {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+function fallbackModelForAgent(agent: string): string | undefined {
+  if (agent === "codex") return "codex-default";
+  if (agent === "claude") return "claude-sonnet-4-5-20250929";
+  return undefined;
+}
+
+function pricingForAgentModel(
+  agent: string,
+  model: string | undefined,
+  pricing: ModelPricing[],
+  options: { allowFallback?: boolean } = {},
+): ModelPricing | undefined {
+  const normalizedModel = model?.trim();
+  const candidates = [
+    normalizedModel && normalizedModel !== "unknown" ? normalizedModel : "",
+    options.allowFallback === false ? "" : fallbackModelForAgent(agent) ?? "",
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    const match = pricing.find(
+      (price) =>
+        price.modelId === candidate ||
+        price.displayName === candidate ||
+        candidate.includes(price.modelId),
+    );
+    if (match) return match;
+  }
+  return undefined;
+}
+
+type TokenCostInput = {
+  agent: string;
+  model?: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+};
+
+function estimateCostFromTokens(
+  tokens: TokenCostInput,
+  pricing: ModelPricing[],
+  options: { allowModelFallback?: boolean } = {},
+): number | undefined {
+  const price = pricingForAgentModel(tokens.agent, tokens.model, pricing, {
+    allowFallback: options.allowModelFallback,
+  });
+  if (!price) return undefined;
+  const inputPerMillion = parsePricePerMillion(price.inputPerMillion);
+  const outputPerMillion = parsePricePerMillion(price.outputPerMillion);
+  const cacheReadPerMillion = parsePricePerMillion(price.cacheReadPerMillion);
+  const cacheCreationPerMillion = parsePricePerMillion(price.cacheCreationPerMillion);
+  if (
+    inputPerMillion === null ||
+    outputPerMillion === null ||
+    cacheReadPerMillion === null ||
+    cacheCreationPerMillion === null
+  ) {
+    return undefined;
+  }
+  const cost =
+    (tokens.inputTokens / 1_000_000) * inputPerMillion +
+    (tokens.outputTokens / 1_000_000) * outputPerMillion +
+    (tokens.cacheReadTokens / 1_000_000) * cacheReadPerMillion +
+    (tokens.cacheCreationTokens / 1_000_000) * cacheCreationPerMillion;
+  return cost > 0 ? cost : undefined;
+}
+
+function estimateUsageCostFromPricing(session: SessionUsage, pricing: ModelPricing[]): number | undefined {
+  if (!session.tokens) return undefined;
+  return estimateCostFromTokens({
+    agent: session.agent,
+    model: session.model,
+    inputTokens: session.tokens.input ?? 0,
+    outputTokens: session.tokens.output ?? 0,
+    cacheReadTokens: session.tokens.cachedInput ?? 0,
+    cacheCreationTokens: 0,
+  }, pricing);
+}
+
+function estimateTrendPointCost(point: TokenTrendPoint, pricing: ModelPricing[]): number | undefined {
+  return estimateCostFromTokens({
+    agent: point.agent,
+    model: point.model,
+    inputTokens: point.inputTokens,
+    outputTokens: point.outputTokens,
+    cacheReadTokens: point.cacheReadTokens,
+    cacheCreationTokens: point.cacheCreationTokens,
+  }, pricing, { allowModelFallback: false });
+}
+
+type ReviewUsageStats = {
+  totalTokens?: number;
+  reportedCost?: number;
+  estimatedCost?: number;
+  costCurrency?: string;
+};
+
+function finalizeUsageStats({
+  hasTokens,
+  totalTokens,
+  hasCost,
+  hasEstimatedCost,
+  costTotal,
+  costCurrency,
+  mixedCurrency,
+}: {
+  hasTokens: boolean;
+  totalTokens: number;
+  hasCost: boolean;
+  hasEstimatedCost: boolean;
+  costTotal: number;
+  costCurrency?: string;
+  mixedCurrency: boolean;
+}): ReviewUsageStats {
+  const roundedCost = Math.round(costTotal * 1_000_000) / 1_000_000;
+  return {
+    ...(hasTokens ? { totalTokens } : {}),
+    ...(hasCost && hasEstimatedCost ? { estimatedCost: roundedCost } : {}),
+    ...(hasCost && !hasEstimatedCost ? { reportedCost: roundedCost } : {}),
+    ...(hasCost && costCurrency && !mixedCurrency ? { costCurrency } : {}),
+  };
+}
+
+function mergeReviewUsageStats(primary: ReviewUsageStats, fallback: ReviewUsageStats): ReviewUsageStats {
+  const fallbackHasAnalyticsUsage =
+    fallback.totalTokens !== undefined ||
+    fallback.reportedCost !== undefined ||
+    fallback.estimatedCost !== undefined;
+  if (fallbackHasAnalyticsUsage) {
+    return fallback;
+  }
+  const primaryHasCost = primary.reportedCost !== undefined || primary.estimatedCost !== undefined;
+  const fallbackCost = fallback.reportedCost !== undefined
+    ? { reportedCost: fallback.reportedCost }
+    : fallback.estimatedCost !== undefined
+      ? { estimatedCost: fallback.estimatedCost }
+      : {};
+  return {
+    totalTokens: primary.totalTokens ?? fallback.totalTokens,
+    ...(primary.reportedCost !== undefined ? { reportedCost: primary.reportedCost } : {}),
+    ...(primary.estimatedCost !== undefined ? { estimatedCost: primary.estimatedCost } : {}),
+    ...(!primaryHasCost ? fallbackCost : {}),
+    costCurrency: primary.costCurrency ?? fallback.costCurrency,
+  };
+}
+
+function sumTokenTrendStatsForDay(
+  dayKey: string,
+  tokenTrendPoints: TokenTrendPoint[],
+  pricing: ModelPricing[],
+): ReviewUsageStats {
+  let totalTokens = 0;
+  let costTotal = 0;
+  let hasTokens = false;
+  let hasCost = false;
+  let costCurrency: string | undefined;
+  let mixedCurrency = false;
+
+  for (const point of tokenTrendPoints) {
+    if (dateKey(point.bucketStart) !== dayKey) continue;
+    if (point.totalTokens > 0) {
+      hasTokens = true;
+      totalTokens += point.totalTokens;
+    }
+    const cost = estimateTrendPointCost(point, pricing);
+    if (cost !== undefined) {
+      hasCost = true;
+      costTotal += cost;
+      const currency = "USD";
+      if (costCurrency && costCurrency !== currency) {
+        mixedCurrency = true;
+      }
+      costCurrency = costCurrency ?? currency;
+    }
+  }
+
+  return finalizeUsageStats({
+    hasTokens,
+    totalTokens,
+    hasCost,
+    hasEstimatedCost: hasCost,
+    costTotal,
+    costCurrency,
+    mixedCurrency,
+  });
+}
+
+function sumReviewUsageStats(
+  entries: DailyWorkReviewEntry[],
+  usageOverview: UsageOverview | null | undefined,
+  pricing: ModelPricing[],
+): ReviewUsageStats {
+  const usageBySessionId = new Map((usageOverview?.sessions ?? []).map((session) => [session.sessionId, session]));
+  let totalTokens = 0;
+  let costTotal = 0;
+  let hasTokens = false;
+  let hasCost = false;
+  let hasEstimatedCost = false;
+  let costCurrency: string | undefined;
+  let mixedCurrency = false;
+  const countedSessionIds = new Set<string>();
+
+  for (const entry of entries) {
+    if (countedSessionIds.has(entry.sessionId)) {
+      continue;
+    }
+    countedSessionIds.add(entry.sessionId);
+    const usage = usageBySessionId.get(entry.sessionId);
+    if (!usage) continue;
+
+    const entryTokens = tokenTotal(usage.tokens);
+    if (entryTokens > 0) {
+      hasTokens = true;
+      totalTokens += entryTokens;
+    }
+
+    const reportedCost = usage.cost?.reported;
+    const estimatedCost = usage.cost?.estimated ?? estimateUsageCostFromPricing(usage, pricing);
+    const cost = typeof reportedCost === "number" && Number.isFinite(reportedCost)
+      ? reportedCost
+      : typeof estimatedCost === "number" && Number.isFinite(estimatedCost)
+        ? estimatedCost
+        : undefined;
+    if (cost !== undefined) {
+      hasCost = true;
+      costTotal += cost;
+      if (cost === estimatedCost && reportedCost === undefined) {
+        hasEstimatedCost = true;
+      }
+      const currency = usage.cost?.currency ?? (reportedCost === undefined ? "USD" : undefined);
+      if (currency) {
+        if (costCurrency && costCurrency !== currency) {
+          mixedCurrency = true;
+        }
+        costCurrency = costCurrency ?? currency;
+      }
+    }
+  }
+
+  return finalizeUsageStats({
+    hasTokens,
+    totalTokens,
+    hasCost,
+    hasEstimatedCost,
+    costTotal,
+    costCurrency,
+    mixedCurrency,
+  });
 }
 
 function buildSummaryText(
   completed: DailyWorkReviewEntry[],
   ongoing: DailyWorkReviewEntry[],
+  agents: string[],
+  usageStats: ReviewUsageStats,
   locale: ResolvedLocale,
 ): string {
-  const focus = titleList([...completed, ...ongoing], locale);
+  const sessionCount = completed.length + ongoing.length;
+  const totalTokens = usageStats.totalTokens ?? 0;
+  const cost = usageStats.reportedCost ?? usageStats.estimatedCost;
   if (locale === "zh-CN") {
-    if (completed.length > 0 && ongoing.length > 0) {
-      return `完成 ${completed.length} 项，跟进 ${ongoing.length} 项。重点：${focus}。`;
+    if (sessionCount === 0) {
+      return "这一天没有可回顾的已完成或跟进中会话。";
     }
-    if (completed.length > 0) {
-      return `完成 ${completed.length} 项。重点：${focus}。`;
+    const statusParts = [
+      completed.length > 0 ? `完成 ${completed.length}` : "",
+      ongoing.length > 0 ? `跟进 ${ongoing.length}` : "",
+    ].filter(Boolean);
+    const summaryParts = [`${sessionCount} 个事项：${statusParts.join("、")}`, `${agents.length} 个 agent`];
+    const usageParts: string[] = [];
+    if (totalTokens > 0) {
+      usageParts.push(`消耗 ${formatTokenCount(totalTokens, locale)} token`);
     }
-    if (ongoing.length > 0) {
-      return `跟进 ${ongoing.length} 项。重点：${focus}。`;
+    if (cost !== undefined) {
+      const costLabel = `${usageStats.estimatedCost !== undefined ? "预估花费" : "花费"} ${formatCost(cost, usageStats.costCurrency, locale)}`;
+      usageParts.push(costLabel);
     }
-    return "这一天没有可回顾的已完成或跟进中会话。";
+    if (usageParts.length > 0) {
+      summaryParts.push(usageParts.join("，"));
+    }
+    return `${summaryParts.join("；")}。`;
   }
 
-  if (completed.length > 0 && ongoing.length > 0) {
-    return `${completed.length} completed, ${ongoing.length} in progress. Focus: ${focus}.`;
+  if (sessionCount === 0) {
+    return "No completed or in-progress sessions to review for this day.";
   }
-  if (completed.length > 0) {
-    return `${completed.length} completed. Focus: ${focus}.`;
+  const statusParts = [
+    completed.length > 0 ? `${completed.length} completed` : "",
+    ongoing.length > 0 ? `${ongoing.length} in progress` : "",
+  ].filter(Boolean);
+  const usageParts = [
+    `${sessionCount} ${sessionCount === 1 ? "item" : "items"}: ${statusParts.join(", ")}`,
+    `${agents.length} ${agents.length === 1 ? "agent" : "agents"}`,
+  ];
+  if (totalTokens > 0) {
+    usageParts.push(`${formatTokenCount(totalTokens, locale)} tokens`);
   }
-  if (ongoing.length > 0) {
-    return `${ongoing.length} in progress. Focus: ${focus}.`;
+  if (cost !== undefined) {
+    usageParts.push(`${usageStats.estimatedCost !== undefined ? "est. " : ""}${formatCost(cost, usageStats.costCurrency, locale)}`);
   }
-  return "No completed or in-progress sessions to review for this day.";
+  return `${usageParts.join("; ")}.`;
 }
 
 export function buildDailyWorkReview(
@@ -281,6 +707,7 @@ export function buildDailyWorkReview(
   const locale = options.locale ?? "en";
   const now = options.now ?? Date.now();
   const maxDays = options.maxDays ?? 14;
+  const pricing = options.pricing ?? options.usageOverview?.pricing ?? [];
   const grouped = new Map<string, DailyWorkReviewEntry[]>();
   const dedupedRows = new Map<string, DailyWorkReviewSource | MonitorSessionRow>();
 
@@ -289,23 +716,21 @@ export function buildDailyWorkReview(
   }
 
   for (const row of dedupedRows.values()) {
-    const timestamp = row.lastUserMessageAt ?? row.updatedAt;
-    if (!Number.isFinite(timestamp)) {
-      continue;
-    }
     const status = normalizeStatus(row.status);
-    const isToday = startOfDay(timestamp) === startOfDay(now);
     if (status === "error") {
       continue;
     }
-    if (!isToday && !isCompleted(status)) {
-      continue;
+    for (const entry of buildEntries(row, now, locale)) {
+      if (!Number.isFinite(entry.timestamp)) {
+        continue;
+      }
+      const isToday = startOfDay(entry.timestamp) === startOfDay(now);
+      if (!isToday && !isCompleted(entry.status)) {
+        continue;
+      }
+      const key = dateKey(entry.timestamp);
+      grouped.set(key, [...(grouped.get(key) ?? []), entry]);
     }
-    if (isLowValueReviewText(row.managedTaskTitle || row.titleLabel || row.title || row.task)) {
-      continue;
-    }
-    const key = dateKey(timestamp);
-    grouped.set(key, [...(grouped.get(key) ?? []), buildEntry(row, now, locale)]);
   }
 
   return Array.from(grouped.entries())
@@ -316,6 +741,9 @@ export function buildDailyWorkReview(
       const ongoing = sortedEntries.filter((entry) => isOngoing(entry.status));
       const agents = Array.from(new Set(sortedEntries.map((entry) => entry.agent))).sort();
       const managedCount = sortedEntries.filter((entry) => entry.source === "managed").length;
+      const liveUsageStats = sumReviewUsageStats([...completed, ...ongoing], options.usageOverview, pricing);
+      const historicalUsageStats = sumTokenTrendStatsForDay(key, options.tokenTrendPoints ?? [], pricing);
+      const usageStats = mergeReviewUsageStats(liveUsageStats, historicalUsageStats);
 
       return {
         key,
@@ -323,12 +751,13 @@ export function buildDailyWorkReview(
         dateLabel: formatDate(timestamp, locale),
         weekdayLabel: formatWeekday(timestamp, locale),
         relativeLabel: relativeLabel(timestamp, now, locale),
-        summaryText: buildSummaryText(completed, ongoing, locale),
+        summaryText: buildSummaryText(completed, ongoing, agents, usageStats, locale),
         sessionCount: sortedEntries.length,
         completedCount: completed.length,
         ongoingCount: ongoing.length,
         managedCount,
         observedCount: sortedEntries.length - managedCount,
+        ...usageStats,
         agents,
         completed,
         ongoing,

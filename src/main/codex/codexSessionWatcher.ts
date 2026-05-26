@@ -5,8 +5,10 @@ import { ACTIVE_SESSION_STALENESS_MS } from "../session/sessionStore";
 import { normalizeCodexLogEvent } from "../../adapters/codex/normalizeCodexLogEvent";
 import { isSessionStatus } from "../../shared/sessionTypes";
 import type { UsageSnapshot, TokenUsageWrite } from "../../shared/usageTypes";
+import type { ProjectAttribution } from "../../shared/projectAttribution";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
 import { codexInputTokensForStorage, makeCodexTokenUsageSourceKey } from "./codexUsage";
+import { resolveProjectAttribution } from "../history/projectAttribution";
 
 type CodexSessionWatcherOptions = {
   sessionsRoot: string;
@@ -59,6 +61,16 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function projectFields(project: ProjectAttribution | null | undefined) {
+  return project
+    ? { projectPath: project.projectPath, projectName: project.projectName }
+    : {};
+}
+
 function pickRateLimit(snapshot: Record<string, unknown>): UsageSnapshot["rateLimit"] | undefined {
   const primary =
     snapshot.primary && typeof snapshot.primary === "object"
@@ -109,7 +121,12 @@ function pickRateLimit(snapshot: Record<string, unknown>): UsageSnapshot["rateLi
   };
 }
 
-function usageSnapshotFromLine(line: string, sourcePath: string, model?: string): { snapshot: UsageSnapshot; tokenWrite: TokenUsageWrite } | null {
+function usageSnapshotFromLine(
+  line: string,
+  sourcePath: string,
+  model: string | undefined,
+  project: ProjectAttribution | null,
+): { snapshot: UsageSnapshot; tokenWrite: TokenUsageWrite } | null {
   const entry = parseLine(line);
   if (!entry || entry.type !== "event_msg") {
     return null;
@@ -202,6 +219,7 @@ function usageSnapshotFromLine(line: string, sourcePath: string, model?: string)
         totalCacheReadTokens,
         totalReasoningTokens,
       }),
+      ...projectFields(project),
     },
   };
 }
@@ -218,6 +236,7 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
     options.initialBootstrapLookbackMs ?? ACTIVE_SESSION_STALENESS_MS;
   const cursors = new Map<string, FileCursor>();
   const sessionModelMap = new Map<string, string>();
+  const sessionProjectMap = new Map<string, ProjectAttribution>();
   const emittedTokenUsageSourceKeys = new Set<string>();
   const debug = process.env.CODEPAL_DEBUG_CODEX === "1";
   const scheduler = createAdaptivePollScheduler({
@@ -263,8 +282,18 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
         if (model && sid) {
           sessionModelMap.set(sid, model);
         }
+        const project = resolveProjectAttribution({ cwd: stringValue(payload?.cwd) });
+        if (project && sid) {
+          sessionProjectMap.set(sid, project);
+        }
       }
-      const usageResult = usageSnapshotFromLine(trimmed, filePath, sessionModelMap.get(sessionIdFromPath(filePath) ?? ""));
+      const sessionId = sessionIdFromPath(filePath);
+      const usageResult = usageSnapshotFromLine(
+        trimmed,
+        filePath,
+        sessionModelMap.get(sessionId ?? ""),
+        sessionProjectMap.get(sessionId ?? "") ?? null,
+      );
       if (usageResult) {
         options.onUsageSnapshot?.(usageResult.snapshot);
         const sourceKey = usageResult.tokenWrite.sourceKey;

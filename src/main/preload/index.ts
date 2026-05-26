@@ -54,8 +54,8 @@ contextBridge.exposeInMainWorld("codepal", {
   getTokenTrend(
     startMs: number,
     endMs: number,
-    granularity: TokenTrendGranularity,
-    filters?: { agent?: string; model?: string },
+	    granularity: TokenTrendGranularity,
+	    filters?: { agent?: string; model?: string; projectPath?: string },
   ) {
     return ipcRenderer.invoke(
       "codepal:get-token-trend",
@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld("codepal", {
     redactModelNames?: boolean;
     trendGranularity?: TokenTrendGranularity;
     metric?: AnalyticsMetric;
+    projectPath?: string;
     agent?: string;
     model?: string;
     locale?: ResolvedLocale;

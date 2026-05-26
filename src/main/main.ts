@@ -246,6 +246,7 @@ function wireActionResponseIpc(
     if (!currentHistoryStore) {
       return {
         daily: [],
+        byProject: [],
         byModel: [],
         byAgent: [],
         topSessions: [],
@@ -260,6 +261,7 @@ function wireActionResponseIpc(
     }
     return {
       daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs, agent),
+      byProject: currentHistoryStore.getTokenUsageByProject(startMs, endMs, agent),
       byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs, agent),
       byAgent: currentHistoryStore.getTokenUsageByAgent(startMs, endMs, agent),
       topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, agent, 10),
@@ -271,10 +273,10 @@ function wireActionResponseIpc(
     "codepal:get-token-trend",
     (
       _event,
-      startMs: number,
-      endMs: number,
-      granularity: import("../shared/analyticsTypes").TokenTrendGranularity,
-      filters?: { agent?: string; model?: string },
+	      startMs: number,
+	      endMs: number,
+	      granularity: import("../shared/analyticsTypes").TokenTrendGranularity,
+	      filters?: { agent?: string; model?: string; projectPath?: string },
     ) => {
       if (!currentHistoryStore) {
         return { granularity, points: [], sourcePointCount: 0 };
@@ -333,6 +335,7 @@ function wireActionResponseIpc(
     const trendPoints = currentHistoryStore.getTokenUsageTrend(startMs, endMs, granularity, {
       agent,
       model,
+      projectPath: reportOptions?.projectPath,
     });
     const durationMs = Math.max(1, endMs - startMs);
     const previousStartMs = startMs - durationMs;

@@ -3,18 +3,22 @@ import path from "node:path";
 import readline from "node:readline";
 import type { TokenUsageWrite, UsageImportStatus } from "../../shared/usageTypes";
 import { codexInputTokensForStorage, makeCodexTokenUsageSourceKey } from "../codex/codexUsage";
+import { type ProjectAttribution } from "../../shared/projectAttribution";
 import type { createHistoryStore } from "./historyStore";
+import { resolveProjectAttribution } from "./projectAttribution";
 
 type HistoryStoreForBackfill = Pick<
   ReturnType<typeof createHistoryStore>,
   "writeTokenUsage" | "writeUsageSessionSummary" | "setUsageImportStatus"
->;
+> & Partial<Pick<ReturnType<typeof createHistoryStore>, "repairTokenUsageProjectAttribution">>;
 
 type ParsedSessionSummary = {
   sessionId: string;
   agent: string;
   title: string;
   timestamp: number;
+  projectPath?: string;
+  projectName?: string;
 };
 
 type RunUsageBackfillOptions = {
@@ -43,6 +47,10 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function parseJsonLine(line: string): Record<string, unknown> | null {
@@ -192,6 +200,36 @@ function sessionIdFromCodexPath(filePath: string): string {
   return match?.[1] ?? basename;
 }
 
+function projectFields(project: ProjectAttribution | null | undefined) {
+  return project
+    ? { projectPath: project.projectPath, projectName: project.projectName }
+    : {};
+}
+
+function decodedClaudeProjectPath(root: string, filePath: string): string | undefined {
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return undefined;
+  }
+  const projectDir = relative.split(path.sep).find(Boolean);
+  if (!projectDir?.startsWith("-")) {
+    return undefined;
+  }
+  const decoded = `/${projectDir.slice(1).replace(/-/g, "/")}`;
+  return decoded === "/" ? undefined : decoded;
+}
+
+function claudeProjectFromEntry(
+  entry: Record<string, unknown>,
+  filePath: string,
+  root: string,
+): ProjectAttribution | null {
+  return (
+    resolveProjectAttribution({ cwd: stringValue(entry.cwd) }) ??
+    resolveProjectAttribution({ cwd: decodedClaudeProjectPath(root, filePath) })
+  );
+}
+
 function linesFromFile(filePath: string): string[] {
   try {
     return fs.readFileSync(filePath, "utf8").split("\n");
@@ -233,6 +271,7 @@ async function readLinesFromFileAsync(
 function claudeUsageFromLine(
   line: string,
   filePath: string,
+  root: string,
   lineIndex: number,
   fallbackNow: number,
 ): TokenUsageWrite | null {
@@ -255,6 +294,7 @@ function claudeUsageFromLine(
     (typeof message?.id === "string" && message.id.trim()) ||
     (typeof entry.uuid === "string" && entry.uuid.trim());
   const timestamp = timestampValue(entry.timestamp, fallbackNow);
+  const project = claudeProjectFromEntry(entry, filePath, root);
 
   return {
     sessionId,
@@ -269,12 +309,14 @@ function claudeUsageFromLine(
     sourceKey: messageId
       ? `claude:${messageId}`
       : `claude:${path.resolve(filePath)}:${lineIndex}`,
+    ...projectFields(project),
   };
 }
 
 function claudeSummaryFromLine(
   line: string,
   filePath: string,
+  root: string,
   fallbackNow: number,
 ): ParsedSessionSummary | null {
   const entry = parseJsonLine(line);
@@ -297,6 +339,7 @@ function claudeSummaryFromLine(
     agent: "claude",
     title,
     timestamp: timestampValue(entry.timestamp, fallbackNow),
+    ...projectFields(claudeProjectFromEntry(entry, filePath, root)),
   };
 }
 
@@ -304,6 +347,7 @@ function codexUsageFromLine(
   line: string,
   filePath: string,
   model: string | undefined,
+  project: ProjectAttribution | null,
   fallbackNow: number,
 ): TokenUsageWrite | null {
   const entry = parseJsonLine(line);
@@ -352,12 +396,14 @@ function codexUsageFromLine(
       totalCacheReadTokens,
       totalReasoningTokens,
     }),
+    ...projectFields(project),
   };
 }
 
 function codexSummaryFromLine(
   line: string,
   filePath: string,
+  project: ProjectAttribution | null,
   fallbackNow: number,
 ): ParsedSessionSummary | null {
   const entry = parseJsonLine(line);
@@ -377,6 +423,7 @@ function codexSummaryFromLine(
     agent: "codex",
     title,
     timestamp: timestampValue(entry.timestamp, fallbackNow),
+    ...projectFields(project),
   };
 }
 
@@ -390,8 +437,8 @@ function importClaudeUsage(
   for (const filePath of listJsonlFiles(root)) {
     linesFromFile(filePath).forEach((line, index) => {
       const trimmed = line.trim();
-      keepFirstSummary(summaries, claudeSummaryFromLine(trimmed, filePath, fallbackNow));
-      const entry = claudeUsageFromLine(trimmed, filePath, index, fallbackNow);
+      keepFirstSummary(summaries, claudeSummaryFromLine(trimmed, filePath, root, fallbackNow));
+      const entry = claudeUsageFromLine(trimmed, filePath, root, index, fallbackNow);
       if (!entry) {
         return;
       }
@@ -418,8 +465,8 @@ async function importClaudeUsageAsync(
     await readLinesFromFileAsync(filePath, async (line, index) => {
       assertNotAborted(context.signal);
       const trimmed = line.trim();
-      keepFirstSummary(summaries, claudeSummaryFromLine(trimmed, filePath, fallbackNow));
-      const entry = claudeUsageFromLine(trimmed, filePath, index, fallbackNow);
+      keepFirstSummary(summaries, claudeSummaryFromLine(trimmed, filePath, root, fallbackNow));
+      const entry = claudeUsageFromLine(trimmed, filePath, root, index, fallbackNow);
       if (entry) {
         historyStore.writeTokenUsage(entry);
         rows += 1;
@@ -444,6 +491,7 @@ function importCodexUsage(
   const summaries = new Map<string, ParsedSessionSummary>();
   for (const filePath of listJsonlFiles(root)) {
     let model: string | undefined;
+    let project: ProjectAttribution | null = null;
     linesFromFile(filePath).forEach((line) => {
       const trimmed = line.trim();
       if (!trimmed) {
@@ -455,9 +503,10 @@ function importCodexUsage(
         if (typeof payload?.model === "string" && payload.model.trim()) {
           model = payload.model.trim();
         }
+        project = resolveProjectAttribution({ cwd: stringValue(payload?.cwd) }) ?? project;
       }
-      keepFirstSummary(summaries, codexSummaryFromLine(trimmed, filePath, fallbackNow));
-      const entry = codexUsageFromLine(trimmed, filePath, model, fallbackNow);
+      keepFirstSummary(summaries, codexSummaryFromLine(trimmed, filePath, project, fallbackNow));
+      const entry = codexUsageFromLine(trimmed, filePath, model, project, fallbackNow);
       if (!entry) {
         return;
       }
@@ -482,6 +531,7 @@ async function importCodexUsageAsync(
   for (const filePath of await listJsonlFilesAsync(root, context)) {
     assertNotAborted(context.signal);
     let model: string | undefined;
+    let project: ProjectAttribution | null = null;
     await readLinesFromFileAsync(filePath, async (line) => {
       assertNotAborted(context.signal);
       const trimmed = line.trim();
@@ -495,9 +545,10 @@ async function importCodexUsageAsync(
         if (typeof payload?.model === "string" && payload.model.trim()) {
           model = payload.model.trim();
         }
+        project = resolveProjectAttribution({ cwd: stringValue(payload?.cwd) }) ?? project;
       }
-      keepFirstSummary(summaries, codexSummaryFromLine(trimmed, filePath, fallbackNow));
-      const entry = codexUsageFromLine(trimmed, filePath, model, fallbackNow);
+      keepFirstSummary(summaries, codexSummaryFromLine(trimmed, filePath, project, fallbackNow));
+      const entry = codexUsageFromLine(trimmed, filePath, model, project, fallbackNow);
       if (entry) {
         historyStore.writeTokenUsage(entry);
         rows += 1;
@@ -526,6 +577,7 @@ export function runUsageBackfill(options: RunUsageBackfillOptions): UsageImportS
       options.codexSessionsPath,
       completedAt,
     );
+    options.historyStore.repairTokenUsageProjectAttribution?.();
     const status: UsageImportStatus = {
       completedAt,
       claudeRowsImported,
@@ -570,6 +622,7 @@ export async function runUsageBackfillAsync(
       completedAt,
       context,
     );
+    options.historyStore.repairTokenUsageProjectAttribution?.();
     assertNotAborted(options.signal);
     const status: UsageImportStatus = {
       completedAt,

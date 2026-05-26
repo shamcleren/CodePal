@@ -114,6 +114,47 @@ describe("AnalyticsLineChart", () => {
     expect(html).toContain("12:00");
   });
 
+  it("fills missing token buckets with zero points across the selected domain", () => {
+    const dayOne = new Date(2026, 4, 20, 0, 0, 0, 0).getTime();
+    const dayThree = new Date(2026, 4, 22, 0, 0, 0, 0).getTime();
+    const domainEnd = new Date(2026, 4, 23, 0, 0, 0, 0).getTime();
+    const html = renderToStaticMarkup(
+      <AnalyticsLineChart
+        points={[
+          { ...points[0], bucketStart: dayOne },
+          { ...points[1], bucketStart: dayThree },
+        ]}
+        metric="tokens"
+        granularity="day"
+        domainStart={dayOne}
+        domainEnd={domainEnd}
+      />,
+    );
+
+    const hoverZones = html.match(/analytics-line-chart__hover-zone/g) ?? [];
+    expect(hoverZones).toHaveLength(3);
+  });
+
+  it("aligns hour x-axis labels to whole aggregation buckets", () => {
+    const domainStart = new Date(2026, 4, 22, 10, 15, 0, 0).getTime();
+    const pointTime = new Date(2026, 4, 22, 11, 0, 0, 0).getTime();
+    const domainEnd = new Date(2026, 4, 22, 13, 45, 0, 0).getTime();
+    const html = renderToStaticMarkup(
+      <AnalyticsLineChart
+        points={[{ ...points[0], bucketStart: pointTime }]}
+        metric="tokens"
+        granularity="hour"
+        domainStart={domainStart}
+        domainEnd={domainEnd}
+      />,
+    );
+
+    expect(html).toContain("11:00");
+    expect(html).toContain("12:00");
+    expect(html).toContain("13:00");
+    expect(html).not.toContain("10:15");
+  });
+
   it("formats million-scale axis labels without duplicate rounded values", () => {
     const html = renderToStaticMarkup(
       <AnalyticsLineChart

@@ -3,6 +3,8 @@ export type AnalyticsMetric = "tokens" | "requests" | "cost" | "cacheHit";
 
 export interface TokenTrendPoint {
   bucketStart: number;
+  projectPath?: string;
+  projectName?: string;
   agent: string;
   model: string;
   inputTokens: number;

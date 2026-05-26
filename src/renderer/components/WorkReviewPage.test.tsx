@@ -81,6 +81,53 @@ describe("WorkReviewPage", () => {
               lastUserMessageAt: Date.parse("2026-05-20T17:58:00+08:00"),
             },
           ]}
+          tokenTrendPoints={[
+            {
+              bucketStart: Date.parse("2026-05-20T00:00:00+08:00"),
+              agent: "claude",
+              model: "claude-sonnet-4-5-20250929",
+              inputTokens: 100_000,
+              outputTokens: 50_000,
+              cacheReadTokens: 20_000,
+              cacheCreationTokens: 0,
+              reasoningTokens: 0,
+              totalTokens: 170_000,
+              requestCount: 2,
+            },
+          ]}
+          pricing={[
+            {
+              modelId: "claude-sonnet-4-5-20250929",
+              displayName: "Claude Sonnet 4.5",
+              inputPerMillion: "3",
+              outputPerMillion: "15",
+              cacheReadPerMillion: "0.30",
+              cacheCreationPerMillion: "3.75",
+            },
+          ]}
+          usageOverview={{
+            summary: { rateLimits: [], contextMode: "multi-session" },
+            sessions: [
+              {
+                agent: "codex",
+                sessionId: "managed:mt_1",
+                updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+                sources: ["session-derived"],
+                completeness: "partial",
+                tokens: { total: 1_200 },
+                cost: { estimated: 0.02, currency: "USD" },
+              },
+              {
+                agent: "codex",
+                sessionId: "running-1",
+                updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+                sources: ["session-derived"],
+                completeness: "partial",
+                tokens: { total: 1_800 },
+                cost: { estimated: 0.03, currency: "USD" },
+              },
+            ],
+          }}
           now={Date.parse("2026-05-25T12:00:00+08:00")}
           onFocusSession={vi.fn()}
         />
@@ -96,11 +143,11 @@ describe("WorkReviewPage", () => {
     expect(html).not.toContain("遇到的问题");
     expect(html).toContain("托管 CLI 体验修复");
     expect(html).toContain("推进每日工作回顾");
-    expect(html).toContain("整理 v1.2.0 发布检查");
+    expect(html).toContain("1 个事项：完成 1；1 个 agent；消耗 170K token，预估花费 US$1.06。");
     expect(html).not.toContain("无效错误对话");
-    expect(html).toContain("完成 1 项，跟进 1 项。重点：托管 CLI 体验修复、推进每日工作回顾。");
+    expect(html).toContain("2 个事项：完成 1、跟进 1；1 个 agent；消耗 3K token，预估花费 US$0.05。");
     expect(html).toContain("最近运行 12 分钟");
-    expect(html).toContain("总时长 30 分钟");
+    expect(html).toContain("总时长 12 分钟");
     expect(html).not.toContain("<summary");
   });
 
@@ -131,8 +178,80 @@ describe("WorkReviewPage", () => {
     expect(html).not.toContain("<summary");
   });
 
+  it("groups daily review entries by project instead of repeating project labels", () => {
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="zh-CN">
+        <WorkReviewPage
+          sessions={[
+            row({
+              id: "codepal-session",
+              titleLabel: "实现会话分组",
+              projectPath: "/repo/CodePal",
+              projectName: "CodePal",
+            }),
+            row({
+              id: "gateway-session",
+              titleLabel: "校准指标注入",
+              projectPath: "/repo/gateway",
+              projectName: "gateway",
+            }),
+          ]}
+          now={Date.parse("2026-05-25T12:00:00+08:00")}
+        />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain("work-review__project-group");
+    expect(html).toContain("work-review__project-heading");
+    expect(html).toContain("work-review__project-toggle");
+    expect(html).toContain("work-review__project-drag");
+    expect(html).toContain("aria-expanded=\"true\"");
+    expect(html).toContain("draggable=\"true\"");
+    expect(html).toContain("CodePal");
+    expect(html).toContain("实现会话分组");
+    expect(html).toContain("gateway");
+    expect(html).toContain("校准指标注入");
+    expect(html.indexOf("CodePal")).toBeLessThan(html.indexOf("实现会话分组"));
+    expect(html.indexOf("gateway")).toBeLessThan(html.indexOf("校准指标注入"));
+    expect(html.indexOf("实现会话分组")).toBeLessThan(html.indexOf("gateway"));
+  });
+
+  it("marks historical entries as archived instead of offering a live session jump", () => {
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="zh-CN">
+        <WorkReviewPage
+          sessions={[]}
+          historySessions={[
+            {
+              id: "older-history",
+              tool: "codex",
+              status: "completed",
+              title: "旧标题",
+              task: "旧标题",
+              updatedAt: Date.parse("2026-05-20T18:00:00+08:00"),
+              lastUserMessageAt: Date.parse("2026-05-20T17:58:00+08:00"),
+              userPrompts: [
+                {
+                  id: "prompt-1",
+                  body: "实现工作回顾历史状态标记",
+                  timestamp: Date.parse("2026-05-20T17:00:00+08:00"),
+                },
+              ],
+            },
+          ]}
+          now={Date.parse("2026-05-25T12:00:00+08:00")}
+          onFocusSession={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain("实现工作回顾历史状态标记");
+    expect(html).toContain("历史记录");
+    expect(html).not.toContain("查看会话");
+  });
+
   it("shows only remaining entries in details when the summary preview is capped", () => {
-    const sessions = Array.from({ length: 5 }, (_, index) =>
+    const sessions = Array.from({ length: 6 }, (_, index) =>
       row({
         id: `done-${index + 1}`,
         titleLabel: `完成条目${index + 1}`,
@@ -152,6 +271,8 @@ describe("WorkReviewPage", () => {
 
     expect(html).toContain("查看剩余明细");
     expect(html).toContain("完成条目1");
-    expect(html.match(/完成条目2/g)?.length).toBe(1);
+    expect(html).not.toContain("完成条目2");
+    expect(html).toContain("展开 2 条");
+    expect(html).toContain("完成条目6");
   });
 });

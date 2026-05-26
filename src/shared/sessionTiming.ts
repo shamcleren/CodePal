@@ -62,6 +62,33 @@ function sessionEndFor(input: SessionTimingInput, now: number): number | undefin
   return input.status === "running" ? Math.max(updatedAt, now) : updatedAt;
 }
 
+function runningDurationFromActivities(
+  input: SessionTimingInput,
+  activities: TimingActivity[],
+  now: number,
+): number | undefined {
+  let currentStart: number | null = null;
+  let total = 0;
+
+  for (const item of activities) {
+    if (item.tone === "running") {
+      currentStart ??= item.timestamp;
+      continue;
+    }
+    if (currentStart !== null && item.tone && RUNNING_END_TONES.has(item.tone)) {
+      total += Math.max(0, item.timestamp - currentStart);
+      currentStart = null;
+    }
+  }
+
+  if (currentStart !== null) {
+    const fallbackEnd = sessionEndFor(input, now);
+    total += Math.max(0, (fallbackEnd ?? now) - currentStart);
+  }
+
+  return total > 0 ? total : undefined;
+}
+
 function deriveLatestRunningDurationMs(
   input: SessionTimingInput,
   activities: TimingActivity[],
@@ -102,14 +129,21 @@ export function computeSessionTiming(input: SessionTimingInput, now = Date.now()
   const activities = sortedActivities(input.activityItems);
   const startedAt = deriveStartedAt(input, activities);
   const end = sessionEndFor(input, now);
-  const runningSessionDuration =
-    input.status === "running" && startedAt !== undefined
-      ? positiveDuration(now - startedAt)
-      : undefined;
   const explicitSessionDuration = positiveDuration(input.sessionDurationMs);
+  const latestRunningStartedAt = finiteNumber(input.latestRunningStartedAt);
+  const activeRunningDuration =
+    input.status === "running" && latestRunningStartedAt !== undefined
+      ? positiveDuration(now - latestRunningStartedAt)
+      : undefined;
+  const runningSessionDuration =
+    input.status === "running" && activeRunningDuration !== undefined
+      ? (explicitSessionDuration ?? 0) + activeRunningDuration
+      : undefined;
+  const activitySessionDuration = runningDurationFromActivities(input, activities, now);
   const sessionDurationMs =
     runningSessionDuration ??
     explicitSessionDuration ??
+    activitySessionDuration ??
     (startedAt !== undefined && end !== undefined ? positiveDuration(end - startedAt) : undefined);
   const latestRunningDurationMs = deriveLatestRunningDurationMs(input, activities, now);
 

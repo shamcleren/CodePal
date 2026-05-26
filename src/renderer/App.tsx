@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultAppSettings, type AppSettings, type AppSettingsPatch } from "../shared/appSettings";
+import type { TokenTrendPoint } from "../shared/analyticsTypes";
 import type { HistoryDiagnostics, SessionHistorySummary } from "../shared/historyTypes";
 import type { IntegrationAgentId, IntegrationDiagnostics } from "../shared/integrationTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
-import type { UsageOverview } from "../shared/usageTypes";
+import type { ModelPricing, UsageOverview } from "../shared/usageTypes";
 import type { ProviderGatewayStatus } from "../shared/providerGatewayTypes";
 import type { ProviderGatewayClientSetupTarget } from "../shared/providerGatewayTypes";
 import { DisplayPreferencesPanel } from "./components/DisplayPreferencesPanel";
@@ -13,7 +14,6 @@ import { AnalyticsPage } from "./components/AnalyticsPage";
 import { AttentionBanner } from "./components/AttentionBanner";
 import { MainUpdateButton } from "./components/MainUpdateButton";
 import { NotificationPreferencesPanel } from "./components/NotificationPreferencesPanel";
-import { ReportPreferencesPanel } from "./components/ReportPreferencesPanel";
 import { ProviderGatewayPanel } from "./components/ProviderGatewayPanel";
 import { StatusBar } from "./components/StatusBar";
 import { SessionList } from "./components/SessionList";
@@ -47,6 +47,15 @@ type SettingsSection = {
 
 const WORK_REVIEW_HISTORY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 const WORK_REVIEW_HISTORY_LIMIT = 500;
+
+function workReviewTokenRange(now = Date.now()): { start: number; end: number } {
+  const start = new Date(now - WORK_REVIEW_HISTORY_MAX_AGE_MS);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(now);
+  end.setDate(end.getDate() + 1);
+  end.setHours(0, 0, 0, 0);
+  return { start: start.getTime(), end: end.getTime() };
+}
 
 export function buildFallbackHistoryDiagnostics(enabled: boolean): HistoryDiagnostics {
   return {
@@ -88,6 +97,10 @@ export function App() {
   const [workReviewHistorySessions, setWorkReviewHistorySessions] = useState<
     SessionHistorySummary[]
   >([]);
+  const [workReviewTokenTrendPoints, setWorkReviewTokenTrendPoints] = useState<
+    TokenTrendPoint[]
+  >([]);
+  const [workReviewPricing, setWorkReviewPricing] = useState<ModelPricing[]>([]);
   const [sessionHistoryClearing, setSessionHistoryClearing] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [appSettingsPath, setAppSettingsPath] = useState("");
@@ -404,6 +417,32 @@ export function App() {
 
   useEffect(() => {
     let active = true;
+    const { start, end } = workReviewTokenRange();
+    void Promise.all([
+      window.codepal.getTokenTrend(start, end, "day"),
+      window.codepal.getModelPricing(),
+    ])
+      .then(([trend, pricing]) => {
+        if (!active) {
+          return;
+        }
+        setWorkReviewTokenTrendPoints(trend.points);
+        setWorkReviewPricing(pricing);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        setWorkReviewTokenTrendPoints([]);
+        setWorkReviewPricing([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [historyStoreVersion]);
+
+  useEffect(() => {
+    let active = true;
     const unsub = window.codepal.onUsageOverview((overview) => {
       setUsageOverview(overview);
     });
@@ -462,6 +501,7 @@ export function App() {
       .then((diagnostics) => {
         setHistoryDiagnostics(diagnostics);
         setWorkReviewHistorySessions([]);
+        setWorkReviewTokenTrendPoints([]);
         setHistoryStoreVersion((current) => current + 1);
         return diagnostics;
       })
@@ -598,19 +638,14 @@ export function App() {
           />
         </>
       ) : activeView === "analytics" ? (
-        <AnalyticsPage
-          appSettings={appSettings}
-          workItemList={workItemList}
-          usageOverview={usageOverview}
-          onFocusSession={(sessionId) => {
-            setActiveView("sessions");
-            setJumpToSessionId(sessionId);
-          }}
-        />
+        <AnalyticsPage />
       ) : (
         <WorkReviewPage
           sessions={rows}
           historySessions={workReviewHistorySessions}
+          usageOverview={usageOverview}
+          tokenTrendPoints={workReviewTokenTrendPoints}
+          pricing={workReviewPricing}
           onFocusSession={(sessionId) => {
             setActiveView("sessions");
             setJumpToSessionId(sessionId);
@@ -817,18 +852,6 @@ export function App() {
                       void updateAppSettings({
                         notifications: {
                           ...appSettings.notifications,
-                          ...patch,
-                        },
-                      })
-                    }
-                  />
-                  <ReportPreferencesPanel
-                    showHeader={false}
-                    settings={appSettings.reports}
-                    onUpdate={(patch) =>
-                      void updateAppSettings({
-                        reports: {
-                          ...appSettings.reports,
                           ...patch,
                         },
                       })

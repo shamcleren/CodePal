@@ -1633,24 +1633,186 @@ body {
   padding: 0 2px;
 }
 
-.session-list__group {
+.session-list__project-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.session-list__project-heading {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  gap: 8px;
+  padding: 0 4px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.session-list__project-drag,
+.session-list__project-toggle,
+.work-review__project-drag,
+.work-review__project-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  color: var(--text-faint);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.session-list__project-drag,
+.work-review__project-drag {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  cursor: grab;
+}
+
+.session-list__project-drag:active,
+.work-review__project-drag:active {
+  cursor: grabbing;
+}
+
+.session-list__project-toggle,
+.work-review__project-toggle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.session-list__project-toggle span,
+.work-review__project-toggle span {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: transform 0.12s ease;
+}
+
+.session-list__project-toggle[aria-expanded="false"] span,
+.work-review__project-toggle[aria-expanded="false"] span {
+  transform: rotate(-45deg) translate(-1px, 1px);
+}
+
+.session-list__project-drag:hover,
+.session-list__project-toggle:hover,
+.work-review__project-drag:hover,
+.work-review__project-toggle:hover {
+  border-color: var(--line-subtle);
+  color: var(--text-muted);
+  background: var(--surface-hover);
+}
+
+.session-list__project-marker {
+  position: relative;
+  width: 14px;
+  height: 10px;
+  flex: 0 0 auto;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.75;
+}
+
+.session-list__project-marker::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: -5px;
+  width: 7px;
+  height: 4px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--bg);
+}
+
+.session-list__project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-list__project-count {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.session-list__project-group + .session-list__project-group {
+  margin-top: 4px;
+}
+
+.session-list__project-sessions {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.session-list__subheader {
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: var(--letter-label);
-  color: var(--text-faint);
-  padding: 6px 2px 2px;
+.session-list__session-shell {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 5px;
+  align-items: stretch;
 }
 
-.session-list__group > .session-row:first-of-type {
-  margin-top: 4px;
+.session-list__session-shell > .session-row {
+  min-width: 0;
+}
+
+.session-list__session-drag {
+  display: grid;
+  place-items: center;
+  align-self: center;
+  width: 18px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: grab;
+}
+
+.session-list__session-shell:active .session-list__session-drag {
+  cursor: grabbing;
+}
+
+.session-list__session-shell:hover .session-list__session-drag {
+  border-color: var(--line-subtle);
+  color: var(--text-muted);
+  background: var(--surface-hover);
+}
+
+.session-list__project-more,
+.work-review__project-more {
+  justify-self: start;
+  align-self: flex-start;
+  border: 0;
+  padding: 3px 4px;
+  color: var(--text-faint);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.session-list__project-more:hover,
+.work-review__project-more:hover {
+  color: var(--accent);
 }
 
 .session-row {
@@ -1762,6 +1924,14 @@ body {
 }
 
 .session-row__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.session-row__content {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1796,8 +1966,31 @@ body {
   font-size: 11px;
 }
 
+.session-row__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  min-width: max-content;
+}
+
+.session-row__rail-top,
+.session-row__stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-row__stats {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .session-row__time {
-  margin-left: auto;
   flex-shrink: 0;
   font-size: 10px;
   color: var(--text-faint);
@@ -5797,6 +5990,64 @@ body {
 
 .work-review__summary-head strong {
   color: var(--text-muted);
+}
+
+.work-review__project-groups {
+  display: grid;
+}
+
+.work-review__project-group + .work-review__project-group {
+  border-top: 1px solid var(--line-subtle);
+}
+
+.work-review__project-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 11px 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.work-review__project-marker {
+  position: relative;
+  width: 13px;
+  height: 9px;
+  flex: 0 0 auto;
+  border: 1.4px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.76;
+}
+
+.work-review__project-marker::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: -5px;
+  width: 6px;
+  height: 4px;
+  border: 1.4px solid currentColor;
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--surface-card);
+}
+
+.work-review__project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-review__project-heading strong {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.work-review__project-items {
+  display: grid;
 }
 
 .work-review__item-list {

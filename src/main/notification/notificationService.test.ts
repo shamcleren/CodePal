@@ -73,6 +73,42 @@ describe("notificationService", () => {
     });
   });
 
+  it("includes project attribution in session state notifications", () => {
+    service.onSessionStateChange({
+      sessionId: "s1",
+      tool: "codex",
+      prevStatus: "running",
+      nextStatus: "completed",
+      title: "Fix session grouping",
+      projectName: "CodePal",
+      projectPath: "/repo/CodePal",
+    });
+
+    expect(MockNotification).toHaveBeenCalledTimes(1);
+    expect(MockNotification.mock.calls[0][0]).toMatchObject({
+      title: expect.stringContaining("CodePal"),
+      body: expect.stringContaining("CodePal"),
+    });
+    expect(MockNotification.mock.calls[0][0].body).toContain("Fix session grouping");
+  });
+
+  it("includes project attribution in pending-action notifications", () => {
+    service.onPendingActionCreated({
+      sessionId: "s1",
+      tool: "cursor",
+      pendingCount: 1,
+      title: "Review command",
+      projectName: "gateway",
+      projectPath: "/repo/gateway",
+    });
+
+    expect(MockNotification).toHaveBeenCalledTimes(1);
+    expect(MockNotification.mock.calls[0][0]).toMatchObject({
+      title: expect.stringContaining("gateway"),
+      body: expect.stringContaining("gateway"),
+    });
+  });
+
   it("truncates long lastUserMessage to 120 chars", () => {
     const longMessage = "a".repeat(200);
     service.onSessionStateChange({

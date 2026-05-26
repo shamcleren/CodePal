@@ -104,6 +104,8 @@ export interface TokenUsageWrite {
   reasoningTokens?: number;
   sourceKind?: string;
   sourceKey?: string;
+  projectPath?: string;
+  projectName?: string;
 }
 
 export interface DailyTokenStats {
@@ -137,6 +139,20 @@ export interface AgentTokenStats {
   cacheCreationTokens: number;
   totalTokens: number;
   requestCount: number;
+}
+
+export interface ProjectTokenStats {
+  projectPath: string;
+  projectName: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  totalTokens: number;
+  requestCount: number;
+  estimatedCost: number;
+  firstSeenAt: number;
+  lastSeenAt: number;
 }
 
 export interface SessionTokenStats {
@@ -198,6 +214,7 @@ export interface SessionStatsEntry {
 
 export interface TokenStatsResult {
   daily: DailyTokenStats[];
+  byProject?: ProjectTokenStats[];
   byModel: ModelTokenStats[];
   byAgent: AgentTokenStats[];
   topSessions: SessionTokenStats[];

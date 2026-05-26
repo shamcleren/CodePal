@@ -12,6 +12,12 @@ export type SessionHistoryPage = {
   hasMore: boolean;
 };
 
+export type UserPromptSummary = {
+  id: string;
+  body: string;
+  timestamp: number;
+};
+
 export type SessionHistorySummaryRequest = {
   maxAgeMs?: number;
   limit?: number;
@@ -23,11 +29,14 @@ export type SessionHistorySummary = {
   status: SessionStatus;
   title?: string;
   task?: string;
+  projectPath?: string;
+  projectName?: string;
   updatedAt: number;
   lastUserMessageAt?: number;
   startedAt?: number;
   sessionDurationMs?: number;
   latestRunningDurationMs?: number;
+  userPrompts?: UserPromptSummary[];
 };
 
 export type HistoryDiagnostics = {

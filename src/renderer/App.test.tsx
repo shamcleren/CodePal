@@ -1,5 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import { App, buildFallbackHistoryDiagnostics } from "./App";
 
 describe("App", () => {
@@ -48,5 +50,11 @@ describe("App", () => {
     });
 
     expect(buildFallbackHistoryDiagnostics(false).enabled).toBe(false);
+  });
+
+  it("does not expose unfinished LLM report settings", () => {
+    const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
+
+    expect(source).not.toContain("ReportPreferencesPanel");
   });
 });

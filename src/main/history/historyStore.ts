@@ -3,7 +3,12 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { HistoryRetentionPreset } from "../../shared/appSettings";
 import type { TokenTrendGranularity, TokenTrendPoint } from "../../shared/analyticsTypes";
-import type { HistoryDiagnostics, SessionHistoryPage, SessionHistoryPageRequest } from "../../shared/historyTypes";
+import type {
+  HistoryDiagnostics,
+  SessionHistoryPage,
+  SessionHistoryPageRequest,
+  UserPromptSummary,
+} from "../../shared/historyTypes";
 import { computeSessionTiming } from "../../shared/sessionTiming";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type {
@@ -11,10 +16,16 @@ import type {
   DailyTokenStats,
   ModelPricing,
   ModelTokenStats,
+  ProjectTokenStats,
   SessionTokenStats,
   TokenUsageWrite,
   UsageImportStatus,
 } from "../../shared/usageTypes";
+import {
+  UNKNOWN_PROJECT_NAME,
+  UNKNOWN_PROJECT_PATH,
+  normalizeProjectAttribution,
+} from "../../shared/projectAttribution";
 
 const DEFAULT_PAGE_LIMIT = 100;
 const MAX_PAGE_LIMIT = 200;
@@ -59,6 +70,8 @@ export type PersistedSessionWrite = {
     updatedAt: number;
     lastUserMessageAt?: number;
     hasPendingActions: boolean;
+    projectPath?: string;
+    projectName?: string;
   };
   activityItems: ActivityItem[];
   debugEvent?: {
@@ -76,11 +89,14 @@ export type SessionSeedRecord = {
   status: string;
   title: string | null;
   latestTask: string | null;
+  projectPath?: string | null;
+  projectName?: string | null;
   updatedAt: number;
   lastUserMessageAt: number | null;
   startedAt?: number | null;
   sessionDurationMs?: number | null;
   latestRunningDurationMs?: number | null;
+  userPrompts?: UserPromptSummary[];
 };
 
 export type GetRecentSessionsOptions = {
@@ -93,6 +109,8 @@ export type UsageSessionSummaryWrite = {
   agent: string;
   title: string;
   timestamp: number;
+  projectPath?: string;
+  projectName?: string;
 };
 
 function parseJsonObject(value: string | null): Record<string, unknown> | undefined {
@@ -103,6 +121,17 @@ function parseJsonObject(value: string | null): Record<string, unknown> | undefi
   } catch {
     return undefined;
   }
+}
+
+function normalizedProjectFields(input: {
+  projectPath?: string;
+  projectName?: string;
+}): { projectPath: string | null; projectName: string | null } {
+  const project = normalizeProjectAttribution(input.projectPath, input.projectName);
+  return {
+    projectPath: project?.projectPath ?? null,
+    projectName: project?.projectName ?? null,
+  };
 }
 
 function encodeCursor(cursor: HistoryCursor): string {
@@ -175,7 +204,9 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       latest_task TEXT,
       updated_at INTEGER NOT NULL,
       last_user_message_at INTEGER,
-      has_pending_actions INTEGER NOT NULL DEFAULT 0
+      has_pending_actions INTEGER NOT NULL DEFAULT 0,
+      project_path TEXT,
+      project_name TEXT
     );
 
     CREATE TABLE IF NOT EXISTS session_activity_items (
@@ -231,6 +262,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       reasoning_tokens INTEGER NOT NULL DEFAULT 0,
       source_kind TEXT,
       source_key TEXT,
+      project_path TEXT,
+      project_name TEXT,
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
 
@@ -250,8 +283,12 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   `);
 
   for (const statement of [
+    "ALTER TABLE sessions ADD COLUMN project_path TEXT",
+    "ALTER TABLE sessions ADD COLUMN project_name TEXT",
     "ALTER TABLE token_usage ADD COLUMN source_kind TEXT",
     "ALTER TABLE token_usage ADD COLUMN source_key TEXT",
+    "ALTER TABLE token_usage ADD COLUMN project_path TEXT",
+    "ALTER TABLE token_usage ADD COLUMN project_name TEXT",
   ]) {
     try {
       db.exec(statement);
@@ -263,6 +300,9 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   }
   // Keep column migrations before indexes that depend on the migrated columns.
   db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_token_usage_project_ts
+      ON token_usage (project_path, timestamp DESC);
+
     CREATE UNIQUE INDEX IF NOT EXISTS idx_token_usage_source_key
       ON token_usage (agent, source_key)
       WHERE source_key IS NOT NULL
@@ -517,10 +557,28 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     db.exec(`PRAGMA wal_checkpoint(${mode})`);
   }
 
+  function tokenUsageProjectFields(entry: TokenUsageWrite): {
+    projectPath: string | null;
+    projectName: string | null;
+  } {
+    const explicit = normalizedProjectFields(entry);
+    if (explicit.projectPath) {
+      return explicit;
+    }
+    const sessionProject = sessionProjectStmt.get(entry.sessionId) as
+      | { projectPath: string | null; projectName: string | null }
+      | undefined;
+    return normalizedProjectFields({
+      projectPath: sessionProject?.projectPath ?? undefined,
+      projectName: sessionProject?.projectName ?? undefined,
+    });
+  }
+
   const upsertSessionStmt = db.prepare(`
     INSERT INTO sessions (
-      id, tool, status, title, latest_task, updated_at, last_user_message_at, has_pending_actions
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      id, tool, status, title, latest_task, updated_at, last_user_message_at,
+      has_pending_actions, project_path, project_name
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tool = CASE
         WHEN excluded.updated_at >= sessions.updated_at THEN excluded.tool
@@ -547,6 +605,14 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       has_pending_actions = CASE
         WHEN excluded.updated_at >= sessions.updated_at THEN excluded.has_pending_actions
         ELSE sessions.has_pending_actions
+      END,
+      project_path = CASE
+        WHEN excluded.project_path IS NOT NULL THEN excluded.project_path
+        ELSE sessions.project_path
+      END,
+      project_name = CASE
+        WHEN excluded.project_name IS NOT NULL THEN excluded.project_name
+        ELSE sessions.project_name
       END
   `);
 
@@ -597,7 +663,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     LIMIT ?
   `);
   const recentSessionsStmt = db.prepare(`
-    SELECT id, tool, status, title, latest_task, updated_at, last_user_message_at
+    SELECT id, tool, status, title, latest_task, project_path, project_name, updated_at, last_user_message_at
     FROM sessions
     WHERE updated_at >= ?
       AND last_user_message_at IS NOT NULL
@@ -610,19 +676,41 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     WHERE session_id = ?
     ORDER BY timestamp ASC, insert_seq ASC
   `);
+  const sessionUserPromptsStmt = db.prepare(`
+    SELECT item_id AS id, body, timestamp
+    FROM session_activity_items
+    WHERE session_id = ?
+      AND kind = 'message'
+      AND source = 'user'
+    ORDER BY timestamp ASC, insert_seq ASC
+  `);
   const deleteActivityBeforeStmt = db.prepare(`DELETE FROM session_activity_items WHERE timestamp < ?`);
   const deleteDebugBeforeStmt = db.prepare(`DELETE FROM session_event_debug WHERE timestamp < ?`);
 
   // Token usage statements
   const ensureTokenUsageSessionStmt = db.prepare(`
-    INSERT INTO sessions (id, tool, status, title, latest_task, updated_at, last_user_message_at, has_pending_actions)
-    VALUES (?, ?, 'unknown', NULL, NULL, ?, NULL, 0)
+    INSERT INTO sessions (
+      id, tool, status, title, latest_task, updated_at, last_user_message_at,
+      has_pending_actions, project_path, project_name
+    )
+    VALUES (?, ?, 'unknown', NULL, NULL, ?, NULL, 0, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
-      updated_at = MAX(sessions.updated_at, excluded.updated_at)
+      updated_at = MAX(sessions.updated_at, excluded.updated_at),
+      project_path = CASE
+        WHEN sessions.project_path IS NULL THEN excluded.project_path
+        ELSE sessions.project_path
+      END,
+      project_name = CASE
+        WHEN sessions.project_name IS NULL THEN excluded.project_name
+        ELSE sessions.project_name
+      END
   `);
   const upsertUsageSessionSummaryStmt = db.prepare(`
-    INSERT INTO sessions (id, tool, status, title, latest_task, updated_at, last_user_message_at, has_pending_actions)
-    VALUES (?, ?, 'usage-only', ?, ?, ?, ?, 0)
+    INSERT INTO sessions (
+      id, tool, status, title, latest_task, updated_at, last_user_message_at,
+      has_pending_actions, project_path, project_name
+    )
+    VALUES (?, ?, 'usage-only', ?, ?, ?, ?, 0, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tool = CASE
         WHEN sessions.tool IS NULL OR sessions.tool = '' THEN excluded.tool
@@ -645,14 +733,28 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         WHEN sessions.last_user_message_at IS NULL THEN excluded.last_user_message_at
         WHEN excluded.last_user_message_at IS NULL THEN sessions.last_user_message_at
         ELSE MAX(sessions.last_user_message_at, excluded.last_user_message_at)
+      END,
+      project_path = CASE
+        WHEN sessions.project_path IS NULL THEN excluded.project_path
+        ELSE sessions.project_path
+      END,
+      project_name = CASE
+        WHEN sessions.project_name IS NULL THEN excluded.project_name
+        ELSE sessions.project_name
       END
+  `);
+  const sessionProjectStmt = db.prepare(`
+    SELECT project_path AS projectPath, project_name AS projectName
+    FROM sessions
+    WHERE id = ?
   `);
   const insertTokenUsageStmt = db.prepare(`
     INSERT INTO token_usage (
       session_id, agent, model, timestamp, input_tokens, output_tokens,
-      cache_read_tokens, cache_creation_tokens, reasoning_tokens, source_kind, source_key
+      cache_read_tokens, cache_creation_tokens, reasoning_tokens, source_kind,
+      source_key, project_path, project_name
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const findTokenUsageBySourceStmt = db.prepare(`
     SELECT id FROM token_usage WHERE agent = ? AND source_key = ? LIMIT 1
@@ -668,7 +770,9 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cache_read_tokens = ?,
       cache_creation_tokens = ?,
       reasoning_tokens = ?,
-      source_kind = ?
+      source_kind = ?,
+      project_path = COALESCE(?, project_path),
+      project_name = COALESCE(?, project_name)
     WHERE id = ?
   `);
   const deleteLegacyDuplicateTokenUsageStmt = db.prepare(`
@@ -689,6 +793,72 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       )
   `);
   const deleteTokenUsageBeforeStmt = db.prepare(`DELETE FROM token_usage WHERE timestamp < ?`);
+  const repairTokenUsageProjectStmt = db.prepare(`
+    UPDATE token_usage
+    SET
+      project_path = COALESCE(
+        NULLIF(project_path, ''),
+        (SELECT NULLIF(sessions.project_path, '') FROM sessions WHERE sessions.id = token_usage.session_id)
+      ),
+      project_name = COALESCE(
+        NULLIF(project_name, ''),
+        (SELECT NULLIF(sessions.project_name, '') FROM sessions WHERE sessions.id = token_usage.session_id)
+      )
+    WHERE (
+        project_path IS NULL OR project_path = ''
+        OR project_name IS NULL OR project_name = ''
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM sessions
+        WHERE sessions.id = token_usage.session_id
+          AND NULLIF(sessions.project_path, '') IS NOT NULL
+      )
+  `);
+  const repairSessionProjectFromTokenUsageStmt = db.prepare(`
+    UPDATE sessions
+    SET
+      project_path = COALESCE(
+        NULLIF(project_path, ''),
+        (
+          SELECT NULLIF(token_usage.project_path, '')
+          FROM token_usage
+          WHERE token_usage.session_id = sessions.id
+            AND NULLIF(token_usage.project_path, '') IS NOT NULL
+          GROUP BY NULLIF(token_usage.project_path, ''), NULLIF(token_usage.project_name, '')
+          ORDER BY
+            SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) DESC,
+            COUNT(*) DESC,
+            NULLIF(token_usage.project_path, '') ASC
+          LIMIT 1
+        )
+      ),
+      project_name = COALESCE(
+        NULLIF(project_name, ''),
+        (
+          SELECT COALESCE(NULLIF(token_usage.project_name, ''), NULLIF(token_usage.project_path, ''))
+          FROM token_usage
+          WHERE token_usage.session_id = sessions.id
+            AND NULLIF(token_usage.project_path, '') IS NOT NULL
+          GROUP BY NULLIF(token_usage.project_path, ''), NULLIF(token_usage.project_name, '')
+          ORDER BY
+            SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) DESC,
+            COUNT(*) DESC,
+            NULLIF(token_usage.project_path, '') ASC
+          LIMIT 1
+        )
+      )
+    WHERE (
+        project_path IS NULL OR project_path = ''
+        OR project_name IS NULL OR project_name = ''
+      )
+      AND EXISTS (
+        SELECT 1
+        FROM token_usage
+        WHERE token_usage.session_id = sessions.id
+          AND NULLIF(token_usage.project_path, '') IS NOT NULL
+      )
+  `);
 
   const dailyStatsStmt = db.prepare(`
     SELECT
@@ -739,6 +909,45 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       AND (? IS NULL OR agent = ?)
     GROUP BY agent
     ORDER BY totalTokens DESC
+  `);
+
+  const projectStatsStmt = db.prepare(`
+    SELECT
+      COALESCE(
+        NULLIF(token_usage.project_path, ''),
+        NULLIF(sessions.project_path, ''),
+        '${UNKNOWN_PROJECT_PATH}'
+      ) AS projectPath,
+      COALESCE(
+        NULLIF(token_usage.project_name, ''),
+        NULLIF(sessions.project_name, ''),
+        '${UNKNOWN_PROJECT_NAME}'
+      ) AS projectName,
+      SUM(token_usage.input_tokens) AS inputTokens,
+      SUM(token_usage.output_tokens) AS outputTokens,
+      SUM(token_usage.cache_read_tokens) AS cacheReadTokens,
+      SUM(token_usage.cache_creation_tokens) AS cacheCreationTokens,
+      SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) AS totalTokens,
+      COUNT(*) AS requestCount,
+      SUM(
+        (token_usage.input_tokens / 1000000.0) * COALESCE(CAST(model_pricing.input_per_million AS REAL), 0) +
+        (token_usage.output_tokens / 1000000.0) * COALESCE(CAST(model_pricing.output_per_million AS REAL), 0) +
+        (token_usage.cache_read_tokens / 1000000.0) * COALESCE(CAST(model_pricing.cache_read_per_million AS REAL), 0) +
+        (token_usage.cache_creation_tokens / 1000000.0) * COALESCE(CAST(model_pricing.cache_creation_per_million AS REAL), 0)
+      ) AS estimatedCost,
+      MIN(token_usage.timestamp) AS firstSeenAt,
+      MAX(token_usage.timestamp) AS lastSeenAt
+    FROM token_usage
+    LEFT JOIN sessions ON sessions.id = token_usage.session_id
+    LEFT JOIN model_pricing ON model_pricing.model_id = COALESCE(token_usage.model, 'unknown')
+    WHERE token_usage.timestamp >= ? AND token_usage.timestamp < ?
+      AND (? IS NULL OR token_usage.agent = ?)
+    GROUP BY projectPath
+    ORDER BY
+      CASE WHEN projectPath = '${UNKNOWN_PROJECT_PATH}' THEN 1 ELSE 0 END ASC,
+      totalTokens DESC,
+      requestCount DESC,
+      projectName ASC
   `);
 
   const topSessionStatsStmt = db.prepare(`
@@ -822,6 +1031,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
   function writeSessionEvent(write: PersistedSessionWrite) {
     assertOpen();
+    const project = normalizedProjectFields(write.session);
     db.exec("BEGIN");
     try {
       upsertSessionStmt.run(
@@ -833,6 +1043,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         write.session.updatedAt,
         write.session.lastUserMessageAt ?? null,
         write.session.hasPendingActions ? 1 : 0,
+        project.projectPath,
+        project.projectName,
       );
 
       for (const item of write.activityItems) {
@@ -932,6 +1144,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       latest_task: string | null;
       updated_at: number;
       last_user_message_at: number | null;
+      project_path: string | null;
+      project_name: string | null;
     }>;
     return rows.map((row) => {
       const activityItems = sessionTimingItemsStmt.all(row.id) as Array<{
@@ -947,12 +1161,15 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
           ...(item.tone ? { tone: item.tone } : {}),
         })),
       }, now());
+      const userPrompts = sessionUserPromptsStmt.all(row.id) as UserPromptSummary[];
       return {
         id: row.id,
         tool: row.tool,
         status: row.status,
         title: row.title,
         latestTask: row.latest_task,
+        projectPath: row.project_path,
+        projectName: row.project_name,
         updatedAt: row.updated_at,
         lastUserMessageAt: row.last_user_message_at,
         ...(timing.startedAt !== undefined ? { startedAt: timing.startedAt } : {}),
@@ -962,12 +1179,14 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         ...(timing.latestRunningDurationMs !== undefined
           ? { latestRunningDurationMs: timing.latestRunningDurationMs }
           : {}),
+        ...(userPrompts.length > 0 ? { userPrompts } : {}),
       };
     });
   }
 
   function writeTokenUsage(entry: TokenUsageWrite) {
     assertOpen();
+    const project = tokenUsageProjectFields(entry);
     const sourceKey =
       typeof entry.sourceKey === "string" && entry.sourceKey.trim()
         ? entry.sourceKey.trim()
@@ -984,7 +1203,13 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
     db.exec("BEGIN");
     try {
-      ensureTokenUsageSessionStmt.run(entry.sessionId, entry.agent, entry.timestamp);
+      ensureTokenUsageSessionStmt.run(
+        entry.sessionId,
+        entry.agent,
+        entry.timestamp,
+        project.projectPath,
+        project.projectName,
+      );
       const existing =
         sourceKey !== null
           ? (findTokenUsageBySourceStmt.get(entry.agent, sourceKey) as { id: number } | undefined)
@@ -1015,6 +1240,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
           cacheCreationTokens,
           reasoningTokens,
           sourceKind,
+          project.projectPath,
+          project.projectName,
           existing.id,
         );
       } else {
@@ -1030,9 +1257,28 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
           reasoningTokens,
           sourceKind,
           sourceKey,
+          project.projectPath,
+          project.projectName,
         );
       }
       db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  function repairTokenUsageProjectAttribution(): number {
+    assertOpen();
+    db.exec("BEGIN");
+    try {
+      const sessionResult = repairSessionProjectFromTokenUsageStmt.run() as { changes?: number };
+      const usageResult = repairTokenUsageProjectStmt.run() as { changes?: number };
+      db.exec("COMMIT");
+      return (
+        (typeof sessionResult.changes === "number" ? sessionResult.changes : 0) +
+        (typeof usageResult.changes === "number" ? usageResult.changes : 0)
+      );
     } catch (error) {
       db.exec("ROLLBACK");
       throw error;
@@ -1045,6 +1291,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     if (!title) {
       return;
     }
+    const project = normalizedProjectFields(summary);
     upsertUsageSessionSummaryStmt.run(
       summary.sessionId,
       summary.agent,
@@ -1052,6 +1299,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       title,
       summary.timestamp,
       summary.timestamp,
+      project.projectPath,
+      project.projectName,
     );
   }
 
@@ -1154,6 +1403,45 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }));
   }
 
+  function getTokenUsageByProject(
+    startMs: number,
+    endMs: number,
+    agent?: string,
+  ): ProjectTokenStats[] {
+    assertOpen();
+    const rows = projectStatsStmt.all(
+      startMs,
+      endMs,
+      agent ?? null,
+      agent ?? null,
+    ) as Array<{
+      projectPath: string;
+      projectName: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheCreationTokens: number;
+      totalTokens: number;
+      requestCount: number;
+      estimatedCost: number | null;
+      firstSeenAt: number;
+      lastSeenAt: number;
+    }>;
+    return rows.map((row) => ({
+      projectPath: row.projectPath,
+      projectName: row.projectName,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      cacheReadTokens: row.cacheReadTokens,
+      cacheCreationTokens: row.cacheCreationTokens,
+      totalTokens: row.totalTokens,
+      requestCount: row.requestCount,
+      estimatedCost: row.estimatedCost ?? 0,
+      firstSeenAt: row.firstSeenAt,
+      lastSeenAt: row.lastSeenAt,
+    }));
+  }
+
   function getTopTokenUsageSessions(
     startMs: number,
     endMs: number,
@@ -1232,24 +1520,43 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     startMs: number,
     endMs: number,
     granularity: TokenTrendGranularity,
-    filters: { agent?: string; model?: string } = {},
+    filters: { agent?: string; model?: string; projectPath?: string } = {},
   ): TokenTrendPoint[] {
     assertOpen();
     const rows = db.prepare(`
       SELECT
         timestamp,
-        agent,
-        COALESCE(model, 'unknown') AS model,
-        input_tokens AS inputTokens,
-        output_tokens AS outputTokens,
-        cache_read_tokens AS cacheReadTokens,
-        cache_creation_tokens AS cacheCreationTokens,
-        reasoning_tokens AS reasoningTokens
+        token_usage.agent AS agent,
+        COALESCE(token_usage.model, 'unknown') AS model,
+        COALESCE(
+          NULLIF(token_usage.project_path, ''),
+          NULLIF(sessions.project_path, ''),
+          '${UNKNOWN_PROJECT_PATH}'
+        ) AS projectPath,
+        COALESCE(
+          NULLIF(token_usage.project_name, ''),
+          NULLIF(sessions.project_name, ''),
+          '${UNKNOWN_PROJECT_NAME}'
+        ) AS projectName,
+        token_usage.input_tokens AS inputTokens,
+        token_usage.output_tokens AS outputTokens,
+        token_usage.cache_read_tokens AS cacheReadTokens,
+        token_usage.cache_creation_tokens AS cacheCreationTokens,
+        token_usage.reasoning_tokens AS reasoningTokens
       FROM token_usage
-      WHERE timestamp >= ? AND timestamp < ?
-        AND (? IS NULL OR agent = ?)
-        AND (? IS NULL OR COALESCE(model, 'unknown') = ?)
-      ORDER BY timestamp ASC, agent ASC, model ASC
+      LEFT JOIN sessions ON sessions.id = token_usage.session_id
+      WHERE token_usage.timestamp >= ? AND token_usage.timestamp < ?
+        AND (? IS NULL OR token_usage.agent = ?)
+        AND (? IS NULL OR COALESCE(token_usage.model, 'unknown') = ?)
+        AND (
+          ? IS NULL
+          OR COALESCE(
+            NULLIF(token_usage.project_path, ''),
+            NULLIF(sessions.project_path, ''),
+            '${UNKNOWN_PROJECT_PATH}'
+          ) = ?
+        )
+      ORDER BY timestamp ASC, projectPath ASC, agent ASC, model ASC
     `).all(
       startMs,
       endMs,
@@ -1257,10 +1564,14 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       filters.agent ?? null,
       filters.model ?? null,
       filters.model ?? null,
+      filters.projectPath ?? null,
+      filters.projectPath ?? null,
     ) as Array<{
       timestamp: number;
       agent: string;
       model: string;
+      projectPath: string;
+      projectName: string;
       inputTokens: number;
       outputTokens: number;
       cacheReadTokens: number;
@@ -1271,9 +1582,11 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     const buckets = new Map<string, TokenTrendPoint>();
     for (const row of rows) {
       const bucketStart = bucketStartFor(row.timestamp, granularity);
-      const key = `${bucketStart}\u0000${row.agent}\u0000${row.model}`;
+      const key = `${bucketStart}\u0000${row.projectPath}\u0000${row.agent}\u0000${row.model}`;
       const existing = buckets.get(key) ?? {
         bucketStart,
+        projectPath: row.projectPath,
+        projectName: row.projectName,
         agent: row.agent,
         model: row.model,
         inputTokens: 0,
@@ -1301,7 +1614,16 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     return Array.from(buckets.values()).sort((a, b) => {
       if (a.bucketStart !== b.bucketStart) return a.bucketStart - b.bucketStart;
       if (a.agent !== b.agent) return a.agent.localeCompare(b.agent);
-      return a.model.localeCompare(b.model);
+      if (a.model !== b.model) return a.model.localeCompare(b.model);
+      const aProjectPath = a.projectPath ?? UNKNOWN_PROJECT_PATH;
+      const bProjectPath = b.projectPath ?? UNKNOWN_PROJECT_PATH;
+      const aUnknown = aProjectPath === UNKNOWN_PROJECT_PATH;
+      const bUnknown = bProjectPath === UNKNOWN_PROJECT_PATH;
+      if (aUnknown !== bUnknown) return aUnknown ? 1 : -1;
+      const aProjectName = a.projectName ?? UNKNOWN_PROJECT_NAME;
+      const bProjectName = b.projectName ?? UNKNOWN_PROJECT_NAME;
+      if (aProjectName !== bProjectName) return aProjectName.localeCompare(bProjectName);
+      return aProjectPath.localeCompare(bProjectPath);
     });
   }
 
@@ -1437,8 +1759,10 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     runCleanup,
     close,
     writeTokenUsage,
+    repairTokenUsageProjectAttribution,
     writeUsageSessionSummary,
     getTokenUsageDailyStats,
+    getTokenUsageByProject,
     getTokenUsageByModel,
     getTokenUsageByAgent,
     getTopTokenUsageSessions,

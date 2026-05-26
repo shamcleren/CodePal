@@ -53,6 +53,12 @@ const TOKEN_COLORS = {
   cache: "var(--trend-line-cache)",
 };
 
+const TICK_BUCKET_STEPS: Record<TokenTrendGranularity, number[]> = {
+  minute: [1, 5, 10, 15, 30, 60, 120, 240, 360, 720, 1440],
+  hour: [1, 2, 3, 4, 6, 12, 24, 48, 72, 168],
+  day: [1, 2, 3, 7, 14, 30],
+};
+
 export function AnalyticsLineChart({
   points,
   metric,
@@ -89,7 +95,22 @@ export function AnalyticsLineChart({
     () => seriesForMetric(points, metric, pricing ?? []),
     [points, metric, pricing],
   );
-  const sourcePointCount = Math.max(0, ...rawSeries.map((series) => series.points.length));
+  const rawAllPoints = rawSeries.flatMap((entry) => entry.points);
+  const rawXMin = Math.min(...rawAllPoints.map((point) => point.x));
+  const rawXMax = Math.max(...rawAllPoints.map((point) => point.x));
+  const explicitXMin =
+    typeof domainStart === "number" && Number.isFinite(domainStart) ? domainStart : undefined;
+  const explicitXMax =
+    typeof domainEnd === "number" && Number.isFinite(domainEnd) ? domainEnd : undefined;
+  const xMin = alignDomainStart(explicitXMin ?? rawXMin, granularity);
+  const candidateXMax =
+    explicitXMax !== undefined && explicitXMax > xMin ? explicitXMax : rawXMax;
+  const xMax = alignDomainEnd(candidateXMax, granularity, xMin);
+  const completedSeries = useMemo(
+    () => fillSeriesBucketGaps(rawSeries, metric, granularity, xMin, xMax),
+    [rawSeries, metric, granularity, xMin, xMax],
+  );
+  const sourcePointCount = Math.max(0, ...completedSeries.map((series) => series.points.length));
   const targetPointCount = resolveLttbTargetPointCount({
     plotWidth,
     minPxPerPoint: 5.5,
@@ -99,7 +120,7 @@ export function AnalyticsLineChart({
   const summarizeTrend = sourcePointCount > targetPointCount;
   const series = useMemo(
     () =>
-      rawSeries.map((entry) => ({
+      completedSeries.map((entry) => ({
         ...entry,
         points: summarizeTrend
           ? summarizeSeries(entry.points, targetPointCount)
@@ -107,19 +128,10 @@ export function AnalyticsLineChart({
             ? lttbSample(entry.points, targetPointCount)
             : entry.points,
       })),
-    [rawSeries, summarizeTrend, targetPointCount],
+    [completedSeries, summarizeTrend, targetPointCount],
   );
   const sampledPointCount = Math.max(0, ...series.map((entry) => entry.points.length));
-  const rawAllPoints = rawSeries.flatMap((entry) => entry.points);
   const allPoints = series.flatMap((entry) => entry.points);
-  const rawXMin = Math.min(...rawAllPoints.map((point) => point.x));
-  const rawXMax = Math.max(...rawAllPoints.map((point) => point.x));
-  const explicitXMin =
-    typeof domainStart === "number" && Number.isFinite(domainStart) ? domainStart : undefined;
-  const explicitXMax =
-    typeof domainEnd === "number" && Number.isFinite(domainEnd) ? domainEnd : undefined;
-  const xMin = explicitXMin ?? rawXMin;
-  const xMax = explicitXMax !== undefined && explicitXMax > xMin ? explicitXMax : rawXMax;
   const yMax = Math.max(1, ...allPoints.map((point) => point.y));
   const plotH = SVG_HEIGHT - PAD_TOP - PAD_BOTTOM;
   const plotW = SVG_WIDTH - PAD_LEFT - PAD_RIGHT;
@@ -128,7 +140,7 @@ export function AnalyticsLineChart({
   const toSvgX = (x: number) =>
     PAD_LEFT + ((x - xMin) / Math.max(1, xMax - xMin)) * plotW;
   const toSvgY = (y: number) => PAD_TOP + plotH - (y / yMax) * plotH;
-  const xTicks = buildTimeTicks(xMin, xMax);
+  const xTicks = buildTimeTicks(xMin, xMax, granularity);
   const hoverTargets = buildHoverTargets(series, toSvgX, toSvgY, xMax - xMin, granularity);
   const activeHover =
     hoverIndex !== null && hoverTargets[hoverIndex] ? hoverTargets[hoverIndex] : null;
@@ -638,6 +650,107 @@ function estimatePointCost(point: TokenTrendPoint, pricing?: ModelPricing): numb
   );
 }
 
+function fillSeriesBucketGaps(
+  series: Series[],
+  metric: AnalyticsMetric,
+  granularity: TokenTrendGranularity | undefined,
+  xMin: number,
+  xMax: number,
+): Series[] {
+  if (
+    metric === "cacheHit" ||
+    !granularity ||
+    !Number.isFinite(xMin) ||
+    !Number.isFinite(xMax) ||
+    xMax <= xMin
+  ) {
+    return series;
+  }
+
+  const bucketStarts = bucketStartsBetween(xMin, xMax, granularity);
+  if (bucketStarts.length === 0) {
+    return series;
+  }
+
+  return series.map((entry) => {
+    if (entry.points.length === 0) {
+      return entry;
+    }
+    const valuesByBucket = new Map(entry.points.map((point) => [point.x, point.y]));
+    return {
+      ...entry,
+      points: bucketStarts.map((x) => ({
+        x,
+        y: valuesByBucket.get(x) ?? 0,
+      })),
+    };
+  });
+}
+
+function bucketStartsBetween(
+  start: number,
+  end: number,
+  granularity: TokenTrendGranularity,
+): number[] {
+  const starts: number[] = [];
+  let cursor = alignDomainStart(start, granularity);
+  let guard = 0;
+  while (cursor < end && guard < 10_000) {
+    starts.push(cursor);
+    cursor = nextBucketStart(cursor, granularity);
+    guard += 1;
+  }
+  return starts;
+}
+
+function alignDomainStart(
+  value: number,
+  granularity?: TokenTrendGranularity,
+): number {
+  if (!granularity || !Number.isFinite(value)) {
+    return value;
+  }
+  const date = new Date(value);
+  if (granularity === "day") {
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  }
+  if (granularity === "hour") {
+    date.setMinutes(0, 0, 0);
+    return date.getTime();
+  }
+  date.setSeconds(0, 0);
+  return date.getTime();
+}
+
+function alignDomainEnd(
+  value: number,
+  granularity: TokenTrendGranularity | undefined,
+  minimum: number,
+): number {
+  if (!granularity || !Number.isFinite(value)) {
+    return value;
+  }
+  const aligned = alignDomainStart(value, granularity);
+  const end = aligned === value ? aligned : nextBucketStart(aligned, granularity);
+  return end > minimum ? end : nextBucketStart(minimum, granularity);
+}
+
+function nextBucketStart(
+  value: number,
+  granularity: TokenTrendGranularity,
+): number {
+  const date = new Date(value);
+  if (granularity === "day") {
+    date.setDate(date.getDate() + 1);
+  } else if (granularity === "hour") {
+    date.setHours(date.getHours() + 1, 0, 0, 0);
+  } else {
+    date.setMinutes(date.getMinutes() + 1, 0, 0);
+  }
+  return date.getTime();
+}
+
 function defaultYFormat(value: number, metric: AnalyticsMetric): string {
   if (metric === "cost") return `$${value.toFixed(value >= 10 ? 0 : 2)}`;
   if (metric === "cacheHit") return `${Math.round(value)}%`;
@@ -652,12 +765,29 @@ function defaultYFormat(value: number, metric: AnalyticsMetric): string {
   return String(Math.round(value));
 }
 
-function buildTimeTicks(xMin: number, xMax: number): number[] {
+function buildTimeTicks(
+  xMin: number,
+  xMax: number,
+  granularity?: TokenTrendGranularity,
+): number[] {
   if (!Number.isFinite(xMin) || !Number.isFinite(xMax)) {
     return [];
   }
   if (xMin === xMax) {
     return [xMin];
+  }
+
+  if (granularity) {
+    const buckets = bucketStartsBetween(xMin, xMax, granularity);
+    if (buckets.length === 0) {
+      return [];
+    }
+    const step = chooseBucketTickStep(buckets.length, granularity);
+    const ticks = buckets.filter((_, index) => index % step === 0);
+    if (isAlignedToBucketStart(xMax, granularity) && ticks.at(-1) !== xMax) {
+      ticks.push(xMax);
+    }
+    return ticks;
   }
 
   const tickCount = 5;
@@ -668,12 +798,33 @@ function buildTimeTicks(xMin: number, xMax: number): number[] {
   return Array.from(new Set(ticks.map((tick) => Math.round(tick))));
 }
 
+function chooseBucketTickStep(bucketCount: number, granularity: TokenTrendGranularity): number {
+  return (
+    TICK_BUCKET_STEPS[granularity].find((step) => Math.ceil(bucketCount / step) <= 6) ??
+    TICK_BUCKET_STEPS[granularity].at(-1) ??
+    1
+  );
+}
+
+function isAlignedToBucketStart(value: number, granularity: TokenTrendGranularity): boolean {
+  return alignDomainStart(value, granularity) === value;
+}
+
 function formatTimeTick(
   value: number,
   spanMs: number,
   granularity?: TokenTrendGranularity,
 ): string {
   const date = new Date(value);
+  if (granularity === "day") {
+    return `${twoDigit(date.getMonth() + 1)}-${twoDigit(date.getDate())}`;
+  }
+  if (granularity === "hour") {
+    if (spanMs > 36 * 60 * 60_000) {
+      return `${twoDigit(date.getMonth() + 1)}-${twoDigit(date.getDate())} ${twoDigit(date.getHours())}h`;
+    }
+    return `${twoDigit(date.getHours())}:00`;
+  }
   if (granularity === "minute" || spanMs <= 36 * 60 * 60_000) {
     return `${twoDigit(date.getHours())}:${twoDigit(date.getMinutes())}`;
   }

@@ -1,6 +1,7 @@
 import { Notification } from "electron";
 import { execFile } from "node:child_process";
 import type { NotificationSettings } from "../../shared/appSettings";
+import { isUnknownProjectPath, projectDisplayName } from "../../shared/projectAttribution";
 import type { SessionStatus } from "../../shared/sessionTypes";
 import type { BrowserWindow } from "electron";
 import type { PendingActionCreated } from "../session/sessionStore";
@@ -50,6 +51,23 @@ function toolLabel(tool: string): string {
   return KNOWN_TOOL_LABELS[tool] ?? tool.charAt(0).toUpperCase() + tool.slice(1);
 }
 
+function notificationProjectLabel(projectName?: string, projectPath?: string): string | null {
+  const trimmedName = projectName?.trim();
+  if (trimmedName && trimmedName !== "unknown") {
+    return trimmedName;
+  }
+
+  const trimmedPath = projectPath?.trim();
+  if (!trimmedPath || isUnknownProjectPath(trimmedPath)) {
+    return null;
+  }
+  return projectDisplayName(trimmedPath);
+}
+
+function prefixProject(text: string, projectLabel: string | null): string {
+  return projectLabel ? `[${projectLabel}] ${text}` : text;
+}
+
 export interface NotificationService {
   onSessionStateChange(params: {
     sessionId: string;
@@ -59,6 +77,8 @@ export interface NotificationService {
     title?: string;
     task?: string;
     lastUserMessage?: string;
+    projectPath?: string;
+    projectName?: string;
   }): void;
   onPendingActionCreated(params: PendingActionCreated): void;
 }
@@ -68,34 +88,43 @@ function buildNotificationBody(params: {
   title?: string;
   task?: string;
   nextStatus: SessionStatus;
+  projectLabel: string | null;
 }): string {
   const userMsg = params.lastUserMessage?.trim();
   if (userMsg) {
-    return userMsg.length > 120 ? `${userMsg.slice(0, 117)}...` : userMsg;
+    const body = userMsg.length > 120 ? `${userMsg.slice(0, 117)}...` : userMsg;
+    return prefixProject(body, params.projectLabel);
   }
 
   const title = params.title?.trim();
   if (title) {
-    return title;
+    return prefixProject(title, params.projectLabel);
   }
 
   const task = params.task?.trim();
   if (task) {
-    return task;
+    return prefixProject(task, params.projectLabel);
   }
 
+  let fallback: string;
   switch (params.nextStatus) {
     case "completed":
-      return "Open CodePal to review the completed session.";
+      fallback = "Open CodePal to review the completed session.";
+      break;
     case "waiting":
-      return "Open CodePal to review the pending decision.";
+      fallback = "Open CodePal to review the pending decision.";
+      break;
     case "error":
-      return "Open CodePal to inspect the session error.";
+      fallback = "Open CodePal to inspect the session error.";
+      break;
     case "running":
-      return "Open CodePal to review the resumed session.";
+      fallback = "Open CodePal to review the resumed session.";
+      break;
     default:
-      return "Open CodePal to inspect this session.";
+      fallback = "Open CodePal to inspect this session.";
+      break;
   }
+  return prefixProject(fallback, params.projectLabel);
 }
 
 export function createNotificationService(deps: {
@@ -105,7 +134,17 @@ export function createNotificationService(deps: {
   const lastNotified = new Map<string, number>();
 
   return {
-    onSessionStateChange({ sessionId, tool, prevStatus, nextStatus, title, task, lastUserMessage }) {
+    onSessionStateChange({
+      sessionId,
+      tool,
+      prevStatus,
+      nextStatus,
+      title,
+      task,
+      lastUserMessage,
+      projectPath,
+      projectName,
+    }) {
       const settings = deps.getNotificationSettings();
       if (!settings.enabled) return;
 
@@ -120,9 +159,12 @@ export function createNotificationService(deps: {
       lastNotified.set(debounceKey, now);
 
       const label = toolLabel(tool);
+      const projectLabel = notificationProjectLabel(projectName, projectPath);
       const notification = new Notification({
-        title: `${label} ${transition.titleZh}`,
-        body: buildNotificationBody({ lastUserMessage, title, task, nextStatus }),
+        title: projectLabel
+          ? `${label} ${transition.titleZh} · ${projectLabel}`
+          : `${label} ${transition.titleZh}`,
+        body: buildNotificationBody({ lastUserMessage, title, task, nextStatus, projectLabel }),
         silent: true,
       });
 
@@ -147,7 +189,7 @@ export function createNotificationService(deps: {
       }
     },
 
-    onPendingActionCreated({ sessionId, tool, pendingCount, title, task }) {
+    onPendingActionCreated({ sessionId, tool, pendingCount, title, task, projectPath, projectName }) {
       const settings = deps.getNotificationSettings();
       if (!settings.enabled) return;
 
@@ -161,15 +203,18 @@ export function createNotificationService(deps: {
       lastNotified.set(debounceKey, now);
 
       const label = toolLabel(tool);
+      const projectLabel = notificationProjectLabel(projectName, projectPath);
       const body =
         pendingCount === 1
           ? "需要你的审批"
           : `${pendingCount} 条操作需要你的审批`;
-      const titleText = `${label} · ${title ?? task ?? "未知会话"}`;
+      const titleText = projectLabel
+        ? `${label} · ${projectLabel} · ${title ?? task ?? "未知会话"}`
+        : `${label} · ${title ?? task ?? "未知会话"}`;
 
       const notification = new Notification({
         title: titleText,
-        body,
+        body: prefixProject(body, projectLabel),
         silent: true,
       });
 
