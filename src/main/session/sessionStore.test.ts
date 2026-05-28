@@ -328,6 +328,58 @@ describe("createSessionStore", () => {
     expect(store.getSessions()).toEqual([]);
   });
 
+  it("hides JetBrains noise sessions that only contain transient connection errors", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "jb-transport-noise",
+      tool: "pycharm",
+      status: "error",
+      title: "p2-cmdb",
+      timestamp: 100,
+      meta: {
+        jetbrains_event_type: "accept stream failed",
+        jetbrains_status_source: "lifecycle",
+      },
+      activityItems: [
+        {
+          id: "jb-transport-noise:closed-pipe",
+          kind: "note",
+          source: "system",
+          title: "Connection error",
+          body: "accept stream failed: io: read/write on closed pipe",
+          tone: "error",
+          timestamp: 100,
+        },
+      ],
+    });
+
+    store.applyEvent({
+      sessionId: "jb-transport-noise",
+      tool: "pycharm",
+      status: "error",
+      title: "p2-cmdb",
+      timestamp: 102,
+      meta: {
+        jetbrains_event_type: "accept stream failed",
+        jetbrains_status_source: "lifecycle",
+      },
+      activityItems: [
+        {
+          id: "jb-transport-noise:reset",
+          kind: "note",
+          source: "system",
+          title: "Connection error",
+          body: "accept stream failed: read tcp 192.168.255.10:64896->21.34.11.236:443: read: connection reset by peer",
+          tone: "error",
+          timestamp: 102,
+        },
+      ],
+    });
+
+    expect(store.getSessions()).toEqual([]);
+  });
+
   it("keeps JetBrains sessions visible once the user prompt arrives", () => {
     const store = createSessionStore();
 

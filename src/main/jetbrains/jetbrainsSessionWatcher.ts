@@ -199,9 +199,13 @@ function inferEditorNameFromIdeaLogPath(filePath: string): string | undefined {
 
 function isIgnorableTransportError(message: string): boolean {
   const normalized = message.trim().toLowerCase();
+  if (!normalized.startsWith("accept stream failed:")) {
+    return false;
+  }
   return (
-    normalized.includes("websocket: close 1006") &&
-    normalized.includes("unexpected eof")
+    normalized.includes("io: read/write on closed pipe") ||
+    normalized.includes("connection reset by peer") ||
+    (normalized.includes("websocket: close 1006") && normalized.includes("unexpected eof"))
   );
 }
 

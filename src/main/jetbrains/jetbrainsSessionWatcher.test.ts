@@ -403,6 +403,36 @@ describe("createJetBrainsSessionWatcher", () => {
     expect(onEvent).not.toHaveBeenCalled();
   });
 
+  it("does not surface transient accept stream transport errors as dashboard errors", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-jetbrains-"));
+    const filePath = createLogFile([
+      '{"jsonrpc":"2.0","method":"gongfeng/chat-agent-register","params":{"workspace":["file:///Users/renjinming/go/src/github.com/shamcleren/p2-cmdb"],"session_id":"019","editor_name":"JetBrainsPyCharm"},"id":"1"}',
+      '{"id":"1","result":{"code":0,"msg":"success","uuid":"cccccccc-1111-2222-3333-dddddddddddd","workspace_uri":"file:///Users/renjinming/go/src/github.com/shamcleren/p2-cmdb"},"jsonrpc":"2.0"}',
+      "",
+    ]);
+
+    const onEvent = vi.fn();
+    const watcher = createJetBrainsSessionWatcher({
+      logRoot: tmpDir,
+      onEvent,
+      initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
+    });
+
+    await watcher.pollOnce();
+    fs.appendFileSync(
+      filePath,
+      [
+        "2026-05-28 10:01:03.000\tERROR\tws/connect.go:105\taccept stream failed: io: read/write on closed pipe, cccccccc-1111-2222-3333-dddddddddddd",
+        "2026-05-28 10:01:05.000\tERROR\tws/connect.go:105\taccept stream failed: read tcp 192.168.255.10:64896->21.34.11.236:443: read: connection reset by peer, cccccccc-1111-2222-3333-dddddddddddd",
+        "",
+      ].join("\n"),
+    );
+
+    await watcher.pollOnce();
+
+    expect(onEvent).not.toHaveBeenCalled();
+  });
+
   it("surfaces assistant message content from JetBrains idea logs", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-jetbrains-"));
     const chatAgentFile = createLogFile([

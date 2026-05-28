@@ -734,6 +734,23 @@ function isMeaningfulAssistantBody(body: string): boolean {
   return trimmed !== "正在整理回复" && trimmed !== "正在整理回复...";
 }
 
+function isTransientJetBrainsConnectionErrorItem(item: ActivityItem): boolean {
+  if (item.kind !== "note" || item.source !== "system" || item.title !== "Connection error") {
+    return false;
+  }
+
+  const body = item.body.trim().toLowerCase();
+  if (!body.startsWith("accept stream failed:")) {
+    return false;
+  }
+
+  return (
+    body.includes("io: read/write on closed pipe") ||
+    body.includes("connection reset by peer") ||
+    (body.includes("websocket: close 1006") && body.includes("unexpected eof"))
+  );
+}
+
 function hasOnlyLifecycleOrPlaceholderContent(session: InternalSessionRecord): boolean {
   if (session.activityItems.length === 0) {
     return true;
@@ -743,6 +760,7 @@ function hasOnlyLifecycleOrPlaceholderContent(session: InternalSessionRecord): b
     if (item.kind === "system" || item.kind === "note") {
       if (item.source !== "system") return false;
       if ((item.meta as Record<string, unknown>)?.inferred === true) return true;
+      if (isTransientJetBrainsConnectionErrorItem(item)) return true;
       return isLowSignalSystemItem(item);
     }
     return (
