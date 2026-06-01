@@ -61,7 +61,7 @@
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
 - v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
-- v1.0.3 through v1.3.0 are all shipped. Current shipped baseline is **v1.3.0**.
+- v1.0.3 through v1.3.2 are all shipped. Current shipped baseline is **v1.3.2**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -76,11 +76,19 @@
 - v1.1.11 shipped: Claude statusLine model-id enrichment, Codex timeline noise filtering, estimated cost per agent in usage strip, background hook startup fix
 - v1.2.0 shipped: Report Facts + work items + operation flow + LLM report generation, attention queue banner, SVG line trend chart with LTTB, Work Health strip, agent filter chips, report settings panel, semantic built-in themes
 - v1.3.0 shipped: Daily Work Review, project grouping / attribution across sessions and analytics, live session run and context metrics, persisted Analytics filters, review noise reduction
+- v1.3.1 shipped: session noise filtering, unified token / cost formatting across monitoring surfaces, Analytics simplification, 30-day Work Review coverage, and Analytics / Work Review daily usage alignment
+- v1.3.2 shipped: clean patch release from the CI-stable follow-up commit after v1.3.1 tag checks exposed timezone-sensitive Work Review / Analytics test expectations
 - v1.3.0 local lint / test / build verification is green on 2026-05-26:
   - `npm run lint`
   - `npm test` — 976 tests across 107 files, all passing
   - `npm run build`
   - `npm run test:e2e` — 17 Playwright tests, all passing
+  - `git diff --check`
+- v1.3.2 local release-candidate validation on 2026-06-01 covers the v1.3.1 CI recovery patch:
+  - `npm run lint`
+  - `TZ=UTC npm test`
+  - `npm run build`
+  - `npm run test:e2e`
   - `git diff --check`
 - Current post-v1.1.11 dev validation on 2026-05-21 covered the first visual-system and expanded-session usage pass:
   - semantic built-in themes: `graphite-ops` and `paper-ops`
@@ -336,9 +344,9 @@ npm run dist:mac
 - team sharing, cloud sync, billing, and broader control surfaces until the individual local workflow has proven sustained value
 - any productivity-scoring or team-ranking surface
 
-### v1.1.0–v1.3.1 Release Track
+### v1.1.0–v1.3.2 Release Track
 
-v1.1.0 through v1.3.1 are shipped. See individual release notes for details:
+v1.1.0 through v1.3.2 are shipped. See individual release notes for details:
 
 - `docs/release/notes/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release/notes/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -355,6 +363,7 @@ v1.1.0 through v1.3.1 are shipped. See individual release notes for details:
 - `docs/release/notes/release-notes-v1.2.0.md` — Report Facts, work items, operation flow, LLM reports, attention banner, SVG line trend chart, Work Health strip, agent filters, report settings, semantic themes
 - `docs/release/notes/release-notes-v1.3.0.md` — Daily Work Review, project grouping, live run / context metrics, persisted Analytics filters, review noise reduction
 - `docs/release/notes/release-notes-v1.3.1.md` — session noise filtering, unified usage formatting, 30-day Work Review coverage, Analytics / Work Review daily usage alignment
+- `docs/release/notes/release-notes-v1.3.2.md` — clean CI-stable patch release for the v1.3.1 usage-alignment work, with timezone-stable Work Review / Analytics test coverage
 
 ## Next Product Direction Handoff
 
