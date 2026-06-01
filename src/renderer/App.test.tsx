@@ -10,6 +10,18 @@ import {
   workReviewUsageRefreshKey,
 } from "./App";
 
+function localDayStart(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function addLocalDays(timestamp: number, days: number): number {
+  const date = new Date(timestamp);
+  date.setDate(date.getDate() + days);
+  return date.getTime();
+}
+
 describe("App", () => {
   it("renders sessions and the in-app settings drawer shell together", () => {
     const html = renderToStaticMarkup(<App />);
@@ -73,14 +85,14 @@ describe("App", () => {
 
   it("preloads the full 30-day work review range on natural day boundaries", () => {
     const now = Date.parse("2026-06-01T17:30:00+08:00");
+    const localTodayStart = localDayStart(now);
+    const expectedStart = addLocalDays(localTodayStart, -29);
 
     expect(workReviewTokenRange(now)).toEqual({
-      start: Date.parse("2026-05-03T00:00:00+08:00"),
-      end: Date.parse("2026-06-02T00:00:00+08:00"),
+      start: expectedStart,
+      end: addLocalDays(localTodayStart, 1),
     });
-    expect(workReviewHistoryMaxAgeMs(now)).toBe(
-      now - Date.parse("2026-05-03T00:00:00+08:00"),
-    );
+    expect(workReviewHistoryMaxAgeMs(now)).toBe(now - expectedStart);
   });
 
   it("does not expose unfinished LLM report settings", () => {

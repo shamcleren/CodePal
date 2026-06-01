@@ -23,6 +23,12 @@ function row(overrides: Partial<MonitorSessionRow>): MonitorSessionRow {
   };
 }
 
+function localDayStart(timestamp: string): number {
+  const date = new Date(Date.parse(timestamp));
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
 describe("buildDailyWorkReview", () => {
   it("groups sessions by local day, summarizes useful work, and omits errored sessions", () => {
     const days = buildDailyWorkReview([
@@ -163,7 +169,7 @@ describe("buildDailyWorkReview", () => {
       now: Date.parse("2026-05-25T14:00:00+08:00"),
       tokenTrendPoints: [
         {
-          bucketStart: Date.parse("2026-05-20T00:00:00+08:00"),
+          bucketStart: localDayStart("2026-05-20T18:00:00+08:00"),
           agent: "codex",
           model: "codex-default",
           inputTokens: 100_000,
@@ -222,7 +228,7 @@ describe("buildDailyWorkReview", () => {
       },
       tokenTrendPoints: [
         {
-          bucketStart: Date.parse("2026-05-25T00:00:00+08:00"),
+          bucketStart: localDayStart("2026-05-25T09:00:00+08:00"),
           agent: "codex",
           model: "codex-default",
           inputTokens: 500_000,
@@ -266,7 +272,7 @@ describe("buildDailyWorkReview", () => {
       now: Date.parse("2026-05-25T14:00:00+08:00"),
       tokenTrendPoints: [
         {
-          bucketStart: Date.parse("2026-05-25T00:00:00+08:00"),
+          bucketStart: localDayStart("2026-05-25T09:00:00+08:00"),
           agent: "codex",
           model: "unknown",
           inputTokens: 500_000,

@@ -114,7 +114,7 @@ test("renders analytics from persisted token usage", async () => {
     await expect(page.locator(".analytics-line-chart__tooltip")).toContainText("Total");
     await expect(page.locator(".analytics-small-multiples__card")).toHaveCount(0);
     await expect(page.locator(".analytics-page__source-coverage")).toContainText(
-      /Requests|请求/,
+      /requests|请求/i,
     );
 
     await page.getByRole("button", { name: /30 Days|30 天/ }).click();

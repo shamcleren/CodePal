@@ -26,6 +26,12 @@ function row(overrides: Partial<MonitorSessionRow>): MonitorSessionRow {
   };
 }
 
+function localDayStart(timestamp: string): number {
+  const date = new Date(Date.parse(timestamp));
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
 function fakeStorage(): Storage {
   const values = new Map<string, string>();
   return {
@@ -108,7 +114,7 @@ describe("WorkReviewPage", () => {
           ]}
           tokenTrendPoints={[
             {
-              bucketStart: Date.parse("2026-05-20T00:00:00+08:00"),
+              bucketStart: localDayStart("2026-05-20T18:00:00+08:00"),
               agent: "claude",
               model: "claude-sonnet-4-5-20250929",
               inputTokens: 100_000,
