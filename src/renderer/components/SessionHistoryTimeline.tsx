@@ -5,6 +5,8 @@ import type { PendingAction } from "../../shared/sessionTypes";
 import { canReply } from "../../shared/sessionTypes";
 import type { ModelPricing, SessionTokenUsageResult, UsageContext } from "../../shared/usageTypes";
 import { useI18n } from "../i18n";
+import { estimateTokenCost, formatUsageCost, formatUsageTokens, selectUsageCost } from "../usageFormat";
+import type { UsageCostKind } from "../usageFormat";
 import type { MonitorSessionRow, TimelineItem } from "../monitorSession";
 import { HoverDetails } from "./HoverDetails";
 import { SessionMessageInput } from "./SessionMessageInput";
@@ -35,6 +37,8 @@ export type SessionFooterUsageSummary = {
   cacheTokens: number;
   context?: UsageContext & { percent: number };
   cost: number | null;
+  costKind?: UsageCostKind;
+  costCurrency?: string;
 };
 
 function normalizeComparableText(text: string): string {
@@ -62,12 +66,6 @@ function appendUniqueHistoryItems(current: ActivityItem[], next: ActivityItem[])
   return merged;
 }
 
-function parsePricePerToken(value: string): number | null {
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed)) return null;
-  return parsed / 1_000_000;
-}
-
 function estimatePersistedUsageCost(
   persisted: SessionTokenUsageResult["persisted"],
   pricing: ModelPricing[],
@@ -84,26 +82,21 @@ function estimatePersistedUsageCost(
     );
     if (!price) continue;
 
-    const inputRate = parsePricePerToken(price.inputPerMillion);
-    const outputRate = parsePricePerToken(price.outputPerMillion);
-    const cacheReadRate = parsePricePerToken(price.cacheReadPerMillion);
-    const cacheCreationRate = parsePricePerToken(price.cacheCreationPerMillion);
-
-    if (
-      inputRate === null ||
-      outputRate === null ||
-      cacheReadRate === null ||
-      cacheCreationRate === null
-    ) {
-      continue;
-    }
-
+    const cost = estimateTokenCost(
+      {
+        agent: row.agent,
+        model: row.model,
+        inputTokens: row.inputTokens,
+        outputTokens: row.outputTokens,
+        cacheReadTokens: row.cacheReadTokens,
+        cacheCreationTokens: row.cacheCreationTokens,
+      },
+      [price],
+      { allowModelFallback: false },
+    );
+    if (cost === undefined) continue;
     matched = true;
-    total +=
-      row.inputTokens * inputRate +
-      row.outputTokens * outputRate +
-      row.cacheReadTokens * cacheReadRate +
-      row.cacheCreationTokens * cacheCreationRate;
+    total += cost;
   }
 
   return matched ? total : null;
@@ -176,11 +169,9 @@ export function summarizeSessionFooterUsage(
     }
   }
 
-  const liveCost = usage.live?.cost?.reported ?? usage.live?.cost?.estimated;
-  const cost =
-    typeof liveCost === "number"
-      ? liveCost
-      : estimatePersistedUsageCost(usage.persisted, usage.pricing);
+  const liveCost = selectUsageCost(usage.live?.cost);
+  const persistedCost = estimatePersistedUsageCost(usage.persisted, usage.pricing);
+  const cost = liveCost?.amount ?? persistedCost;
   const context = normalizeFooterContext(usage.live?.context);
 
   if (
@@ -201,20 +192,15 @@ export function summarizeSessionFooterUsage(
     cacheTokens,
     ...(context ? { context } : {}),
     cost,
+    ...(liveCost
+      ? {
+          costKind: liveCost.kind,
+          ...(liveCost.currency ? { costCurrency: liveCost.currency } : {}),
+        }
+      : persistedCost !== null
+        ? { costKind: "estimated" as const, costCurrency: "USD" }
+        : {}),
   };
-}
-
-function formatFooterTokenCount(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 10_000) return `${(value / 1_000).toFixed(1)}K`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
-  return value.toLocaleString();
-}
-
-function formatFooterCost(value: number): string {
-  if (value < 0.01) return `$${value.toFixed(4)}`;
-  if (value < 1) return `$${value.toFixed(3)}`;
-  return `$${value.toFixed(2)}`;
 }
 
 function SessionFooterUsageStats({
@@ -225,7 +211,7 @@ function SessionFooterUsageStats({
   const i18n = useI18n();
   const contextTitle =
     typeof summary.context?.used === "number" && typeof summary.context.max === "number"
-      ? `${formatFooterTokenCount(summary.context.used)} / ${formatFooterTokenCount(summary.context.max)}`
+      ? `${formatUsageTokens(summary.context.used, i18n.locale)} / ${formatUsageTokens(summary.context.max, i18n.locale)}`
       : undefined;
   const stats = [
     {
@@ -237,19 +223,19 @@ function SessionFooterUsageStats({
     {
       key: "input",
       label: i18n.t("session.footer.usage.input"),
-      value: formatFooterTokenCount(summary.inputTokens),
+      value: formatUsageTokens(summary.inputTokens, i18n.locale),
       show: summary.inputTokens > 0,
     },
     {
       key: "output",
       label: i18n.t("session.footer.usage.output"),
-      value: formatFooterTokenCount(summary.outputTokens),
+      value: formatUsageTokens(summary.outputTokens, i18n.locale),
       show: summary.outputTokens > 0,
     },
     {
       key: "cache",
       label: i18n.t("session.footer.usage.cache"),
-      value: formatFooterTokenCount(summary.cacheTokens),
+      value: formatUsageTokens(summary.cacheTokens, i18n.locale),
       show: summary.cacheTokens > 0,
     },
     {
@@ -262,8 +248,17 @@ function SessionFooterUsageStats({
     },
     {
       key: "cost",
-      label: i18n.t("session.footer.usage.cost"),
-      value: summary.cost === null ? "" : formatFooterCost(summary.cost),
+      label:
+        summary.costKind === "estimated"
+          ? i18n.t("tokenStats.estimatedCost")
+          : i18n.t("session.footer.usage.cost"),
+      value:
+        summary.cost === null
+          ? ""
+          : formatUsageCost(summary.cost, {
+              currency: summary.costCurrency ?? (summary.costKind === "estimated" ? "USD" : undefined),
+              locale: i18n.locale,
+            }),
       show: summary.cost !== null,
     },
   ].filter((item) => item.show);

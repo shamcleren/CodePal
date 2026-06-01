@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildDailyWorkReview, type DailyWorkReviewDay, type DailyWorkReviewEntry } from "../dailyWorkReview";
 import type { MonitorSessionRow } from "../monitorSession";
+import {
+  readWorkReviewPagePreferences,
+  writeWorkReviewPagePreferences,
+  type WorkReviewRangeDays,
+} from "../projectViewPreferences";
 import type { SessionHistorySummary } from "../../shared/historyTypes";
 import type { TokenTrendPoint } from "../../shared/analyticsTypes";
 import type { ModelPricing, UsageOverview } from "../../shared/usageTypes";
@@ -23,6 +28,7 @@ type WorkReviewPageProps = {
 
 const WORK_REVIEW_CLOCK_INTERVAL_MS = 1_000;
 const DEFAULT_VISIBLE_REVIEW_ITEMS_PER_PROJECT = 3;
+const WORK_REVIEW_RANGE_DAYS: readonly WorkReviewRangeDays[] = [7, 14, 30];
 
 type ReviewProjectGroup = {
   key: string;
@@ -280,6 +286,40 @@ function DayButton({
   );
 }
 
+function buildWorkReviewCoverageParts({
+  rangeDays,
+  hasHistoricalUsage,
+  hasLiveUsage,
+  selected,
+  t,
+}: {
+  rangeDays: WorkReviewRangeDays;
+  hasHistoricalUsage: boolean;
+  hasLiveUsage: boolean;
+  selected: DailyWorkReviewDay;
+  t: (key: string, params?: Record<string, string | number | boolean | undefined>) => string;
+}): string[] {
+  const tokenCoverage =
+    hasHistoricalUsage && hasLiveUsage
+      ? t("workReview.coverage.tokenMixed")
+      : hasHistoricalUsage
+        ? t("workReview.coverage.tokenHistory")
+        : hasLiveUsage
+          ? t("workReview.coverage.tokenLive")
+          : t("workReview.coverage.tokenNone");
+  const costCoverage = selected.reportedCost !== undefined
+    ? t("workReview.coverage.costReported")
+    : selected.estimatedCost !== undefined
+      ? t("workReview.coverage.costEstimated")
+      : t("workReview.coverage.costNone");
+
+  return [
+    t("workReview.coverage.range", { days: rangeDays }),
+    tokenCoverage,
+    costCoverage,
+  ];
+}
+
 export function WorkReviewPage({
   sessions,
   historySessions = [],
@@ -291,7 +331,13 @@ export function WorkReviewPage({
 }: WorkReviewPageProps) {
   const { t, locale } = useI18n();
   const reviewNow = useWorkReviewNow(now);
+  const [rangeDays, setRangeDays] = useState<WorkReviewRangeDays>(
+    () => readWorkReviewPagePreferences().rangeDays,
+  );
   const reviewSources = useMemo(() => [...historySessions, ...sessions], [historySessions, sessions]);
+  useEffect(() => {
+    writeWorkReviewPagePreferences({ rangeDays });
+  }, [rangeDays]);
   const days = useMemo(
     () => buildDailyWorkReview(reviewSources, {
       locale,
@@ -299,11 +345,15 @@ export function WorkReviewPage({
       usageOverview,
       tokenTrendPoints,
       pricing,
+      maxDays: rangeDays,
+      rangeDays,
     }),
-    [reviewSources, locale, reviewNow, usageOverview, tokenTrendPoints, pricing],
+    [reviewSources, locale, reviewNow, usageOverview, tokenTrendPoints, pricing, rangeDays],
   );
   const [selectedKey, setSelectedKey] = useState<string | null>(days[0]?.key ?? null);
   const selected = days.find((day) => day.key === selectedKey) ?? days[0] ?? null;
+  const hasHistoricalUsage = (tokenTrendPoints?.length ?? 0) > 0;
+  const hasLiveUsage = (usageOverview?.sessions.length ?? 0) > 0;
 
   if (days.length === 0 || !selected) {
     return (
@@ -327,6 +377,20 @@ export function WorkReviewPage({
           <div className="work-review__eyebrow">{t("workReview.eyebrow")}</div>
           <h2>{t("workReview.title")}</h2>
           <p>{t("workReview.subtitle")}</p>
+        </div>
+        <div className="work-review__range" aria-label={t("workReview.range.label")}>
+          {WORK_REVIEW_RANGE_DAYS.map((daysOption) => (
+            <button
+              key={daysOption}
+              type="button"
+              className={`work-review__range-btn ${
+                rangeDays === daysOption ? "work-review__range-btn--active" : ""
+              }`}
+              onClick={() => setRangeDays(daysOption)}
+            >
+              {t("workReview.range.days", { days: daysOption })}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -364,6 +428,18 @@ export function WorkReviewPage({
           <div className="work-review__digest">
             <div className="work-review__digest-title">{t("workReview.todaySummary")}</div>
             <p>{selected.summaryText}</p>
+            <div className="work-review__coverage" aria-label={t("workReview.coverage.label")}>
+              <span className="work-review__coverage-label">{t("workReview.coverage.label")}</span>
+              {buildWorkReviewCoverageParts({
+                rangeDays,
+                hasHistoricalUsage,
+                hasLiveUsage,
+                selected,
+                t,
+              }).map((part) => (
+                <span key={part} className="work-review__coverage-pill">{part}</span>
+              ))}
+            </div>
           </div>
 
           <section className="work-review__summary-block work-review__summary-block--done">

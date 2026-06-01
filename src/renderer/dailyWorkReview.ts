@@ -10,6 +10,7 @@ import {
   isUnknownProjectPath,
 } from "../shared/projectAttribution";
 import type { MonitorSessionRow } from "./monitorSession";
+import { estimateTokenCost, estimateTrendPointCost, formatUsageCost, formatUsageTokens } from "./usageFormat";
 
 export type DailyWorkReviewSource = {
   id: string;
@@ -77,6 +78,7 @@ type BuildDailyWorkReviewOptions = {
   locale?: ResolvedLocale;
   now?: number;
   maxDays?: number;
+  rangeDays?: number;
   usageOverview?: UsageOverview | null;
   tokenTrendPoints?: TokenTrendPoint[];
   pricing?: ModelPricing[];
@@ -361,112 +363,9 @@ function tokenTotal(tokens?: UsageTokens): number {
     .reduce((sum, value) => sum + value, 0);
 }
 
-function formatTokenCount(value: number, locale: ResolvedLocale): string {
-  const absValue = Math.abs(value);
-  if (absValue >= 1_000_000) {
-    return `${new Intl.NumberFormat(locale, {
-      maximumFractionDigits: absValue >= 10_000_000 ? 0 : 1,
-    }).format(value / 1_000_000)}M`;
-  }
-  if (absValue >= 1_000) {
-    return `${new Intl.NumberFormat(locale, {
-      maximumFractionDigits: absValue >= 10_000 ? 0 : 1,
-    }).format(value / 1_000)}K`;
-  }
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
-}
-
-function formatCost(value: number, currency: string | undefined, locale: ResolvedLocale): string {
-  if (!currency) {
-    return new Intl.NumberFormat(locale, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  }
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-function parsePricePerMillion(value: string): number | null {
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed)) return null;
-  return parsed;
-}
-
-function fallbackModelForAgent(agent: string): string | undefined {
-  if (agent === "codex") return "codex-default";
-  if (agent === "claude") return "claude-sonnet-4-5-20250929";
-  return undefined;
-}
-
-function pricingForAgentModel(
-  agent: string,
-  model: string | undefined,
-  pricing: ModelPricing[],
-  options: { allowFallback?: boolean } = {},
-): ModelPricing | undefined {
-  const normalizedModel = model?.trim();
-  const candidates = [
-    normalizedModel && normalizedModel !== "unknown" ? normalizedModel : "",
-    options.allowFallback === false ? "" : fallbackModelForAgent(agent) ?? "",
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    const match = pricing.find(
-      (price) =>
-        price.modelId === candidate ||
-        price.displayName === candidate ||
-        candidate.includes(price.modelId),
-    );
-    if (match) return match;
-  }
-  return undefined;
-}
-
-type TokenCostInput = {
-  agent: string;
-  model?: string;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-};
-
-function estimateCostFromTokens(
-  tokens: TokenCostInput,
-  pricing: ModelPricing[],
-  options: { allowModelFallback?: boolean } = {},
-): number | undefined {
-  const price = pricingForAgentModel(tokens.agent, tokens.model, pricing, {
-    allowFallback: options.allowModelFallback,
-  });
-  if (!price) return undefined;
-  const inputPerMillion = parsePricePerMillion(price.inputPerMillion);
-  const outputPerMillion = parsePricePerMillion(price.outputPerMillion);
-  const cacheReadPerMillion = parsePricePerMillion(price.cacheReadPerMillion);
-  const cacheCreationPerMillion = parsePricePerMillion(price.cacheCreationPerMillion);
-  if (
-    inputPerMillion === null ||
-    outputPerMillion === null ||
-    cacheReadPerMillion === null ||
-    cacheCreationPerMillion === null
-  ) {
-    return undefined;
-  }
-  const cost =
-    (tokens.inputTokens / 1_000_000) * inputPerMillion +
-    (tokens.outputTokens / 1_000_000) * outputPerMillion +
-    (tokens.cacheReadTokens / 1_000_000) * cacheReadPerMillion +
-    (tokens.cacheCreationTokens / 1_000_000) * cacheCreationPerMillion;
-  return cost > 0 ? cost : undefined;
-}
-
 function estimateUsageCostFromPricing(session: SessionUsage, pricing: ModelPricing[]): number | undefined {
   if (!session.tokens) return undefined;
-  return estimateCostFromTokens({
+  return estimateTokenCost({
     agent: session.agent,
     model: session.model,
     inputTokens: session.tokens.input ?? 0,
@@ -474,17 +373,6 @@ function estimateUsageCostFromPricing(session: SessionUsage, pricing: ModelPrici
     cacheReadTokens: session.tokens.cachedInput ?? 0,
     cacheCreationTokens: 0,
   }, pricing);
-}
-
-function estimateTrendPointCost(point: TokenTrendPoint, pricing: ModelPricing[]): number | undefined {
-  return estimateCostFromTokens({
-    agent: point.agent,
-    model: point.model,
-    inputTokens: point.inputTokens,
-    outputTokens: point.outputTokens,
-    cacheReadTokens: point.cacheReadTokens,
-    cacheCreationTokens: point.cacheCreationTokens,
-  }, pricing, { allowModelFallback: false });
 }
 
 type ReviewUsageStats = {
@@ -668,10 +556,13 @@ function buildSummaryText(
     const summaryParts = [`${sessionCount} 个事项：${statusParts.join("、")}`, `${agents.length} 个 agent`];
     const usageParts: string[] = [];
     if (totalTokens > 0) {
-      usageParts.push(`消耗 ${formatTokenCount(totalTokens, locale)} token`);
+      usageParts.push(`消耗 ${formatUsageTokens(totalTokens, locale)} token`);
     }
     if (cost !== undefined) {
-      const costLabel = `${usageStats.estimatedCost !== undefined ? "预估花费" : "花费"} ${formatCost(cost, usageStats.costCurrency, locale)}`;
+      const costLabel = `${usageStats.estimatedCost !== undefined ? "估算费用" : "费用"} ${formatUsageCost(cost, {
+        currency: usageStats.costCurrency,
+        locale,
+      })}`;
       usageParts.push(costLabel);
     }
     if (usageParts.length > 0) {
@@ -692,10 +583,13 @@ function buildSummaryText(
     `${agents.length} ${agents.length === 1 ? "agent" : "agents"}`,
   ];
   if (totalTokens > 0) {
-    usageParts.push(`${formatTokenCount(totalTokens, locale)} tokens`);
+    usageParts.push(`${formatUsageTokens(totalTokens, locale)} tokens`);
   }
   if (cost !== undefined) {
-    usageParts.push(`${usageStats.estimatedCost !== undefined ? "est. " : ""}${formatCost(cost, usageStats.costCurrency, locale)}`);
+    usageParts.push(`${usageStats.estimatedCost !== undefined ? "est. " : ""}${formatUsageCost(cost, {
+      currency: usageStats.costCurrency,
+      locale,
+    })}`);
   }
   return `${usageParts.join("; ")}.`;
 }
@@ -707,6 +601,10 @@ export function buildDailyWorkReview(
   const locale = options.locale ?? "en";
   const now = options.now ?? Date.now();
   const maxDays = options.maxDays ?? 14;
+  const rangeStart =
+    typeof options.rangeDays === "number" && options.rangeDays > 0
+      ? startOfDay(now) - (Math.floor(options.rangeDays) - 1) * MS_PER_DAY
+      : undefined;
   const pricing = options.pricing ?? options.usageOverview?.pricing ?? [];
   const grouped = new Map<string, DailyWorkReviewEntry[]>();
   const dedupedRows = new Map<string, DailyWorkReviewSource | MonitorSessionRow>();
@@ -722,6 +620,9 @@ export function buildDailyWorkReview(
     }
     for (const entry of buildEntries(row, now, locale)) {
       if (!Number.isFinite(entry.timestamp)) {
+        continue;
+      }
+      if (rangeStart !== undefined && entry.timestamp < rangeStart) {
         continue;
       }
       const isToday = startOfDay(entry.timestamp) === startOfDay(now);

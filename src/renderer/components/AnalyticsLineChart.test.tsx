@@ -171,7 +171,7 @@ describe("AnalyticsLineChart", () => {
     );
 
     expect(html).toContain("2.3M");
-    expect(html).toContain("3.0M");
+    expect(html).toContain("3M");
   });
 
   it("summarizes dense pulse data before drawing trend lines", () => {
@@ -194,5 +194,37 @@ describe("AnalyticsLineChart", () => {
 
     expect(html).toContain("Trend summarized");
     expect(html).not.toContain("LTTB auto-sampled");
+  });
+
+  it("uses the shared trend cost estimator for model alias matches", () => {
+    const html = renderToStaticMarkup(
+      <AnalyticsLineChart
+        points={[
+          {
+            ...points[0],
+            model: "gpt-5.5-2026-06",
+            inputTokens: 1_000_000,
+            outputTokens: 500_000,
+            cacheReadTokens: 100_000,
+            cacheCreationTokens: 0,
+            totalTokens: 1_600_000,
+          },
+        ]}
+        metric="cost"
+        pricing={[
+          {
+            modelId: "gpt-5.5",
+            displayName: "GPT 5.5",
+            inputPerMillion: "5",
+            outputPerMillion: "25",
+            cacheReadPerMillion: "0.50",
+            cacheCreationPerMillion: "6.25",
+          },
+        ]}
+        yFormat={(value, metric) => `${metric}:${value.toFixed(4)}`}
+      />,
+    );
+
+    expect(html).toContain("cost:17.5500");
   });
 });

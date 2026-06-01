@@ -199,6 +199,23 @@ describe("renderer layout styles", () => {
     expect(css).toMatch(/@keyframes session-loading-dots/);
   });
 
+  it("keeps page scope controls and coverage pills safe in narrow windows", () => {
+    const css = fs.readFileSync(stylesPath, "utf8");
+
+    expect(cssBlock(css, ".session-list__scope")).toContain("flex-wrap: wrap;");
+    expect(cssBlock(css, ".session-list__scope span")).toContain("max-width: 100%;");
+    expect(cssBlock(css, ".session-list__scope span")).toContain("overflow-wrap: anywhere;");
+    expect(cssBlock(css, ".work-review__range")).toContain("flex-wrap: wrap;");
+    expect(cssBlock(css, ".work-review__range")).toContain("max-width: 100%;");
+    expect(cssBlock(css, ".work-review__range-btn")).toContain("white-space: nowrap;");
+    expect(cssBlock(css, ".work-review__coverage")).toContain("min-width: 0;");
+    expect(cssBlock(css, ".work-review__coverage-pill")).toContain("max-width: 100%;");
+    expect(cssBlock(css, ".work-review__coverage-pill")).toContain("overflow-wrap: anywhere;");
+    expect(css).toMatch(
+      /@media \(max-width: 640px\)\s*\{[\s\S]*\.work-review__range\s*\{[\s\S]*align-self:\s*flex-start;/,
+    );
+  });
+
   it("keeps analytics text and surfaces theme-aware in light mode", () => {
     const css = fs.readFileSync(stylesPath, "utf8");
 
@@ -247,10 +264,8 @@ describe("renderer layout styles", () => {
     );
     expect(cssBlock(css, ".work-health-strip__value")).toContain("font-weight");
     expect(cssBlock(css, ".analytics-line-chart svg")).toContain("height:");
-    expect(cssBlock(css, ".analytics-small-multiples")).toContain("grid-template-columns");
     expect(css).toContain("--trend-line-input: #54d6c0;");
     expect(css).toContain("--trend-line-output: #9b78ff;");
-    expect(cssBlock(css, ".analytics-small-multiples__line")).toContain("vector-effect");
     expect(cssBlock(css, ".analytics-line-chart__tooltip")).toContain("position: absolute;");
     expect(cssBlock(css, ".analytics-line-chart__tooltip")).toContain("font-size: 12px;");
     expect(cssBlock(css, ".analytics-line-chart__tooltip")).toContain(

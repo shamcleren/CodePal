@@ -56,6 +56,9 @@ describe("SessionList", () => {
 
     expect(html).not.toContain("Current");
     expect(html).not.toContain("History");
+    expect(html).toContain("All Projects");
+    expect(html).toContain("3 sessions");
+    expect(html).toContain("Grouped by project");
     expect(html.indexOf("latest user turn")).toBeLessThan(html.indexOf("older user turn"));
     expect(html.indexOf("older user turn")).toBeLessThan(html.indexOf("live run"));
   });

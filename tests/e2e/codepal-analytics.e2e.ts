@@ -112,10 +112,10 @@ test("renders analytics from persisted token usage", async () => {
     await page.locator(".analytics-line-chart__hover-zone").first().hover();
     await expect(page.locator(".analytics-line-chart__tooltip")).toBeVisible();
     await expect(page.locator(".analytics-line-chart__tooltip")).toContainText("Total");
-    await expect(page.locator(".analytics-small-multiples__card").first()).toContainText(/Peak|峰值/);
-    await page.locator(".analytics-small-multiples__hover-zone").first().hover();
-    await expect(page.locator(".analytics-small-multiples__tooltip")).toBeVisible();
-    await expect(page.locator(".analytics-small-multiples__tooltip")).toContainText("Codex");
+    await expect(page.locator(".analytics-small-multiples__card")).toHaveCount(0);
+    await expect(page.locator(".analytics-page__source-coverage")).toContainText(
+      /Requests|请求/,
+    );
 
     await page.getByRole("button", { name: /30 Days|30 天/ }).click();
     await expect(page.locator(".analytics-page__range-btn--active")).toHaveText(/30 Days|30 天/);

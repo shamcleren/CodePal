@@ -45,17 +45,28 @@ type SettingsSection = {
   summary: string;
 };
 
-const WORK_REVIEW_HISTORY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const WORK_REVIEW_HISTORY_RANGE_DAYS = 30;
 const WORK_REVIEW_HISTORY_LIMIT = 500;
 const WORK_REVIEW_USAGE_REFRESH_DELAY_MS = 500;
 
-function workReviewTokenRange(now = Date.now()): { start: number; end: number } {
-  const start = new Date(now - WORK_REVIEW_HISTORY_MAX_AGE_MS);
-  start.setHours(0, 0, 0, 0);
+function startOfLocalDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+export function workReviewTokenRange(now = Date.now()): { start: number; end: number } {
+  const start = new Date(startOfLocalDay(now));
+  start.setDate(start.getDate() - (WORK_REVIEW_HISTORY_RANGE_DAYS - 1));
   const end = new Date(now);
   end.setDate(end.getDate() + 1);
   end.setHours(0, 0, 0, 0);
   return { start: start.getTime(), end: end.getTime() };
+}
+
+export function workReviewHistoryMaxAgeMs(now = Date.now()): number {
+  const { start } = workReviewTokenRange(now);
+  return Math.max(0, now - start);
 }
 
 export function workReviewUsageRefreshKey(overview: UsageOverview | null): number {
@@ -409,7 +420,7 @@ export function App() {
     let active = true;
     void window.codepal
       .getSessionHistorySummaries({
-        maxAgeMs: WORK_REVIEW_HISTORY_MAX_AGE_MS,
+        maxAgeMs: workReviewHistoryMaxAgeMs(),
         limit: WORK_REVIEW_HISTORY_LIMIT,
       })
       .then((sessions) => {

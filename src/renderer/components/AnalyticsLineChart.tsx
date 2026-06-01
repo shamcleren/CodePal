@@ -13,6 +13,7 @@ import {
   resolveLttbTargetPointCount,
   type AnalyticsPoint,
 } from "../../shared/analyticsSampling";
+import { estimateTrendPointCost, formatMetricValue } from "../usageFormat";
 
 type Series = {
   key: string;
@@ -583,7 +584,12 @@ function seriesForMetric(
         label: "Cost",
         color: TOKEN_COLORS.total,
         points: pointFor((bucket) =>
-          bucket.reduce((sum, point) => sum + estimatePointCost(point, pricingByModel.get(point.model)), 0),
+          bucket.reduce((sum, point) => {
+            const exactPrice = pricingByModel.get(point.model);
+            return sum + (exactPrice
+              ? estimateTrendPointCost(point, [exactPrice]) ?? 0
+              : estimateTrendPointCost(point, pricing) ?? 0);
+          }, 0),
         ),
       },
     ];
@@ -638,16 +644,6 @@ function seriesForMetric(
       ),
     },
   ];
-}
-
-function estimatePointCost(point: TokenTrendPoint, pricing?: ModelPricing): number {
-  if (!pricing) return 0;
-  return (
-    (point.inputTokens / 1_000_000) * Number(pricing.inputPerMillion) +
-    (point.outputTokens / 1_000_000) * Number(pricing.outputPerMillion) +
-    (point.cacheReadTokens / 1_000_000) * Number(pricing.cacheReadPerMillion) +
-    (point.cacheCreationTokens / 1_000_000) * Number(pricing.cacheCreationPerMillion)
-  );
 }
 
 function fillSeriesBucketGaps(
@@ -752,17 +748,7 @@ function nextBucketStart(
 }
 
 function defaultYFormat(value: number, metric: AnalyticsMetric): string {
-  if (metric === "cost") return `$${value.toFixed(value >= 10 ? 0 : 2)}`;
-  if (metric === "cacheHit") return `${Math.round(value)}%`;
-  if (value >= 1_000_000) {
-    const millions = value / 1_000_000;
-    return `${millions >= 10 ? Math.round(millions) : millions.toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    const thousands = value / 1_000;
-    return `${thousands >= 100 ? Math.round(thousands) : thousands.toFixed(1)}K`;
-  }
-  return String(Math.round(value));
+  return formatMetricValue(value, metric, "en");
 }
 
 function buildTimeTicks(

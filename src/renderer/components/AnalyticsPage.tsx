@@ -4,8 +4,8 @@ import type { ModelPricing, TokenStatsResult } from "../../shared/usageTypes";
 import { UNKNOWN_PROJECT_NAME, UNKNOWN_PROJECT_PATH, isUnknownProjectPath, sortProjectRows } from "../../shared/projectAttribution";
 import { useI18n } from "../i18n";
 import { readAnalyticsPagePreferences, writeAnalyticsPagePreferences } from "../projectViewPreferences";
+import { estimateTokenCost, formatMetricValue, formatUsageCost, formatUsageTokens } from "../usageFormat";
 import { AnalyticsLineChart } from "./AnalyticsLineChart";
-import { AnalyticsSmallMultiples } from "./AnalyticsSmallMultiples";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
 type BreakdownMode = "project" | "model" | "agent";
@@ -74,43 +74,51 @@ function defaultGranularity(preset: RangePreset, start: number, end: number): To
   return "hour";
 }
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
-function formatCost(usd: number): string {
-  return `$${usd.toFixed(2)}`;
-}
-
 function agentLabel(agent: string): string {
   return AGENT_LABELS[agent] ?? agent;
 }
 
 function estimateCost(
   stats: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number },
-  pricingMap: Map<string, ModelPricing>,
+  pricing: ModelPricing[],
   model?: string,
 ): number {
-  const pricing = (model ? pricingMap.get(model) : null) ?? pricingMap.get("claude-sonnet-4-5-20250929");
-  if (!pricing) return 0;
-  return (
-    (stats.inputTokens / 1_000_000) * Number(pricing.inputPerMillion) +
-    (stats.outputTokens / 1_000_000) * Number(pricing.outputPerMillion) +
-    (stats.cacheReadTokens / 1_000_000) * Number(pricing.cacheReadPerMillion) +
-    (stats.cacheCreationTokens / 1_000_000) * Number(pricing.cacheCreationPerMillion)
-  );
+  return estimateTokenCost({ ...stats, model }, pricing, { allowModelFallback: false }) ?? 0;
+}
+
+export function buildAnalyticsCoverageSummary(
+  data: TokenStatsResult | null,
+  trendData: TokenTrendResult | null,
+  t: (key: string, params?: Record<string, string | number | boolean | undefined>) => string,
+): string | null {
+  if (!data) return null;
+
+  const requestCount =
+    data.daily.reduce((sum, row) => sum + row.requestCount, 0) ||
+    data.byModel.reduce((sum, row) => sum + row.requestCount, 0);
+  const trendPointCount = trendData?.sourcePointCount ?? trendData?.points.length ?? 0;
+  const backfillCount =
+    (data.importStatus?.claudeRowsImported ?? 0) + (data.importStatus?.codexRowsImported ?? 0);
+  const backfillLabel = data.importStatus?.completedAt
+    ? t("tokenStats.coverage.backfilled", { count: backfillCount })
+    : t("tokenStats.coverage.backfillPending");
+  const costLabel = (data.pricing?.length ?? 0) > 0
+    ? t("tokenStats.coverage.costEstimated")
+    : t("tokenStats.coverage.costUnavailable");
+
+  return t("tokenStats.coverage.summary", {
+    requests: requestCount,
+    points: trendPointCount,
+    backfill: backfillLabel,
+    cost: costLabel,
+  });
 }
 
 export function buildAnalyticsBreakdownRows(
   breakdownMode: BreakdownMode,
   data: TokenStatsResult | null,
 ): AnalyticsBreakdownRow[] {
-  const pricingMap = new Map<string, ModelPricing>();
-  for (const p of data?.pricing ?? []) {
-    pricingMap.set(p.modelId, p);
-  }
+  const pricing = data?.pricing ?? [];
 
   if (breakdownMode === "project") {
     return sortProjectRows(data?.byProject ?? []).map((project) => ({
@@ -139,7 +147,7 @@ export function buildAnalyticsBreakdownRows(
       cacheReadTokens: m.cacheReadTokens,
       cacheCreationTokens: m.cacheCreationTokens,
       totalTokens: m.totalTokens,
-      cost: estimateCost(m, pricingMap, m.model),
+      cost: estimateCost(m, pricing, m.model),
     }));
   }
 
@@ -148,7 +156,7 @@ export function buildAnalyticsBreakdownRows(
     costByAgent.set(
       modelStats.agent,
       (costByAgent.get(modelStats.agent) ?? 0) +
-        estimateCost(modelStats, pricingMap, modelStats.model),
+        estimateCost(modelStats, pricing, modelStats.model),
     );
   }
 
@@ -374,10 +382,7 @@ export function AnalyticsPage() {
     await window.codepal.openExternalTarget(filePath);
   }, [range, customStart, customEnd, granularity, metric, projectFilter, agentFilter, modelFilter, i18n.locale]);
 
-  const pricingMap = new Map<string, ModelPricing>();
-  for (const p of data?.pricing ?? []) {
-    pricingMap.set(p.modelId, p);
-  }
+  const pricing = data?.pricing ?? [];
 
   const totalInput = (data?.daily ?? []).reduce((s, d) => s + d.inputTokens, 0);
   const totalOutput = (data?.daily ?? []).reduce((s, d) => s + d.outputTokens, 0);
@@ -388,7 +393,7 @@ export function AnalyticsPage() {
   const cacheHitRate = totalCacheRead + totalInput > 0
     ? totalCacheRead / (totalCacheRead + totalInput + totalCacheCreation)
     : 0;
-  const totalCost = (data?.byModel ?? []).reduce((s, m) => s + estimateCost(m, pricingMap, m.model), 0);
+  const totalCost = (data?.byModel ?? []).reduce((s, m) => s + estimateCost(m, pricing, m.model), 0);
   const topAgent = data?.byAgent?.[0];
   const topModel = data?.byModel?.[0];
 
@@ -420,15 +425,15 @@ export function AnalyticsPage() {
   ];
 
   const heroStats = [
-    { label: i18n.t("tokenStats.totalTokens"), value: formatTokens(totalTokens) },
+    { label: i18n.t("tokenStats.totalTokens"), value: formatUsageTokens(totalTokens, i18n.locale) },
     { label: i18n.t("tokenStats.requests"), value: String(totalRequests) },
-    { label: i18n.t("tokenStats.input"), value: formatTokens(totalInput) },
-    { label: i18n.t("tokenStats.output"), value: formatTokens(totalOutput) },
+    { label: i18n.t("tokenStats.input"), value: formatUsageTokens(totalInput, i18n.locale) },
+    { label: i18n.t("tokenStats.output"), value: formatUsageTokens(totalOutput, i18n.locale) },
     {
       label: i18n.t("tokenStats.topAgent"),
       value: topAgent ? agentLabel(topAgent.agent) : "—",
       detail: topAgent
-        ? i18n.t("tokenStats.tokensValue", { value: formatTokens(topAgent.totalTokens) })
+        ? i18n.t("tokenStats.tokensValue", { value: formatUsageTokens(topAgent.totalTokens, i18n.locale) })
         : undefined,
     },
     {
@@ -437,10 +442,14 @@ export function AnalyticsPage() {
       detail: topModel ? agentLabel(topModel.agent) : undefined,
     },
     { label: i18n.t("tokenStats.cacheHit"), value: `${Math.round(cacheHitRate * 100)}%` },
-    { label: i18n.t("tokenStats.estimatedCost"), value: formatCost(totalCost) },
+    {
+      label: i18n.t("tokenStats.estimatedCost"),
+      value: formatUsageCost(totalCost, { currency: "USD", locale: i18n.locale }),
+    },
   ];
 
   const breakdownRows = buildAnalyticsBreakdownRows(breakdownMode, data);
+  const coverageSummary = buildAnalyticsCoverageSummary(data, trendData, i18n.t);
 
   return (
     <div className="analytics-page">
@@ -504,6 +513,11 @@ export function AnalyticsPage() {
           {i18n.t("tokenStats.openReport")}
         </button>
       </div>
+      {coverageSummary ? (
+        <div className="analytics-page__source-coverage" aria-label={i18n.t("tokenStats.coverage.label")}>
+          {coverageSummary}
+        </div>
+      ) : null}
 
       <div className="analytics-page__hero-grid">
         {heroStats.map((stat) => (
@@ -619,11 +633,7 @@ export function AnalyticsPage() {
           domainStart={currentRange.startMs}
           domainEnd={currentRange.endMs}
           pricing={data?.pricing ?? []}
-        />
-        <AnalyticsSmallMultiples
-          points={trendData?.points ?? []}
-          selectedAgent={agentFilter}
-          formatValue={formatTokens}
+          yFormat={(value, trendMetric) => formatMetricValue(value, trendMetric, i18n.locale)}
         />
       </div>
 
@@ -659,7 +669,7 @@ export function AnalyticsPage() {
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.input")}</th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.output")}</th>
                 <th className="analytics-page__table-num">{i18n.t("tokenStats.cacheHit")}</th>
-                <th className="analytics-page__table-num">{i18n.t("tokenStats.cost")}</th>
+                <th className="analytics-page__table-num">{i18n.t("tokenStats.estimatedCost")}</th>
               </tr>
             </thead>
             <tbody>
@@ -673,11 +683,11 @@ export function AnalyticsPage() {
                     {row.key === UNKNOWN_PROJECT_PATH ? i18n.t("tokenStats.unknownProject") : row.name}
                   </td>
                   <td className="analytics-page__table-num">{row.requestCount}</td>
-                  <td className="analytics-page__table-num">{formatTokens(row.totalTokens)}</td>
-                  <td className="analytics-page__table-num">{formatTokens(row.inputTokens)}</td>
-                  <td className="analytics-page__table-num">{formatTokens(row.outputTokens)}</td>
+                  <td className="analytics-page__table-num">{formatUsageTokens(row.totalTokens, i18n.locale)}</td>
+                  <td className="analytics-page__table-num">{formatUsageTokens(row.inputTokens, i18n.locale)}</td>
+                  <td className="analytics-page__table-num">{formatUsageTokens(row.outputTokens, i18n.locale)}</td>
                   <td className="analytics-page__table-num">{cacheRate > 0 ? `${Math.round(cacheRate * 100)}%` : "—"}</td>
-                  <td className="analytics-page__table-num">{formatCost(row.cost)}</td>
+                  <td className="analytics-page__table-num">{formatUsageCost(row.cost, { currency: "USD", locale: i18n.locale })}</td>
                 </tr>
                 );
               })}

@@ -16,8 +16,15 @@ export type AnalyticsPagePreferences = {
   modelFilter?: string;
 };
 
+export type WorkReviewRangeDays = 7 | 14 | 30;
+
+export type WorkReviewPagePreferences = {
+  rangeDays: WorkReviewRangeDays;
+};
+
 const SESSION_LIST_STORAGE_KEY = "codepal.sessions.project-view-preferences.v1";
 const ANALYTICS_PAGE_STORAGE_KEY = "codepal.analytics.local-preferences.v1";
+const WORK_REVIEW_PAGE_STORAGE_KEY = "codepal.work-review.local-preferences.v1";
 
 const EMPTY_SESSION_LIST_PREFERENCES: SessionListPreferences = {
   projectOrder: [],
@@ -35,6 +42,10 @@ const DEFAULT_ANALYTICS_PAGE_PREFERENCES: AnalyticsPagePreferences = {
   projectFilter: undefined,
   agentFilter: undefined,
   modelFilter: undefined,
+};
+
+const DEFAULT_WORK_REVIEW_PAGE_PREFERENCES: WorkReviewPagePreferences = {
+  rangeDays: 14,
 };
 
 function localStorageOrNull(): Storage | null {
@@ -68,8 +79,8 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
-function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
-  return typeof value === "string" && (allowed as readonly string[]).includes(value)
+function oneOf<T extends string | number>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return (allowed as readonly unknown[]).includes(value)
     ? value as T
     : fallback;
 }
@@ -126,4 +137,24 @@ export function writeAnalyticsPagePreferences(
   storage: Storage | null | undefined = localStorageOrNull(),
 ): void {
   writeJson(storage, ANALYTICS_PAGE_STORAGE_KEY, preferences);
+}
+
+export function readWorkReviewPagePreferences(
+  storage: Storage | null | undefined = localStorageOrNull(),
+): WorkReviewPagePreferences {
+  const raw = readJson(storage, WORK_REVIEW_PAGE_STORAGE_KEY);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_WORK_REVIEW_PAGE_PREFERENCES };
+  }
+  const record = raw as Record<string, unknown>;
+  return {
+    rangeDays: oneOf(record.rangeDays, [7, 14, 30] as const, 14),
+  };
+}
+
+export function writeWorkReviewPagePreferences(
+  preferences: WorkReviewPagePreferences,
+  storage: Storage | null | undefined = localStorageOrNull(),
+): void {
+  writeJson(storage, WORK_REVIEW_PAGE_STORAGE_KEY, preferences);
 }

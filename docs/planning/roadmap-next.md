@@ -548,9 +548,14 @@ If planning effort is limited, use this order:
    - Work Health strip with attention, longest wait, unrecovered failures, context-near-full, and cost anomaly signals
    - clickable Work Health signals that navigate to sessions
    - minute / hour granularity deferred (no backend data yet); daily granularity is the current baseline
-6. design and validate work item flow plus CLI operation flow
-7. add manual LLM-generated daily / weekly / monthly reports on top of Report Facts and local operation logs
-8. add factual source / coverage indicators only where they change user decisions
+6. ~~design and validate work item flow plus CLI operation flow~~ — done (v1.2.0):
+   - work items derived from sessions with status tracking
+   - operation flow with preflight, dry-run, execute, result, and local action log
+   - managed CLI task infrastructure remains on a separate branch; not yet merged to main
+7. ~~add manual LLM-generated daily / weekly / monthly reports on top of Report Facts and local operation logs~~ — done (v1.2.0):
+   - LLM report generation through visible session path
+   - report settings panel with model selector and quota warnings
+8. add factual source / coverage indicators only where they change user decisions — next up
 9. add broader workflow-health signals and Attention Queue
 10. add ambient presence only after attention signals are useful
 11. open community templates, schemas, and adapter contribution paths

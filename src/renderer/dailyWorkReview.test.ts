@@ -93,7 +93,7 @@ describe("buildDailyWorkReview", () => {
       totalTokens: 4_000,
       estimatedCost: 0.07,
       costCurrency: "USD",
-      summaryText: "2 个事项：完成 1、跟进 1；1 个 agent；消耗 4K token，预估花费 US$0.07。",
+      summaryText: "2 个事项：完成 1、跟进 1；1 个 agent；消耗 4K token，估算费用 US$0.07。",
     });
     expect(days[0].completed[0]?.title).toBe("托管 CLI 体验修复");
     expect(days[0].completed[0]?.detail).toBe("");
@@ -145,7 +145,7 @@ describe("buildDailyWorkReview", () => {
       totalTokens: 1_600_000,
       estimatedCost: 4.5375,
       costCurrency: "USD",
-      summaryText: "1 个事项：完成 1；1 个 agent；消耗 1.6M token，预估花费 US$4.54。",
+      summaryText: "1 个事项：完成 1；1 个 agent；消耗 1.6M token，估算费用 US$4.54。",
     });
   });
 
@@ -192,7 +192,7 @@ describe("buildDailyWorkReview", () => {
       totalTokens: 170_000,
       estimatedCost: 0.4575,
       costCurrency: "USD",
-      summaryText: "1 个事项：完成 1；1 个 agent；消耗 170K token，预估花费 US$0.46。",
+      summaryText: "1 个事项：完成 1；1 个 agent；消耗 170K token，估算费用 US$0.46。",
     });
   });
 
@@ -250,7 +250,7 @@ describe("buildDailyWorkReview", () => {
       totalTokens: 750_000,
       estimatedCost: 1.96875,
       costCurrency: "USD",
-      summaryText: "1 个事项：完成 1；1 个 agent；消耗 750K token，预估花费 US$1.97。",
+      summaryText: "1 个事项：完成 1；1 个 agent；消耗 750K token，估算费用 US$1.97。",
     });
   });
 
@@ -722,6 +722,28 @@ describe("buildDailyWorkReview", () => {
       summaryText: "1 个事项：完成 1；1 个 agent。",
     });
     expect(days[1].entries.map((entry) => entry.id)).toEqual(["old-completed"]);
+  });
+
+  it("filters review days by calendar range before applying the display count", () => {
+    const days = buildDailyWorkReview([
+      row({
+        id: "today",
+        titleLabel: "今天的事项",
+        updatedAt: Date.parse("2026-05-25T10:00:00+08:00"),
+      }),
+      row({
+        id: "outside-range",
+        titleLabel: "很早之前的事项",
+        updatedAt: Date.parse("2026-05-01T10:00:00+08:00"),
+      }),
+    ], {
+      locale: "zh-CN",
+      now: Date.parse("2026-05-25T14:00:00+08:00"),
+      maxDays: 30,
+      rangeDays: 7,
+    });
+
+    expect(days.map((day) => day.key)).toEqual(["2026-05-25"]);
   });
 
   it("keeps deterministic summaries compact when titles are long", () => {

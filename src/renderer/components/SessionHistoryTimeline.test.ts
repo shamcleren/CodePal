@@ -305,6 +305,8 @@ describe("summarizeSessionFooterUsage", () => {
       outputTokens: 500_000,
       cacheTokens: 110_000,
       cost: 17.6125,
+      costKind: "estimated",
+      costCurrency: "USD",
     });
   });
 
@@ -329,6 +331,7 @@ describe("summarizeSessionFooterUsage", () => {
       outputTokens: 4_500,
       cacheTokens: 2_000,
       cost: 0.42,
+      costKind: "estimated",
     });
   });
 

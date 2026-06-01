@@ -46,6 +46,8 @@ npm run build
 
 ## Next Priorities
 
-- Build the next product layer around personal AI work memory: session reviews, daily digests, and local exportable reports
-- Add workflow-health signals such as waiting time, error recovery, quota pressure, context pressure, and observability confidence
+- Add factual source / coverage indicators where they change user decisions (Roadmap item 8)
+- Add broader workflow-health signals and Attention Queue (Roadmap item 9)
+- Add ambient presence only after attention signals are useful (Roadmap item 10)
+- Managed CLI task infrastructure remains on a separate branch and needs rework before merging to main
 - Keep team, billing, cloud sync, and broader control loops behind proof of sustained individual value and an updated privacy model

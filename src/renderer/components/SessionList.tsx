@@ -413,7 +413,12 @@ export function SessionList({
       className={`session-list ${hasExpandedSession ? "session-list--focus" : ""}`}
       aria-label="Session tasks"
     >
-      <div className="session-list__header">Sessions</div>
+      <div className="session-list__header">{t("sessionList.title")}</div>
+      <div className="session-list__scope" aria-label={t("sessionList.scope.label")}>
+        <span>{t("sessionList.scope.allProjects")}</span>
+        <span>{t("sessionList.scope.sessions", { count: sessions.length })}</span>
+        <span>{t("sessionList.scope.grouped")}</span>
+      </div>
       {projectGroups.map((group) => {
         const projectCollapsed = collapsedProjectKeys.has(group.key);
         const sessionsExpanded = expandedProjectSessionKeys.has(group.key);

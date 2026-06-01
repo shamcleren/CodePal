@@ -380,6 +380,31 @@ describe("createSessionStore", () => {
     expect(store.getSessions()).toEqual([]);
   });
 
+  it("hides Claude sessions that only contain lifecycle placeholders", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "claude-lifecycle-only",
+      tool: "claude",
+      status: "idle",
+      task: "Claude session ended",
+      timestamp: 100,
+      activityItems: [
+        {
+          id: "claude-lifecycle-only:session-end",
+          kind: "system",
+          source: "system",
+          title: "Claude session ended",
+          body: "Claude session ended",
+          tone: "idle",
+          timestamp: 100,
+        },
+      ],
+    });
+
+    expect(store.getSessions()).toEqual([]);
+  });
+
   it("keeps JetBrains sessions visible once the user prompt arrives", () => {
     const store = createSessionStore();
 

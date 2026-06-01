@@ -5,6 +5,7 @@ import cursorAppIcon from "../assets/cursor-app-icon.png";
 import type { ModelPricing, UsageOverview } from "../../shared/usageTypes";
 import type { UsageAgentId, UsageDisplaySettings } from "../usageDisplaySettings";
 import { useI18n, translateWindowLabel } from "../i18n";
+import { estimateTokenCost, formatUsageCost } from "../usageFormat";
 
 type UsageStatusStripProps = {
   overview: UsageOverview | null;
@@ -262,7 +263,7 @@ function formatCompactUsdCents(value: number): string {
 function estimateCostForAgent(
   overview: UsageOverview,
   agent: string,
-  pricingMap: Map<string, ModelPricing>,
+  pricing: ModelPricing[],
 ): number | null {
   const agentSessions = overview.sessions.filter((session) => session.agent === agent);
   if (agentSessions.length === 0) return null;
@@ -271,20 +272,23 @@ function estimateCostForAgent(
   let hasPricing = false;
   for (const session of agentSessions) {
     if (!session.tokens) continue;
-    const pricing = session.model ? pricingMap.get(session.model) : null;
-    if (!pricing) continue;
+    const cost = estimateTokenCost(
+      {
+        agent: session.agent,
+        model: session.model,
+        inputTokens: session.tokens.input ?? 0,
+        outputTokens: session.tokens.output ?? 0,
+        cacheReadTokens: session.tokens.cachedInput ?? 0,
+        cacheCreationTokens: 0,
+      },
+      pricing,
+      { allowModelFallback: false },
+    );
+    if (cost === undefined) continue;
     hasPricing = true;
-    totalCost +=
-      ((session.tokens.input ?? 0) / 1_000_000) * Number(pricing.inputPerMillion) +
-      ((session.tokens.output ?? 0) / 1_000_000) * Number(pricing.outputPerMillion) +
-      ((session.tokens.cachedInput ?? 0) / 1_000_000) * Number(pricing.cacheReadPerMillion);
+    totalCost += cost;
   }
   return hasPricing && totalCost > 0 ? totalCost : null;
-}
-
-function formatCost(value: number): string {
-  if (value < 0.01) return "<$0.01";
-  return `$${value.toFixed(2)}`;
 }
 
 function formatCompactAmount(value: number): string {
@@ -305,10 +309,7 @@ function buildSummaries(
     return [];
   }
 
-  const pricingMap = new Map<string, ModelPricing>();
-  for (const p of overview.pricing ?? []) {
-    pricingMap.set(p.modelId, p);
-  }
+  const pricing = overview.pricing ?? [];
 
   const summaries = [
     summarizeClaude(overview, settings, i18n),
@@ -317,14 +318,17 @@ function buildSummaries(
     summarizeCursor(overview, settings, i18n),
   ].filter((item): item is UsageAgentSummary => item !== null);
 
-  if (pricingMap.size === 0) {
+  if (pricing.length === 0) {
     return summaries;
   }
 
   for (const summary of summaries) {
-    const cost = estimateCostForAgent(overview, summary.agent, pricingMap);
+    const cost = estimateCostForAgent(overview, summary.agent, pricing);
     if (cost !== null) {
-      summary.segments.push({ text: formatCost(cost), tone: "secondary" });
+      summary.segments.push({
+        text: formatUsageCost(cost, { currency: "USD", locale: i18n.locale }),
+        tone: "secondary",
+      });
     }
   }
 

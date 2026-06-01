@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   readAnalyticsPagePreferences,
   readSessionListPreferences,
+  readWorkReviewPagePreferences,
   writeAnalyticsPagePreferences,
   writeSessionListPreferences,
+  writeWorkReviewPagePreferences,
 } from "./projectViewPreferences";
 
 function fakeStorage(): Storage {
@@ -106,6 +108,29 @@ describe("projectViewPreferences", () => {
       agentFilter: "codex",
       modelFilter: undefined,
     });
+  });
+
+  it("persists work review range independently from other page preferences", () => {
+    const storage = fakeStorage();
+
+    writeSessionListPreferences({
+      projectOrder: ["sessions-project"],
+      collapsedProjectKeys: [],
+      expandedProjectSessionKeys: [],
+    }, storage);
+    writeWorkReviewPagePreferences({ rangeDays: 30 }, storage);
+
+    expect(readSessionListPreferences(storage).projectOrder).toEqual(["sessions-project"]);
+    expect(readWorkReviewPagePreferences(storage)).toEqual({ rangeDays: 30 });
+  });
+
+  it("normalizes invalid work review preferences", () => {
+    const storage = fakeStorage();
+    storage.setItem("codepal.work-review.local-preferences.v1", JSON.stringify({
+      rangeDays: "forever",
+    }));
+
+    expect(readWorkReviewPagePreferences(storage)).toEqual({ rangeDays: 14 });
   });
 
   it("falls back to empty preferences for corrupt stored JSON", () => {

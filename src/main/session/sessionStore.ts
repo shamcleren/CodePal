@@ -751,6 +751,25 @@ function isTransientJetBrainsConnectionErrorItem(item: ActivityItem): boolean {
   );
 }
 
+function isClaudeLifecycleItem(item: ActivityItem): boolean {
+  if ((item.kind !== "system" && item.kind !== "note") || item.source !== "system") {
+    return false;
+  }
+  if ((item.meta as Record<string, unknown>)?.inferred === true) {
+    return true;
+  }
+  const body = item.body.trim();
+  return (
+    body === "Claude session started" ||
+    body === "Claude request finished" ||
+    body === "Claude session ended"
+  );
+}
+
+function hasOnlyClaudeLifecycleContent(session: InternalSessionRecord): boolean {
+  return session.activityItems.length > 0 && session.activityItems.every(isClaudeLifecycleItem);
+}
+
 function hasOnlyLifecycleOrPlaceholderContent(session: InternalSessionRecord): boolean {
   if (session.activityItems.length === 0) {
     return true;
@@ -773,8 +792,9 @@ function hasOnlyLifecycleOrPlaceholderContent(session: InternalSessionRecord): b
 
 function shouldHideNoiseSession(session: InternalSessionRecord): boolean {
   const isJetBrains = isJetBrainsTool(session.tool);
+  const isClaude = session.tool === "claude";
   const isCodeBuddy = session.tool === "codebuddy";
-  if (!isJetBrains && !isCodeBuddy) {
+  if (!isJetBrains && !isClaude && !isCodeBuddy) {
     return false;
   }
 
@@ -794,6 +814,17 @@ function shouldHideNoiseSession(session: InternalSessionRecord): boolean {
 
   if (isJetBrains) {
     return !hasUserMessage && !hasAssistantContent && !hasToolResult && hasLifecycleOnly;
+  }
+
+  if (isClaude) {
+    return (
+      session.pendingById.size === 0 &&
+      statusPriority(session.status) >= statusPriority("idle") &&
+      !hasUserMessage &&
+      !hasAssistantContent &&
+      !hasToolResult &&
+      hasOnlyClaudeLifecycleContent(session)
+    );
   }
 
   return (

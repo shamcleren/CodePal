@@ -2,7 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { App, buildFallbackHistoryDiagnostics, workReviewUsageRefreshKey } from "./App";
+import {
+  App,
+  buildFallbackHistoryDiagnostics,
+  workReviewHistoryMaxAgeMs,
+  workReviewTokenRange,
+  workReviewUsageRefreshKey,
+} from "./App";
 
 describe("App", () => {
   it("renders sessions and the in-app settings drawer shell together", () => {
@@ -63,6 +69,18 @@ describe("App", () => {
       summary: { rateLimits: [], contextMode: "none", updatedAt: 150 },
       sessions: [{ agent: "codex", sessionId: "s1", updatedAt: 300, sources: [], completeness: "minimal" }],
     })).toBe(300);
+  });
+
+  it("preloads the full 30-day work review range on natural day boundaries", () => {
+    const now = Date.parse("2026-06-01T17:30:00+08:00");
+
+    expect(workReviewTokenRange(now)).toEqual({
+      start: Date.parse("2026-05-03T00:00:00+08:00"),
+      end: Date.parse("2026-06-02T00:00:00+08:00"),
+    });
+    expect(workReviewHistoryMaxAgeMs(now)).toBe(
+      now - Date.parse("2026-05-03T00:00:00+08:00"),
+    );
   });
 
   it("does not expose unfinished LLM report settings", () => {

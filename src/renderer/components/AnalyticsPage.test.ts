@@ -8,11 +8,13 @@ import {
   BREAKDOWN_MODES,
   TREND_METRICS,
   buildAnalyticsBreakdownRows,
+  buildAnalyticsCoverageSummary,
   buildAvailableAgents,
   buildAvailableModels,
   buildAvailableProjects,
 } from "./AnalyticsPage";
 import type { TokenStatsResult } from "../../shared/usageTypes";
+import { createI18nValue } from "../i18n";
 
 const baseStats: TokenStatsResult = {
   daily: [],
@@ -183,6 +185,38 @@ describe("AnalyticsPage helpers", () => {
     expect(rows[0].cost).toBeCloseTo(14.45);
   });
 
+  it("summarizes analytics data coverage without adding a separate diagnostics panel", () => {
+    const i18n = createI18nValue("zh-CN");
+    const summary = buildAnalyticsCoverageSummary(
+      {
+        ...baseStats,
+        daily: [
+          {
+            date: "2026-05-25",
+            agent: "codex",
+            inputTokens: 1_000_000,
+            outputTokens: 500_000,
+            cacheReadTokens: 100_000,
+            cacheCreationTokens: 0,
+            reasoningTokens: 0,
+            totalTokens: 1_600_000,
+            requestCount: 4,
+          },
+        ],
+        importStatus: {
+          completedAt: 1,
+          claudeRowsImported: 2,
+          codexRowsImported: 3,
+          lastError: null,
+        },
+      },
+      { granularity: "hour", points: [], sourcePointCount: 6 },
+      i18n.t,
+    );
+
+    expect(summary).toBe("来源：本地历史 4 请求 · 趋势 6 点 · 历史补齐 5 条 · 费用：估算");
+  });
+
   it("orders agent and model filters by common usage first", () => {
     const stats: TokenStatsResult = {
       ...baseStats,
@@ -279,13 +313,13 @@ describe("AnalyticsPage helpers", () => {
     ]);
   });
 
-  it("keeps small multiple trend cards wired into the analytics page", () => {
+  it("does not render redundant small multiple trend cards in the analytics page", () => {
     const source = fs.readFileSync(
       path.join(__dirname, "AnalyticsPage.tsx"),
       "utf8",
     );
 
-    expect(source).toContain("AnalyticsSmallMultiples");
+    expect(source).not.toContain("AnalyticsSmallMultiples");
   });
 
   it("does not wire low-signal history or health summary sections into the analytics page", () => {
@@ -295,7 +329,6 @@ describe("AnalyticsPage helpers", () => {
     );
 
     expect(source).not.toContain("analytics-page__import-strip");
-    expect(source).not.toContain("tokenStats.sourceCoverage");
     expect(source).not.toContain("WorkHealthStrip");
   });
 
