@@ -67,6 +67,7 @@ export type PersistedSessionWrite = {
     status: string;
     title?: string;
     latestTask?: string;
+    model?: string;
     updatedAt: number;
     lastUserMessageAt?: number;
     hasPendingActions: boolean;
@@ -89,6 +90,7 @@ export type SessionSeedRecord = {
   status: string;
   title: string | null;
   latestTask: string | null;
+  model?: string | null;
   projectPath?: string | null;
   projectName?: string | null;
   updatedAt: number;
@@ -132,6 +134,14 @@ function normalizedProjectFields(input: {
     projectPath: project?.projectPath ?? null,
     projectName: project?.projectName ?? null,
   };
+}
+
+function normalizedSessionModel(value: string | undefined | null): string | null {
+  const model = value?.trim();
+  if (!model || model.toLowerCase() === "unknown") {
+    return null;
+  }
+  return model;
 }
 
 function encodeCursor(cursor: HistoryCursor): string {
@@ -202,6 +212,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       status TEXT NOT NULL,
       title TEXT,
       latest_task TEXT,
+      model TEXT,
       updated_at INTEGER NOT NULL,
       last_user_message_at INTEGER,
       has_pending_actions INTEGER NOT NULL DEFAULT 0,
@@ -271,6 +282,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       ON token_usage (timestamp DESC);
     CREATE INDEX IF NOT EXISTS idx_token_usage_agent_ts
       ON token_usage (agent, timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_token_usage_session_model_ts
+      ON token_usage (session_id, model, timestamp DESC);
 
     CREATE TABLE IF NOT EXISTS model_pricing (
       model_id TEXT PRIMARY KEY,
@@ -283,6 +296,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   `);
 
   for (const statement of [
+    "ALTER TABLE sessions ADD COLUMN model TEXT",
     "ALTER TABLE sessions ADD COLUMN project_path TEXT",
     "ALTER TABLE sessions ADD COLUMN project_name TEXT",
     "ALTER TABLE token_usage ADD COLUMN source_kind TEXT",
@@ -545,6 +559,28 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
   // Backfill: codex rows that predate model tracking have NULL or "unknown" model
   db.exec(`UPDATE token_usage SET model = 'gpt-5.5' WHERE agent = 'codex' AND (model IS NULL OR model = '' OR model = 'unknown')`);
+  // Backfill persisted session summaries after app updates. Token usage rows
+  // can predate the session-level model field, so choose the last observed
+  // non-empty model for each session.
+  db.exec(`
+    UPDATE sessions
+    SET model = (
+      SELECT token_usage.model
+      FROM token_usage
+      WHERE token_usage.session_id = sessions.id
+        AND NULLIF(token_usage.model, '') IS NOT NULL
+        AND lower(token_usage.model) != 'unknown'
+      ORDER BY token_usage.timestamp DESC, token_usage.id DESC
+      LIMIT 1
+    )
+    WHERE EXISTS (
+        SELECT 1
+        FROM token_usage
+        WHERE token_usage.session_id = sessions.id
+          AND NULLIF(token_usage.model, '') IS NOT NULL
+          AND lower(token_usage.model) != 'unknown'
+      )
+  `);
 
   function assertOpen() {
     if (isClosed) {
@@ -576,9 +612,9 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
   const upsertSessionStmt = db.prepare(`
     INSERT INTO sessions (
-      id, tool, status, title, latest_task, updated_at, last_user_message_at,
+      id, tool, status, title, latest_task, model, updated_at, last_user_message_at,
       has_pending_actions, project_path, project_name
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tool = CASE
         WHEN excluded.updated_at >= sessions.updated_at THEN excluded.tool
@@ -595,6 +631,16 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       latest_task = CASE
         WHEN excluded.updated_at >= sessions.updated_at AND excluded.latest_task IS NOT NULL THEN excluded.latest_task
         ELSE sessions.latest_task
+      END,
+      model = CASE
+        WHEN excluded.model IS NOT NULL
+          AND (
+            sessions.model IS NULL
+            OR sessions.model = ''
+            OR excluded.updated_at >= sessions.updated_at
+          )
+        THEN excluded.model
+        ELSE sessions.model
       END,
       updated_at = MAX(sessions.updated_at, excluded.updated_at),
       last_user_message_at = CASE
@@ -663,7 +709,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     LIMIT ?
   `);
   const recentSessionsStmt = db.prepare(`
-    SELECT id, tool, status, title, latest_task, project_path, project_name, updated_at, last_user_message_at
+    SELECT id, tool, status, title, latest_task, model, project_path, project_name, updated_at, last_user_message_at
     FROM sessions
     WHERE updated_at >= ?
       AND last_user_message_at IS NOT NULL
@@ -690,12 +736,17 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   // Token usage statements
   const ensureTokenUsageSessionStmt = db.prepare(`
     INSERT INTO sessions (
-      id, tool, status, title, latest_task, updated_at, last_user_message_at,
+      id, tool, status, title, latest_task, model, updated_at, last_user_message_at,
       has_pending_actions, project_path, project_name
     )
-    VALUES (?, ?, 'unknown', NULL, NULL, ?, NULL, 0, ?, ?)
+    VALUES (?, ?, 'unknown', NULL, NULL, ?, ?, NULL, 0, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       updated_at = MAX(sessions.updated_at, excluded.updated_at),
+      model = CASE
+        WHEN excluded.model IS NOT NULL AND excluded.updated_at >= sessions.updated_at THEN excluded.model
+        WHEN (sessions.model IS NULL OR sessions.model = '') AND excluded.model IS NOT NULL THEN excluded.model
+        ELSE sessions.model
+      END,
       project_path = CASE
         WHEN sessions.project_path IS NULL THEN excluded.project_path
         ELSE sessions.project_path
@@ -1032,6 +1083,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   function writeSessionEvent(write: PersistedSessionWrite) {
     assertOpen();
     const project = normalizedProjectFields(write.session);
+    const model = normalizedSessionModel(write.session.model);
     db.exec("BEGIN");
     try {
       upsertSessionStmt.run(
@@ -1040,6 +1092,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         write.session.status,
         write.session.title ?? null,
         write.session.latestTask ?? null,
+        model,
         write.session.updatedAt,
         write.session.lastUserMessageAt ?? null,
         write.session.hasPendingActions ? 1 : 0,
@@ -1142,6 +1195,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       status: string;
       title: string | null;
       latest_task: string | null;
+      model: string | null;
       updated_at: number;
       last_user_message_at: number | null;
       project_path: string | null;
@@ -1168,6 +1222,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         status: row.status,
         title: row.title,
         latestTask: row.latest_task,
+        model: row.model,
         projectPath: row.project_path,
         projectName: row.project_name,
         updatedAt: row.updated_at,
@@ -1206,6 +1261,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       ensureTokenUsageSessionStmt.run(
         entry.sessionId,
         entry.agent,
+        normalizedSessionModel(entry.model),
         entry.timestamp,
         project.projectPath,
         project.projectName,

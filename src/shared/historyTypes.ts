@@ -29,6 +29,7 @@ export type SessionHistorySummary = {
   status: SessionStatus;
   title?: string;
   task?: string;
+  model?: string;
   projectPath?: string;
   projectName?: string;
   updatedAt: number;

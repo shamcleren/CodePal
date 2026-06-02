@@ -86,6 +86,25 @@ describe("SessionRow pending action", () => {
     expect(html).not.toContain("session-row__overview-artifact");
   });
 
+  it("renders the concrete session model instead of repeating the tool name", () => {
+    const html = renderRow(
+      baseRow({
+        tool: "codex",
+        model: "gpt-5.5",
+      }),
+    );
+
+    expect(html).toContain("session-row__model-name");
+    expect(html).toContain("gpt-5.5");
+    expect(html).not.toContain("session-row__model-badge");
+    expect(html).not.toContain('tool-name tool-name--codex">Codex');
+    expect(html).not.toContain("tool-name__model-badge");
+    expect(html).not.toContain("(gpt-5.5)");
+    expect(html.indexOf("session-row__model-name")).toBeLessThan(
+      html.indexOf("session-row__title"),
+    );
+  });
+
   it("renders option buttons when pendingActions has one item", () => {
     const html = renderRow(
       baseRow({
@@ -180,13 +199,13 @@ describe("SessionRow pending action", () => {
 
     expect(html).toContain("session-stream");
     expect(html).not.toContain("session-row__interaction");
-    expect(html).toContain("session-stream__artifact-kicker");
+    expect(html).not.toContain("session-stream__artifact-kicker");
     expect(html).toContain("latest Bash");
     expect(html).toContain(
       "Notification (permission_prompt): CodeBuddy needs your permission to use Bash",
     );
     expect(html).toContain("session-stream__item--artifact-group");
-    expect(html).toContain("session-stream__artifact-group-summary");
+    expect(html).toContain("session-stream__artifact-group-summary--inline");
   });
 
   it("renders the collapsed summary line", () => {
@@ -205,12 +224,12 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("Codex · review diff");
     expect(html).toContain("最后需要你确认是否继续合并？");
     expect(html).toContain("2 pending");
-    expect(html).toContain("9af3");
+    expect(html).not.toContain("#9af3");
     expect(html).toContain("04-02 16:01");
     expect(html).toContain("14m");
   });
 
-  it("keeps context usage and short id in a dedicated metrics rail", () => {
+  it("keeps context usage in a dedicated metrics rail without the short id", () => {
     const html = renderRow(
       baseRow({
           titleLabel:
@@ -229,6 +248,7 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("session-row__rail");
     expect(html).toContain("session-row__stats");
     expect(html).toContain("Context 59%");
+    expect(html).not.toContain("#2235");
     expect(html.indexOf("session-row__summary-text")).toBeLessThan(
       html.indexOf("session-row__rail"),
     );
@@ -759,9 +779,9 @@ describe("SessionRow pending action", () => {
     expect(html).not.toContain("session-row__interaction");
     expect(html).not.toContain("session-row__overview-artifact");
     expect(html).toContain("session-stream__item--artifact-active");
-    expect(html).toContain("session-stream__artifact-kicker");
+    expect(html).not.toContain("session-stream__artifact-kicker");
     expect(html).toContain("session-stream__item--artifact-group");
-    expect(html).toContain("session-stream__artifact-group-summary");
+    expect(html).toContain("session-stream__artifact-group-summary--inline");
   });
 
   it("renders result artifacts with a distinct result-state class", () => {
@@ -824,6 +844,88 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("session-stream__artifact-group-summary");
     expect(html).toContain("session-stream__artifact-toggle");
     expect(html).not.toContain("session-stream__plaintext");
+  });
+
+  it("keeps collapsed tool groups to a single compact row", () => {
+    const html = renderToStaticMarkup(
+      <SessionRow
+        session={baseRow({
+          status: "completed",
+          timelineItems: [
+            {
+              id: "tool-compact-1",
+              kind: "tool",
+              source: "tool",
+              label: "Bash",
+              title: "Bash",
+              body: "npm test -- src/renderer/components/SessionRow.test.tsx",
+              timestamp: 2,
+              toolName: "Bash",
+              toolPhase: "call",
+            },
+            {
+              id: "tool-compact-2",
+              kind: "tool",
+              source: "tool",
+              label: "Bash",
+              title: "Bash",
+              body: "PASS src/renderer/components/SessionRow.test.tsx",
+              timestamp: 3,
+              toolName: "Bash",
+              toolPhase: "result",
+            },
+          ],
+        })}
+        expanded
+        onToggleExpanded={vi.fn()}
+        onRespond={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("session-stream__artifact-group-summary--inline");
+    expect(html).not.toContain("session-stream__body");
+    expect(html).not.toContain("npm test -- src/renderer/components/SessionRow.test.tsx");
+    expect(html).not.toContain("PASS src/renderer/components/SessionRow.test.tsx");
+  });
+
+  it("attaches tool groups to the preceding assistant message as a small marker", () => {
+    const html = renderToStaticMarkup(
+      <SessionRow
+        session={baseRow({
+          status: "completed",
+          timelineItems: [
+            {
+              id: "tool-attached-1",
+              kind: "tool",
+              source: "tool",
+              label: "Bash",
+              title: "Bash",
+              body: "git diff --stat",
+              timestamp: 2,
+              toolName: "Bash",
+              toolPhase: "call",
+            },
+            {
+              id: "assistant-before-tool",
+              kind: "message",
+              source: "assistant",
+              label: "Assistant",
+              title: "Assistant",
+              body: "我先看一下 diff。",
+              timestamp: 1,
+            },
+          ],
+        })}
+        expanded
+        onToggleExpanded={vi.fn()}
+        onRespond={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("session-stream__item--message-assistant");
+    expect(html).toContain("session-stream__tool-marker");
+    expect(html).not.toContain("session-stream__item--artifact-group");
+    expect(html).not.toContain("git diff --stat");
   });
 
   it("renders tool artifacts as plain text instead of markdown blocks", () => {

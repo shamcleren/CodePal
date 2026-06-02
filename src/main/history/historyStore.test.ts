@@ -914,6 +914,199 @@ describe("createHistoryStore", () => {
   });
 
   describe("getRecentSessions", () => {
+    it("persists and restores the concrete session model", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const now = () => 100_000_000;
+      store = createHistoryStore({ dbPath, now });
+
+      store.writeSessionEvent({
+        session: {
+          id: "model-session",
+          tool: "codex",
+          status: "completed",
+          title: "Model-aware session",
+          latestTask: "inspect model",
+          model: "gpt-5.5",
+          updatedAt: now() - 1_000,
+          lastUserMessageAt: now() - 2_000,
+          hasPendingActions: false,
+        },
+        activityItems: [],
+      });
+
+      expect(store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 100 })).toEqual([
+        expect.objectContaining({
+          id: "model-session",
+          model: "gpt-5.5",
+        }),
+      ]);
+    });
+
+    it("backfills legacy session models from token usage on startup", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const legacyDb = new DatabaseSync(dbPath);
+      legacyDb.exec(`
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          tool TEXT NOT NULL,
+          status TEXT NOT NULL,
+          title TEXT,
+          latest_task TEXT,
+          updated_at INTEGER NOT NULL,
+          last_user_message_at INTEGER,
+          has_pending_actions INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE token_usage (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          agent TEXT NOT NULL,
+          model TEXT,
+          timestamp INTEGER NOT NULL,
+          input_tokens INTEGER NOT NULL DEFAULT 0,
+          output_tokens INTEGER NOT NULL DEFAULT 0,
+          cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+          cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+          reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+
+        INSERT INTO sessions (
+          id, tool, status, title, latest_task, updated_at, last_user_message_at,
+          has_pending_actions
+        )
+        VALUES (
+          'legacy-model-session', 'codex', 'completed', 'Legacy model session',
+          'inspect old model', 1000, 900, 0
+        );
+
+        INSERT INTO token_usage (
+          session_id, agent, model, timestamp, input_tokens, output_tokens
+        )
+        VALUES
+          ('legacy-model-session', 'codex', 'gpt-5.4', 1000, 200, 40),
+          ('legacy-model-session', 'codex', 'gpt-5.5', 1100, 20, 5);
+      `);
+      legacyDb.close();
+
+      store = createHistoryStore({ dbPath, now: () => 2_000 });
+
+      expect(store.getRecentSessions({ maxAgeMs: 2_000, limit: 10 })).toEqual([
+        expect.objectContaining({
+          id: "legacy-model-session",
+          model: "gpt-5.5",
+        }),
+      ]);
+    });
+
+    it("repairs existing session models from the latest token usage on startup", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const legacyDb = new DatabaseSync(dbPath);
+      legacyDb.exec(`
+        CREATE TABLE sessions (
+          id TEXT PRIMARY KEY,
+          tool TEXT NOT NULL,
+          status TEXT NOT NULL,
+          title TEXT,
+          latest_task TEXT,
+          model TEXT,
+          updated_at INTEGER NOT NULL,
+          last_user_message_at INTEGER,
+          has_pending_actions INTEGER NOT NULL DEFAULT 0
+        );
+
+        CREATE TABLE token_usage (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          agent TEXT NOT NULL,
+          model TEXT,
+          timestamp INTEGER NOT NULL,
+          input_tokens INTEGER NOT NULL DEFAULT 0,
+          output_tokens INTEGER NOT NULL DEFAULT 0,
+          cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+          cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+          reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+        );
+
+        INSERT INTO sessions (
+          id, tool, status, title, latest_task, model, updated_at, last_user_message_at,
+          has_pending_actions
+        )
+        VALUES (
+          'existing-model-session', 'codex', 'completed', 'Existing model session',
+          'inspect changed model', 'gpt-5.4', 1200, 900, 0
+        );
+
+        INSERT INTO token_usage (
+          session_id, agent, model, timestamp, input_tokens, output_tokens
+        )
+        VALUES
+          ('existing-model-session', 'codex', 'gpt-5.4', 1000, 200, 40),
+          ('existing-model-session', 'codex', 'gpt-5.5', 1100, 20, 5);
+      `);
+      legacyDb.close();
+
+      store = createHistoryStore({ dbPath, now: () => 2_000 });
+
+      expect(store.getRecentSessions({ maxAgeMs: 2_000, limit: 10 })).toEqual([
+        expect.objectContaining({
+          id: "existing-model-session",
+          model: "gpt-5.5",
+        }),
+      ]);
+    });
+
+    it("fills a missing session model when token usage arrives later", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const now = () => 100_000_000;
+      store = createHistoryStore({ dbPath, now });
+
+      store.writeSessionEvent({
+        session: {
+          id: "usage-later-session",
+          tool: "claude",
+          status: "completed",
+          title: "Usage later session",
+          updatedAt: now() - 1_000,
+          lastUserMessageAt: now() - 2_000,
+          hasPendingActions: false,
+        },
+        activityItems: [],
+      });
+      store.writeTokenUsage({
+        sessionId: "usage-later-session",
+        agent: "claude",
+        model: "claude-sonnet-4-5-20250929",
+        timestamp: now() - 500,
+        inputTokens: 100,
+        outputTokens: 20,
+        sourceKind: "test",
+        sourceKey: "usage-later-model",
+      });
+      store.writeTokenUsage({
+        sessionId: "usage-later-session",
+        agent: "claude",
+        model: "claude-opus-4-7",
+        timestamp: now() - 250,
+        inputTokens: 10,
+        outputTokens: 5,
+        sourceKind: "test",
+        sourceKey: "usage-later-model-2",
+      });
+
+      expect(store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 100 })).toEqual([
+        expect.objectContaining({
+          id: "usage-later-session",
+          model: "claude-opus-4-7",
+        }),
+      ]);
+    });
+
     it("returns sessions updated within maxAgeMs", () => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
       const dbPath = path.join(tmpDir, "history.sqlite");

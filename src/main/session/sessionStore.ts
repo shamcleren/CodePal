@@ -554,6 +554,7 @@ function toLegacyActivities(activityItems: ActivityItem[]): string[] {
 }
 
 function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
+  const model = firstMetaString(internal.meta, "model");
   const base: SessionRecord = {
     id: internal.id,
     tool: internal.tool,
@@ -561,6 +562,7 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
     ...(internal.title ? { title: internal.title } : {}),
     ...(internal.firstUserPrompt ? { firstUserPrompt: internal.firstUserPrompt } : {}),
     task: internal.task,
+    ...(model ? { model } : {}),
     ...(internal.projectPath ? { projectPath: internal.projectPath } : {}),
     ...(internal.projectName ? { projectName: internal.projectName } : {}),
     updatedAt: internal.updatedAt,
@@ -1629,15 +1631,16 @@ export function createSessionStore(options?: SessionStoreOptions) {
       status: string;
       title: string | null;
       latestTask: string | null;
+      model?: string | null;
       updatedAt: number;
       lastUserMessageAt: number | null;
       startedAt?: number | null;
       sessionDurationMs?: number | null;
       latestRunningDurationMs?: number | null;
-	      userPrompts?: Array<{ body: string; timestamp: number }>;
-	      projectPath?: string | null;
-	      projectName?: string | null;
-	    }) {
+      userPrompts?: Array<{ body: string; timestamp: number }>;
+      projectPath?: string | null;
+      projectName?: string | null;
+    }) {
       if (sessions.has(record.id)) {
         return;
       }
@@ -1659,12 +1662,12 @@ export function createSessionStore(options?: SessionStoreOptions) {
         id: record.id,
         tool: record.tool,
         status: restoredStatus,
-	        title: firstUserPrompt ?? record.title ?? undefined,
-	        ...(firstUserPrompt ? { firstUserPrompt } : {}),
-	        task: record.latestTask ?? undefined,
-	        ...(record.projectPath ? { projectPath: record.projectPath } : {}),
-	        ...(record.projectName ? { projectName: record.projectName } : {}),
-	        meta: undefined,
+        title: firstUserPrompt ?? record.title ?? undefined,
+        ...(firstUserPrompt ? { firstUserPrompt } : {}),
+        task: record.latestTask ?? undefined,
+        ...(record.projectPath ? { projectPath: record.projectPath } : {}),
+        ...(record.projectName ? { projectName: record.projectName } : {}),
+        meta: record.model ? { model: record.model } : undefined,
         updatedAt: record.updatedAt,
         lastUserMessageAt: record.lastUserMessageAt ?? undefined,
         startedAt: record.startedAt ?? record.lastUserMessageAt ?? record.updatedAt,

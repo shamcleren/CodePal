@@ -365,6 +365,7 @@ export interface SessionRecord {
   title?: string;
   firstUserPrompt?: string;
   task?: string;
+  model?: string;
   projectPath?: string;
   projectName?: string;
   updatedAt: number;

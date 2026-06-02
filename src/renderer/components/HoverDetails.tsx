@@ -25,18 +25,20 @@ type PrimaryRenderEntry = {
   isTypingItem: boolean;
 };
 
+type ToolGroupDisplayItem = {
+  renderKey: string;
+  items: TimelineItem[];
+  activeArtifact: boolean;
+};
+
 type PrimaryDisplayItem =
   | {
       kind: "item";
       renderKey: string;
       entry: PrimaryRenderEntry;
+      attachedToolGroup?: ToolGroupDisplayItem;
     }
-  | {
-      kind: "tool-group";
-      renderKey: string;
-      items: TimelineItem[];
-      activeArtifact: boolean;
-    };
+  | ({ kind: "tool-group" } & ToolGroupDisplayItem);
 
 const PRIMARY_ITEM_GAP_PX = 10;
 const PRIMARY_VIRTUALIZATION_THRESHOLD = 24;
@@ -388,11 +390,25 @@ export function buildPrimaryDisplayItems(
       index += 1;
     }
 
-    displayItems.push({
-      kind: "tool-group",
+    const toolGroup: ToolGroupDisplayItem = {
       renderKey: `tool-group:${entries[firstToolIndex].renderKey}`,
       items: toolItems,
       activeArtifact: sessionStatus === "running" && firstToolIndex === 0,
+    };
+    const previous = displayItems[displayItems.length - 1];
+
+    if (
+      previous?.kind === "item" &&
+      previous.entry.item.kind === "message" &&
+      messageRole(previous.entry.item.label) !== "user"
+    ) {
+      previous.attachedToolGroup = toolGroup;
+      continue;
+    }
+
+    displayItems.push({
+      kind: "tool-group",
+      ...toolGroup,
     });
   }
 
@@ -486,20 +502,86 @@ export function calculateVirtualWindow(
   };
 }
 
+function ToolGroupRows({ items }: { items: TimelineItem[] }) {
+  return (
+    <div className="session-stream__artifact-group-list">
+      {items.map((item) => {
+        const toolLabel = item.toolName?.trim() || item.label.trim() || item.title.trim();
+        const phaseLabel = item.toolPhase === "call" ? "call" : "result";
+        return (
+          <div key={item.id} className="session-stream__artifact-group-row" title={item.body}>
+            <span className="session-stream__artifact-group-tool">{toolLabel}</span>
+            <span className="session-stream__artifact-group-phase">{phaseLabel}</span>
+            <span className="session-stream__artifact-group-body">
+              {toolBodySummary(item.body)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ToolGroupMarker({
+  renderKey,
+  items,
+  expanded,
+  onToggle,
+}: {
+  renderKey: string;
+  items: TimelineItem[];
+  expanded: boolean;
+  onToggle: (renderKey: string) => void;
+}) {
+  const i18n = useI18n();
+  const summary = summarizeToolGroup(items);
+
+  return (
+    <div className={`session-stream__tool-marker ${expanded ? "session-stream__tool-marker--expanded" : ""}`}>
+      <button
+        type="button"
+        className="session-stream__tool-marker-button"
+        aria-expanded={expanded}
+        title={summary.summary}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onToggle(renderKey);
+        }}
+      >
+        <span className="session-stream__tool-marker-dot" aria-hidden="true" />
+        <span className="session-stream__tool-marker-label">Tools</span>
+        <span className="session-stream__tool-marker-count">{summary.count}</span>
+        <span className="session-stream__tool-marker-summary">{summary.latestToolLabel}</span>
+        <span className="session-stream__tool-marker-action">
+          {expanded ? i18n.t("session.collapse") : i18n.t("session.expand")}
+        </span>
+      </button>
+      {expanded ? <ToolGroupRows items={items} /> : null}
+    </div>
+  );
+}
+
 function PrimaryStreamItem({
   entry,
   entryIndex,
   primaryItems,
   sessionStatus,
+  attachedToolGroup,
   expandedTools,
+  expandedToolGroups,
   onToggleTool,
+  onToggleToolGroup,
 }: {
   entry: PrimaryRenderEntry;
   entryIndex: number;
   primaryItems: TimelineItem[];
   sessionStatus: SessionStatus;
+  attachedToolGroup?: ToolGroupDisplayItem;
   expandedTools: Record<string, boolean>;
+  expandedToolGroups: Record<string, boolean>;
   onToggleTool: (renderKey: string) => void;
+  onToggleToolGroup: (renderKey: string) => void;
 }) {
   const i18n = useI18n();
   const { item, isTypingItem, renderKey } = entry;
@@ -526,6 +608,14 @@ function PrimaryStreamItem({
             <RichTextBlock text={item.body} />
           )}
         </div>
+        {attachedToolGroup ? (
+          <ToolGroupMarker
+            renderKey={attachedToolGroup.renderKey}
+            items={attachedToolGroup.items}
+            expanded={expandedToolGroups[attachedToolGroup.renderKey] ?? false}
+            onToggle={onToggleToolGroup}
+          />
+        ) : null}
       </div>
     );
   }
@@ -616,49 +706,56 @@ function ToolGroupItem({
     >
       <div className="session-stream__artifact-accent" aria-hidden="true" />
       <div className="session-stream__artifact-copy">
-        <div className="session-stream__header">
-          <span className="session-stream__artifact-kicker">{i18n.t("session.execution")}</span>
-          <span className="session-stream__label">Tools</span>
-          <span className="session-stream__artifact-type">{summary.count}</span>
-          <span className="session-stream__artifact-name">{summary.latestToolLabel}</span>
-          <button
-            type="button"
-            className="session-stream__artifact-toggle"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onToggle(renderKey);
-            }}
-          >
-            {expanded ? i18n.t("session.collapse") : i18n.t("session.expand")}
-          </button>
-        </div>
-        <div className="session-stream__body">
-          {!expanded ? (
-            <div className="session-stream__artifact-group-summary" title={summary.summary}>
+        {!expanded ? (
+          <div className="session-stream__header">
+            <span className="session-stream__label">Tools</span>
+            <span
+              className="session-stream__artifact-group-summary session-stream__artifact-group-summary--inline"
+              title={summary.summary}
+            >
               <span className="session-stream__artifact-group-summary-text">{summary.summary}</span>
               <span className="session-stream__artifact-group-summary-breakdown">
                 {summary.phaseCounts.call} call · {summary.phaseCounts.result} result
               </span>
+            </span>
+            <button
+              type="button"
+              className="session-stream__artifact-toggle"
+              aria-expanded={false}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onToggle(renderKey);
+              }}
+            >
+              {i18n.t("session.expand")}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="session-stream__header">
+              <span className="session-stream__artifact-kicker">{i18n.t("session.execution")}</span>
+              <span className="session-stream__label">Tools</span>
+              <span className="session-stream__artifact-type">{summary.count}</span>
+              <span className="session-stream__artifact-name">{summary.latestToolLabel}</span>
+              <button
+                type="button"
+                className="session-stream__artifact-toggle"
+                aria-expanded={true}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onToggle(renderKey);
+                }}
+              >
+                {i18n.t("session.collapse")}
+              </button>
             </div>
-          ) : (
-            <div className="session-stream__artifact-group-list">
-              {items.map((item) => {
-                const toolLabel = item.toolName?.trim() || item.label.trim() || item.title.trim();
-                const phaseLabel = item.toolPhase === "call" ? "call" : "result";
-                return (
-                  <div key={item.id} className="session-stream__artifact-group-row" title={item.body}>
-                    <span className="session-stream__artifact-group-tool">{toolLabel}</span>
-                    <span className="session-stream__artifact-group-phase">{phaseLabel}</span>
-                    <span className="session-stream__artifact-group-body">
-                      {toolBodySummary(item.body)}
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="session-stream__body">
+              <ToolGroupRows items={items} />
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -834,8 +931,11 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
               entryIndex={index}
               primaryItems={primaryItems}
               sessionStatus={sessionStatus}
+              attachedToolGroup={entry.attachedToolGroup}
               expandedTools={expandedTools}
+              expandedToolGroups={expandedToolGroups}
               onToggleTool={toggleTool}
+              onToggleToolGroup={toggleToolGroup}
             />
           ),
         )}
@@ -845,9 +945,16 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
     const heights = primaryDisplayItems.map((entry) => {
       const renderKey = entry.kind === "item" ? entry.entry.renderKey : entry.renderKey;
       if (entry.kind === "tool-group") {
-        return measuredHeightsRef.current[renderKey] ?? Math.max(90, 60 + entry.items.length * 26);
+        const expanded = expandedToolGroups[renderKey] ?? false;
+        return measuredHeightsRef.current[renderKey] ?? (expanded ? Math.max(90, 60 + entry.items.length * 26) : 42);
       }
-      return measuredHeightsRef.current[renderKey] ?? estimatePrimaryEntryHeight(entry.entry);
+      const attached = entry.attachedToolGroup;
+      const attachedHeight = attached
+        ? expandedToolGroups[attached.renderKey]
+          ? Math.max(56, 32 + attached.items.length * 26)
+          : 26
+        : 0;
+      return measuredHeightsRef.current[renderKey] ?? estimatePrimaryEntryHeight(entry.entry) + attachedHeight;
     });
     const offsets: number[] = [];
     let cursor = 0;
@@ -905,8 +1012,11 @@ export function HoverDetails({ items, sessionStatus, scrollContainerRef }: Hover
                     entryIndex={absoluteIndex}
                     primaryItems={primaryItems}
                     sessionStatus={sessionStatus}
+                    attachedToolGroup={entry.attachedToolGroup}
                     expandedTools={expandedTools}
+                    expandedToolGroups={expandedToolGroups}
                     onToggleTool={toggleTool}
+                    onToggleToolGroup={toggleToolGroup}
                   />
                 )}
               </div>

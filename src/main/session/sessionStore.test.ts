@@ -41,6 +41,47 @@ describe("createSessionStore", () => {
     });
   });
 
+  it("exposes a concrete model from incoming event metadata", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      task: "inspect current session",
+      timestamp: 1,
+      meta: { model: "gpt-5.5" },
+    });
+
+    expect(store.getSession("s1")?.model).toBe("gpt-5.5");
+  });
+
+  it("uses the latest model metadata for an existing session", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      task: "start session",
+      timestamp: 1,
+      meta: { model: "gpt-5.4" },
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      task: "continue session",
+      timestamp: 2,
+      meta: { model: "gpt-5.5" },
+    });
+
+    expect(store.getSession("s1")?.model).toBe("gpt-5.5");
+  });
+
   it("tracks session and running durations independently from the truncated activity preview", () => {
     const store = createSessionStore();
 
@@ -2407,6 +2448,7 @@ describe("createSessionStore", () => {
         status: "completed",
         title: "Fix bug",
         latestTask: "debug task",
+        model: "gpt-5.5",
         updatedAt: Date.now() - 60_000,
         lastUserMessageAt: Date.now() - 120_000,
       });
@@ -2416,6 +2458,7 @@ describe("createSessionStore", () => {
       expect(session!.status).toBe("completed");
       expect(session!.title).toBe("Fix bug");
       expect(session!.task).toBe("debug task");
+      expect(session!.model).toBe("gpt-5.5");
     });
 
     it("normalizes running status to idle on restore", () => {
