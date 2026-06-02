@@ -404,14 +404,7 @@ export function mergeSessionTimelineItems(
     return left.id.localeCompare(right.id);
   };
 
-  // Sort each block independently by timestamp descending.
-  // Live items form a stable block that stays at the front (most recent).
-  // Historical items are appended after (older), so loading history
-  // never reorders the items already visible on screen.
-  const liveDesc = [...filteredLive].sort(descSort);
-  historical.sort(descSort);
-
-  return [...liveDesc, ...historical];
+  return [...filteredLive, ...historical].sort(descSort);
 }
 
 export function shouldLoadNextHistoryPage(options: {
@@ -742,15 +735,10 @@ export function SessionHistoryTimeline({
     ];
   }, [mergedItemsBase, localUserMessages]);
   const summaryText = buildSessionSummaryText(session, mergedItems);
-  const latestToolItem = mergedItems.find((item) => item.kind === "tool");
   const hasRenderablePrimaryContent = mergedItems.some(
     (item) => item.kind === "message" || item.kind === "tool",
   );
   const showLoadingPanel = session.status === "running" && !hasRenderablePrimaryContent;
-  const shouldShowArtifactSummary =
-    latestToolItem &&
-    normalizeComparableText(latestToolItem.body) !== normalizeComparableText(session.titleLabel) &&
-    normalizeComparableText(latestToolItem.body) !== normalizeComparableText(session.collapsedSummary);
   const historyStatus = mergeHistoryStatusState({
     historyError,
     historyLoading,
@@ -1208,12 +1196,6 @@ export function SessionHistoryTimeline({
               <span className="session-row__loading-dots" aria-hidden="true" />
             </div>
           </div>
-        </div>
-      ) : null}
-      {shouldShowArtifactSummary ? (
-        <div className="session-row__overview-artifact">
-          <span className="session-row__overview-artifact-label">{latestToolItem?.label}</span>
-          <span className="session-row__overview-artifact-body">{latestToolItem?.body}</span>
         </div>
       ) : null}
       {!showLoadingPanel ? (

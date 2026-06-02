@@ -93,6 +93,48 @@ describe("mergeSessionTimelineItems", () => {
     });
   });
 
+  it("orders live and persisted messages together by timestamp so the rendered transcript starts with the first user message", () => {
+    const merged = mergeSessionTimelineItems(
+      [
+        timelineItem({
+          id: "live-user-first",
+          kind: "message",
+          source: "user",
+          title: "User",
+          label: "User",
+          body: "用 gongfeng mcp 把当前 mr 重新提一个新的 mr",
+          timestamp: 100,
+        }),
+      ],
+      [
+        activityItem({
+          id: "history-assistant-reply",
+          kind: "message",
+          source: "assistant",
+          title: "Assistant",
+          body: "我会先读取 MR 382 的元信息和分支。",
+          timestamp: 200,
+        }),
+        activityItem({
+          id: "history-tool-result",
+          kind: "tool",
+          source: "tool",
+          title: "exec_command",
+          body: "Chunk ID: 81ef08 Wall time: 0.0000 seconds",
+          timestamp: 150,
+          toolName: "exec_command",
+          toolPhase: "result",
+        }),
+      ],
+    );
+
+    expect(merged.map((item) => item.id)).toEqual([
+      "history-assistant-reply",
+      "history-tool-result",
+      "live-user-first",
+    ]);
+  });
+
   it("returns the live list unchanged when there is no persisted history", () => {
     const live = [
       timelineItem({

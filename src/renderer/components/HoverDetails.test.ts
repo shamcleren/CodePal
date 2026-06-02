@@ -1,10 +1,14 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { TimelineItem } from "../monitorSession";
+import { I18nProvider } from "../i18n";
 import {
   buildItemRenderKeys,
   buildPrimaryRenderEntries,
   calculateVirtualWindow,
   buildPrimaryDisplayItems,
+  HoverDetails,
   summarizeToolGroup,
 } from "./HoverDetails";
 import { toRenderableMessageBody } from "../messageBody";
@@ -129,6 +133,58 @@ describe("buildPrimaryDisplayItems", () => {
 
     const grouped = buildPrimaryDisplayItems(items, "completed", "typing");
     expect(grouped.map((entry) => entry.kind)).toEqual(["tool-group", "item", "tool-group"]);
+  });
+});
+
+describe("HoverDetails", () => {
+  it("renders newest-first input as a chronological transcript with the first user message before tools and assistant replies", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        I18nProvider,
+        { locale: "en" },
+        createElement(HoverDetails, {
+          sessionStatus: "idle",
+          items: [
+            {
+              id: "assistant-later",
+              kind: "message",
+              source: "assistant",
+              label: "Assistant",
+              title: "Assistant",
+              body: "assistant replies after the user",
+              timestamp: 300,
+            },
+            {
+              id: "tool-middle",
+              kind: "tool",
+              source: "tool",
+              label: "exec_command",
+              title: "exec_command",
+              body: "tool runs after the user",
+              timestamp: 200,
+              toolName: "exec_command",
+              toolPhase: "result",
+            },
+            {
+              id: "user-first",
+              kind: "message",
+              source: "user",
+              label: "User",
+              title: "User",
+              body: "user starts the turn",
+              timestamp: 100,
+            },
+          ],
+        }),
+      ),
+    );
+
+    expect(html.indexOf("user starts the turn")).toBeLessThan(
+      html.indexOf("latest exec_command"),
+    );
+    expect(html.indexOf("latest exec_command")).toBeLessThan(
+      html.indexOf("assistant replies after the user"),
+    );
   });
 });
 

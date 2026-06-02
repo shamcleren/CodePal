@@ -44,6 +44,48 @@ function renderRow(
 }
 
 describe("SessionRow pending action", () => {
+  it("does not put a latest tool overview ahead of the expanded chronological transcript", () => {
+    const html = renderRow(
+      baseRow({
+        status: "idle",
+        timelineItems: [
+          {
+            id: "tool-latest",
+            kind: "tool",
+            source: "tool",
+            label: "exec_command",
+            title: "exec_command",
+            body: "latest tool output should stay inside the transcript",
+            timestamp: 300,
+            toolName: "exec_command",
+            toolPhase: "result",
+          },
+          {
+            id: "assistant-middle",
+            kind: "message",
+            source: "assistant",
+            label: "Assistant",
+            title: "Assistant",
+            body: "assistant replies after the user",
+            timestamp: 200,
+          },
+          {
+            id: "user-first",
+            kind: "message",
+            source: "user",
+            label: "User",
+            title: "User",
+            body: "user starts the turn",
+            timestamp: 100,
+          },
+        ],
+      }),
+      { expanded: true },
+    );
+
+    expect(html).not.toContain("session-row__overview-artifact");
+  });
+
   it("renders option buttons when pendingActions has one item", () => {
     const html = renderRow(
       baseRow({
@@ -139,7 +181,7 @@ describe("SessionRow pending action", () => {
     expect(html).toContain("session-stream");
     expect(html).not.toContain("session-row__interaction");
     expect(html).toContain("session-stream__artifact-kicker");
-    expect(html).toContain("Tool call: Bash");
+    expect(html).toContain("latest Bash");
     expect(html).toContain(
       "Notification (permission_prompt): CodeBuddy needs your permission to use Bash",
     );
@@ -715,7 +757,7 @@ describe("SessionRow pending action", () => {
 
     expect(html).toContain("session-stream");
     expect(html).not.toContain("session-row__interaction");
-    expect(html).toContain("session-row__overview-artifact");
+    expect(html).not.toContain("session-row__overview-artifact");
     expect(html).toContain("session-stream__item--artifact-active");
     expect(html).toContain("session-stream__artifact-kicker");
     expect(html).toContain("session-stream__item--artifact-group");
