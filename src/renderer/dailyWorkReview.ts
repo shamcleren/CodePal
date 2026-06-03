@@ -18,6 +18,7 @@ export type DailyWorkReviewSource = {
   status: SessionStatus | string;
   title?: string | null;
   task?: string | null;
+  model?: string | null;
   projectPath?: string | null;
   projectName?: string | null;
   updatedAt: number;

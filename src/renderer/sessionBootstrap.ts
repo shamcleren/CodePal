@@ -3,7 +3,25 @@ import type { ResolvedLocale } from "../shared/i18nTypes";
 import type { MonitorSessionRow } from "./monitorSession";
 import { sessionRecordToRow } from "./sessionRows";
 
+function sessionAttentionRank(session: MonitorSessionRow): number {
+  if (session.status === "waiting") {
+    return 0;
+  }
+  if (session.pendingCount > 0) {
+    return 1;
+  }
+  if (session.status === "running") {
+    return 2;
+  }
+  return 3;
+}
+
 export function compareMonitorSessionRows(a: MonitorSessionRow, b: MonitorSessionRow): number {
+  const aAttentionRank = sessionAttentionRank(a);
+  const bAttentionRank = sessionAttentionRank(b);
+  if (aAttentionRank !== bAttentionRank) {
+    return aAttentionRank - bAttentionRank;
+  }
   const aUserTs = a.lastUserMessageAt ?? a.updatedAt;
   const bUserTs = b.lastUserMessageAt ?? b.updatedAt;
   if (aUserTs !== bUserTs) {
@@ -108,6 +126,7 @@ function sessionMatchesRow(row: MonitorSessionRow, session: SessionRecord): bool
     row.status === session.status &&
     row.title === session.title &&
     row.task === session.task &&
+    row.model === session.model &&
     row.updatedAt === session.updatedAt &&
     row.lastUserMessageAt === session.lastUserMessageAt &&
     row.outcome === session.outcome &&

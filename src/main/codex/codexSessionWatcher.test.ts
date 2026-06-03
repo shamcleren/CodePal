@@ -182,6 +182,57 @@ describe("createCodexSessionWatcher", () => {
     });
   });
 
+  it("emits a model-bearing session event from turn_context metadata", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-codex-"));
+    const sessionDir = path.join(tmpDir, "2026", "06", "02");
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const filePath = path.join(
+      sessionDir,
+      "rollout-2026-06-02T10-05-12-019e8613-e961-7e90-94b0-e56a8fa0e537.jsonl",
+    );
+
+    fs.writeFileSync(
+      filePath,
+      `${JSON.stringify({
+        timestamp: "2026-06-02T02:05:21.759Z",
+        type: "session_meta",
+        payload: {
+          id: "019e8613-e961-7e90-94b0-e56a8fa0e537",
+          cwd: "/Users/demo/codepal",
+          model_provider: "openai",
+        },
+      })}\n${JSON.stringify({
+        timestamp: "2026-06-02T02:05:21.769Z",
+        type: "turn_context",
+        payload: {
+          cwd: "/Users/demo/codepal",
+          model: "gpt-5.5",
+        },
+      })}\n`,
+    );
+
+    const onEvent = vi.fn();
+    const watcher = createCodexSessionWatcher({
+      sessionsRoot: tmpDir,
+      onEvent,
+      initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
+    });
+
+    await watcher.pollOnce();
+
+    expect(onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "019e8613-e961-7e90-94b0-e56a8fa0e537",
+        tool: "codex",
+        status: "running",
+        meta: expect.objectContaining({
+          event_type: "turn_context",
+          model: "gpt-5.5",
+        }),
+      }),
+    );
+  });
+
   it("emits usage snapshots from codex token_count events", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-codex-"));
     const sessionDir = path.join(tmpDir, "2026", "04", "03");

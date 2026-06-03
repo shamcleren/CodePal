@@ -26,6 +26,7 @@ describe("normalizeCodexLogEvent", () => {
         payload: {
           id: "019d4c15-8d42-78f1-955e-d57f67061b9e",
           cwd: "/Users/demo/codepal",
+          model: "gpt-5.5",
           model_provider: "openai",
           source: "vscode",
         },
@@ -42,11 +43,39 @@ describe("normalizeCodexLogEvent", () => {
       meta: {
         event_type: "session_meta",
         cwd: "/Users/demo/codepal",
+        model: "gpt-5.5",
         model_provider: "openai",
         source: "vscode",
       },
     });
     expect(event?.timestamp).toBe(Date.parse("2026-04-02T02:46:49.900Z"));
+  });
+
+  it("maps turn_context model metadata to a running Codex session event", () => {
+    const event = normalizeCodexLogEvent(
+      JSON.stringify({
+        timestamp: "2026-06-02T02:05:21.769Z",
+        type: "turn_context",
+        payload: {
+          cwd: "/Users/demo/codepal",
+          model: "gpt-5.5",
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      type: "status_change",
+      sessionId: "019d4c15-8d42-78f1-955e-d57f67061b9e",
+      tool: "codex",
+      status: "running",
+      task: "Codex session: codepal",
+      meta: {
+        event_type: "turn_context",
+        cwd: "/Users/demo/codepal",
+        model: "gpt-5.5",
+      },
+    });
   });
 
   it("maps Codex subagent session_meta shapes into explicit merge metadata", () => {

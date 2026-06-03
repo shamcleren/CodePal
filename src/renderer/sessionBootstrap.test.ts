@@ -109,12 +109,69 @@ describe("sessionBootstrap", () => {
     });
   });
 
+  it("prioritizes sessions that are waiting on the user ahead of ordinary running work", () => {
+    const rows = rowsFromSessions([
+      {
+        id: "running-newer",
+        tool: "codex",
+        status: "running",
+        task: "keep working",
+        updatedAt: 1_700_000_020_000,
+        lastUserMessageAt: 1_700_000_020_000,
+      },
+      {
+        id: "waiting-older",
+        tool: "codex",
+        status: "waiting",
+        task: "choose whether to continue",
+        updatedAt: 1_700_000_010_000,
+        lastUserMessageAt: 1_700_000_010_000,
+      },
+      {
+        id: "pending-older",
+        tool: "cursor",
+        status: "running",
+        task: "approve tool use",
+        updatedAt: 1_700_000_005_000,
+        lastUserMessageAt: 1_700_000_005_000,
+        pendingActions: [
+          {
+            id: "approval-1",
+            type: "approval",
+            title: "Allow command?",
+            options: ["Allow", "Deny"],
+          },
+        ],
+      },
+    ]);
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "waiting-older",
+      "pending-older",
+      "running-newer",
+    ]);
+  });
+
   it("reuses existing row objects when the incoming session snapshot is unchanged", () => {
     const previousRows = rowsFromSessions(currentSessions);
     const nextRows = reconcileRows(previousRows, currentSessions);
 
     expect(nextRows).toHaveLength(1);
     expect(nextRows[0]).toBe(previousRows[0]);
+  });
+
+  it("recomputes a row when the concrete model changes", () => {
+    const previousRows = rowsFromSessions(currentSessions);
+    const nextRows = reconcileRows(previousRows, [
+      {
+        ...currentSessions[0],
+        model: "gpt-5.5",
+      },
+    ]);
+
+    expect(nextRows).toHaveLength(1);
+    expect(nextRows[0]).not.toBe(previousRows[0]);
+    expect(nextRows[0].model).toBe("gpt-5.5");
   });
 
   it("recomputes only the rows whose session payload changed", () => {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AnalyticsLineChart } from "./AnalyticsLineChart";
+import { AnalyticsLineChart, nextVisibleSeriesKeys } from "./AnalyticsLineChart";
 import type { TokenTrendPoint } from "../../shared/analyticsTypes";
+import { I18nProvider } from "../i18n";
 
 const points: TokenTrendPoint[] = [
   {
@@ -42,6 +43,151 @@ describe("AnalyticsLineChart", () => {
     expect(html).toContain("Output");
     expect(html).toContain("Cache");
     expect(html).not.toContain("analytics-page__chart-bar");
+  });
+
+  it("renders clickable legend filters with pressed state", () => {
+    const html = renderToStaticMarkup(
+      <AnalyticsLineChart points={points} metric="tokens" />,
+    );
+
+    expect(html).toContain("<button");
+    expect(html).toContain("analytics-line-chart__legend-item");
+    expect(html).toContain("aria-pressed=\"true\"");
+    expect(html).toContain("title=\"Hide Total\"");
+    expect(html).toContain("analytics-line-chart__legend-reset");
+    expect(html).toContain("Show all");
+  });
+
+  it("localizes trend legend actions and fallback labels", () => {
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="zh-CN">
+        <AnalyticsLineChart
+          points={[
+            {
+              ...points[0],
+              bucketStart: 1,
+              projectPath: "/repo/CodePal",
+              projectName: "CodePal",
+            },
+            {
+              ...points[0],
+              bucketStart: 1,
+              projectPath: "/repo/small-a",
+              projectName: "small-a",
+            },
+            {
+              ...points[0],
+              bucketStart: 1,
+              projectPath: "/repo/small-b",
+              projectName: "small-b",
+            },
+            {
+              ...points[0],
+              bucketStart: 1,
+              projectPath: "/repo/small-c",
+              projectName: "small-c",
+            },
+            {
+              ...points[0],
+              bucketStart: 1,
+              projectPath: "/repo/small-d",
+              projectName: "small-d",
+            },
+            {
+              ...points[0],
+              bucketStart: 1,
+              projectPath: "/repo/small-e",
+              projectName: "small-e",
+            },
+          ]}
+          metric="tokens"
+          groupMode="project"
+        />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain("显示全部");
+    expect(html).toContain("title=\"隐藏 CodePal\"");
+    expect(html).toContain("其他（1）");
+    expect(html).not.toContain("Show all");
+    expect(html).not.toContain("Other (1)");
+  });
+
+  it("toggles visible series while keeping at least one line visible", () => {
+    const allKeys = ["total", "input", "output", "cache"];
+
+    expect(nextVisibleSeriesKeys(allKeys, allKeys, "input")).toEqual([
+      "total",
+      "output",
+      "cache",
+    ]);
+    expect(nextVisibleSeriesKeys(allKeys, ["input"], "input")).toEqual(["input"]);
+    expect(nextVisibleSeriesKeys(allKeys, ["total", "output"], "input")).toEqual([
+      "total",
+      "input",
+      "output",
+    ]);
+  });
+
+  it("can group token trend lines by project instead of token type", () => {
+    const html = renderToStaticMarkup(
+      <AnalyticsLineChart
+        points={[
+          {
+            ...points[0],
+            bucketStart: 1,
+            projectPath: "/repo/CodePal",
+            projectName: "CodePal",
+            totalTokens: 16,
+          },
+          {
+            ...points[1],
+            bucketStart: 2,
+            projectPath: "/repo/CodePal",
+            projectName: "CodePal",
+            totalTokens: 22,
+          },
+          {
+            ...points[0],
+            bucketStart: 1,
+            projectPath: "/repo/gateway",
+            projectName: "gateway",
+            totalTokens: 8,
+          },
+        ]}
+        metric="tokens"
+        groupMode="project"
+      />,
+    );
+
+    expect(html).toContain("CodePal");
+    expect(html).toContain("gateway");
+    expect(html).not.toContain("Input");
+    expect(html).not.toContain("Output");
+    expect(html).not.toContain("Cache");
+  });
+
+  it("keeps the top project lines readable by grouping smaller projects into a counted Other series", () => {
+    const manyProjects = Array.from({ length: 8 }, (_, index): TokenTrendPoint => ({
+      ...points[0],
+      bucketStart: 1,
+      projectPath: `/repo/project-${index}`,
+      projectName: `project-${index}`,
+      totalTokens: 100 - index,
+    }));
+
+    const html = renderToStaticMarkup(
+      <AnalyticsLineChart
+        points={manyProjects}
+        metric="tokens"
+        groupMode="project"
+      />,
+    );
+
+    expect(html).toContain("project-0");
+    expect(html).toContain("project-4");
+    expect(html).toContain("Other (3)");
+    expect(html).not.toContain("project-7");
   });
 
   it("renders point markers so a single bucket is visible", () => {

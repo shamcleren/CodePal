@@ -126,17 +126,20 @@ function metaForEntry(
     source_path: sourcePath,
   };
 
-  if (entryType === "session_meta") {
+  if (entryType === "session_meta" || entryType === "turn_context") {
     if (typeof payload.cwd === "string" && payload.cwd.trim()) meta.cwd = payload.cwd.trim();
+    if (typeof payload.model === "string" && payload.model.trim()) {
+      meta.model = payload.model.trim();
+    }
     if (typeof payload.model_provider === "string" && payload.model_provider.trim()) {
       meta.model_provider = payload.model_provider.trim();
     }
-    if (typeof payload.thread_source === "string" && payload.thread_source.trim()) {
+    if (entryType === "session_meta" && typeof payload.thread_source === "string" && payload.thread_source.trim()) {
       meta.codex_thread_source = payload.thread_source.trim();
     }
-    if (typeof payload.source === "string" && payload.source.trim()) {
+    if (entryType === "session_meta" && typeof payload.source === "string" && payload.source.trim()) {
       meta.source = payload.source.trim();
-    } else if (payload.source && typeof payload.source === "object") {
+    } else if (entryType === "session_meta" && payload.source && typeof payload.source === "object") {
       const src = payload.source as Record<string, unknown>;
       const subagent = src.subagent as Record<string, unknown> | undefined;
       if (subagent && typeof subagent.other === "string" && subagent.other.trim()) {
@@ -191,7 +194,7 @@ export function normalizeCodexLogEvent(
   let activityItems: ActivityItem[] | undefined;
   const timestamp = parseTimestamp(entry.timestamp);
 
-  if (entryType === "session_meta") {
+  if (entryType === "session_meta" || entryType === "turn_context") {
     status = "running";
     task = taskFromSessionMeta(payload);
   } else if (entryType === "event_msg") {

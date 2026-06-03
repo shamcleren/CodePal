@@ -6,11 +6,14 @@ import { useI18n } from "../i18n";
 import { readAnalyticsPagePreferences, writeAnalyticsPagePreferences } from "../projectViewPreferences";
 import { estimateTokenCost, formatMetricValue, formatUsageCost, formatUsageTokens } from "../usageFormat";
 import { AnalyticsLineChart } from "./AnalyticsLineChart";
+import type { TrendGroupMode } from "./AnalyticsLineChart";
+import type { ResolvedLocale } from "../../shared/i18nTypes";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
 type BreakdownMode = "project" | "model" | "agent";
 
 export const TREND_METRICS = ["tokens", "cost"] as const satisfies readonly AnalyticsMetric[];
+export const TREND_GROUP_MODES = ["project", "tokenType"] as const satisfies readonly TrendGroupMode[];
 export const BREAKDOWN_MODES = ["project", "model", "agent"] as const satisfies readonly BreakdownMode[];
 
 export type AnalyticsBreakdownRow = {
@@ -84,6 +87,15 @@ function estimateCost(
   model?: string,
 ): number {
   return estimateTokenCost({ ...stats, model }, pricing, { allowModelFallback: false }) ?? 0;
+}
+
+export function formatAnalyticsHeroCost(value: number, locale: ResolvedLocale): string {
+  if (value > 0 && value < 1) {
+    return "<$1";
+  }
+  const rounded = Math.round(value);
+  const amount = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(rounded);
+  return `$${amount}`;
 }
 
 export function buildAnalyticsCoverageSummary(
@@ -303,6 +315,7 @@ export function AnalyticsPage() {
   const [trendData, setTrendData] = useState<TokenTrendResult | null>(null);
   const [granularity, setGranularity] = useState<TokenTrendGranularity>(initialPreferences.granularity);
   const [metric, setMetric] = useState<AnalyticsMetric>(initialPreferences.metric);
+  const [trendGroupMode, setTrendGroupMode] = useState<TrendGroupMode>(initialPreferences.trendGroupMode);
   const [projectFilter, setProjectFilter] = useState<string | undefined>(initialPreferences.projectFilter);
   const [agentFilter, setAgentFilter] = useState<string | undefined>(initialPreferences.agentFilter);
   const [modelFilter, setModelFilter] = useState<string | undefined>(initialPreferences.modelFilter);
@@ -316,6 +329,7 @@ export function AnalyticsPage() {
       breakdownMode,
       granularity,
       metric,
+      trendGroupMode,
       projectFilter,
       agentFilter,
       modelFilter,
@@ -327,6 +341,7 @@ export function AnalyticsPage() {
     breakdownMode,
     granularity,
     metric,
+    trendGroupMode,
     projectFilter,
     agentFilter,
     modelFilter,
@@ -444,7 +459,7 @@ export function AnalyticsPage() {
     { label: i18n.t("tokenStats.cacheHit"), value: `${Math.round(cacheHitRate * 100)}%` },
     {
       label: i18n.t("tokenStats.estimatedCost"),
-      value: formatUsageCost(totalCost, { currency: "USD", locale: i18n.locale }),
+      value: formatAnalyticsHeroCost(totalCost, i18n.locale),
     },
   ];
 
@@ -558,6 +573,18 @@ export function AnalyticsPage() {
               </button>
             ))}
           </div>
+          <div className="analytics-page__segmented" aria-label={i18n.t("tokenStats.trendGroup.label")}>
+            {TREND_GROUP_MODES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={`analytics-page__segment ${trendGroupMode === value ? "analytics-page__segment--active" : ""}`}
+                onClick={() => setTrendGroupMode(value)}
+              >
+                {i18n.t(`tokenStats.trendGroup.${value}`)}
+              </button>
+            ))}
+          </div>
         </div>
         {availableProjects.length > 1 ? (
           <div className="analytics-page__filter-chips">
@@ -629,6 +656,7 @@ export function AnalyticsPage() {
         <AnalyticsLineChart
           points={trendData?.points ?? []}
           metric={metric}
+          groupMode={trendGroupMode}
           granularity={granularity}
           domainStart={currentRange.startMs}
           domainEnd={currentRange.endMs}

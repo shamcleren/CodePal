@@ -132,7 +132,13 @@ describe("buildPrimaryDisplayItems", () => {
     ];
 
     const grouped = buildPrimaryDisplayItems(items, "completed", "typing");
-    expect(grouped.map((entry) => entry.kind)).toEqual(["tool-group", "item", "tool-group"]);
+    expect(grouped.map((entry) => entry.kind)).toEqual(["tool-group", "item"]);
+    expect(grouped[1]).toMatchObject({
+      kind: "item",
+      attachedToolGroup: {
+        items: [items[2]],
+      },
+    });
   });
 });
 
@@ -224,7 +230,7 @@ describe("summarizeToolGroup", () => {
         result: 1,
       },
     });
-    expect(summary.summary).toContain("2 calls");
+    expect(summary.summary).toContain("2 tool calls");
     expect(summary.summary).toContain("2 tools");
     expect(summary.summary).toContain("latest write_stdin");
   });

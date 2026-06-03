@@ -6,12 +6,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   AnalyticsPage,
   BREAKDOWN_MODES,
+  TREND_GROUP_MODES,
   TREND_METRICS,
   buildAnalyticsBreakdownRows,
   buildAnalyticsCoverageSummary,
   buildAvailableAgents,
   buildAvailableModels,
   buildAvailableProjects,
+  formatAnalyticsHeroCost,
 } from "./AnalyticsPage";
 import type { TokenStatsResult } from "../../shared/usageTypes";
 import { createI18nValue } from "../i18n";
@@ -107,13 +109,25 @@ describe("AnalyticsPage helpers", () => {
     expect(TREND_METRICS).toEqual(["tokens", "cost"]);
   });
 
+  it("defaults trend grouping to projects while preserving token type as a secondary view", () => {
+    expect(TREND_GROUP_MODES).toEqual(["project", "tokenType"]);
+  });
+
   it("keeps the daily trend controls visible when filtered trend data is empty", () => {
     const html = renderToStaticMarkup(createElement(AnalyticsPage));
 
     expect(html).toContain("Daily Trend");
     expect(html).toContain("Trend granularity");
     expect(html).toContain("Trend metric");
+    expect(html).toContain("Trend grouping");
     expect(html).toContain("No trend data");
+  });
+
+  it("formats the analytics estimated cost card as a compact whole-dollar value", () => {
+    expect(formatAnalyticsHeroCost(56.49, "zh-CN")).toBe("$56");
+    expect(formatAnalyticsHeroCost(56.5, "en")).toBe("$57");
+    expect(formatAnalyticsHeroCost(0.42, "zh-CN")).toBe("<$1");
+    expect(formatAnalyticsHeroCost(0, "en")).toBe("$0");
   });
 
   it("does not render temporary report redaction toggles", () => {

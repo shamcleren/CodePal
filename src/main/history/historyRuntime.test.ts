@@ -90,6 +90,7 @@ describe("historyRuntime", () => {
       status: "running",
       title: "Agent Session",
       task: "Answer the user",
+      model: "gpt-5.5",
       updatedAt: 123,
       lastUserMessageAt: 120,
       activityItems: [
@@ -121,6 +122,7 @@ describe("historyRuntime", () => {
           id: "session-1",
           hasPendingActions: true,
           lastUserMessageAt: 120,
+          model: "gpt-5.5",
         }),
         activityItems: event.activityItems,
       }),

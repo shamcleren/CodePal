@@ -162,7 +162,7 @@ describe("renderer layout styles", () => {
     expect(css).toMatch(/\.session-stream__virtual-viewport\s*\{[\s\S]*position:\s*relative;/);
     expect(css).toMatch(/\.session-stream__virtual-item\s*\{/);
     expect(css).toMatch(/\.session-stream__virtual-item\s*\{[\s\S]*position:\s*absolute;/);
-    expect(css).toMatch(/\.session-stream__item--artifact-active::after\s*\{/);
+    expect(css).toMatch(/\.session-stream__item--artifact-active:not\(\.session-stream__item--artifact-group-collapsed\)::after\s*\{/);
     expect(css).toMatch(/@keyframes session-artifact-scan/);
     expect(css).toMatch(/\.pending-action\s*\{[\s\S]*border-radius:\s*14px;/);
     expect(css).toMatch(/\.pending-action__eyebrow\s*\{/);
@@ -202,6 +202,12 @@ describe("renderer layout styles", () => {
   it("keeps page scope controls and coverage pills safe in narrow windows", () => {
     const css = fs.readFileSync(stylesPath, "utf8");
 
+    const modelName = cssBlock(css, ".session-row__model-name");
+    expect(modelName).toContain("font-size: 12px;");
+    expect(modelName).toContain("text-overflow: ellipsis;");
+    expect(modelName).not.toContain("border:");
+    expect(modelName).not.toContain("background:");
+    expect(modelName).not.toContain("padding:");
     expect(cssBlock(css, ".session-list__scope")).toContain("flex-wrap: wrap;");
     expect(cssBlock(css, ".session-list__scope span")).toContain("max-width: 100%;");
     expect(cssBlock(css, ".session-list__scope span")).toContain("overflow-wrap: anywhere;");
@@ -263,6 +269,10 @@ describe("renderer layout styles", () => {
       expect.stringContaining("color: var(--analytics-table-number-text);"),
     );
     expect(cssBlock(css, ".work-health-strip__value")).toContain("font-weight");
+    expect(cssBlock(css, ".analytics-page__hero-value")).toContain("overflow-wrap: anywhere;");
+    expect(cssBlock(css, ".analytics-page__hero-value")).toContain("font-size: clamp(");
+    expect(cssBlock(css, ".analytics-page__hero-value")).not.toContain("text-overflow: ellipsis;");
+    expect(cssBlock(css, ".analytics-page__hero-value")).not.toContain("white-space: nowrap;");
     expect(cssBlock(css, ".analytics-line-chart svg")).toContain("height:");
     expect(css).toContain("--trend-line-input: #54d6c0;");
     expect(css).toContain("--trend-line-output: #9b78ff;");

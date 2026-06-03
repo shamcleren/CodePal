@@ -7,12 +7,14 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { AnalyticsMetric, TokenTrendGranularity, TokenTrendPoint } from "../../shared/analyticsTypes";
+import { UNKNOWN_PROJECT_NAME, UNKNOWN_PROJECT_PATH, isUnknownProjectPath } from "../../shared/projectAttribution";
 import type { ModelPricing } from "../../shared/usageTypes";
 import {
   lttbSample,
   resolveLttbTargetPointCount,
   type AnalyticsPoint,
 } from "../../shared/analyticsSampling";
+import { useI18n } from "../i18n";
 import { estimateTrendPointCost, formatMetricValue } from "../usageFormat";
 
 type Series = {
@@ -21,6 +23,10 @@ type Series = {
   color: string;
   points: AnalyticsPoint[];
 };
+
+export type TrendGroupMode = "project" | "tokenType";
+
+type Translate = ReturnType<typeof useI18n>["t"];
 
 type HoverValue = {
   key: string;
@@ -54,6 +60,17 @@ const TOKEN_COLORS = {
   cache: "var(--trend-line-cache)",
 };
 
+const PROJECT_COLORS = [
+  "var(--trend-line-total)",
+  "var(--trend-line-input)",
+  "var(--trend-line-output)",
+  "var(--trend-line-cache)",
+  "var(--accent)",
+  "var(--text-faint)",
+];
+const MAX_PROJECT_SERIES = 5;
+const OTHER_PROJECTS_LABEL = "Other";
+
 const TICK_BUCKET_STEPS: Record<TokenTrendGranularity, number[]> = {
   minute: [1, 5, 10, 15, 30, 60, 120, 240, 360, 720, 1440],
   hour: [1, 2, 3, 4, 6, 12, 24, 48, 72, 168],
@@ -63,6 +80,7 @@ const TICK_BUCKET_STEPS: Record<TokenTrendGranularity, number[]> = {
 export function AnalyticsLineChart({
   points,
   metric,
+  groupMode = "tokenType",
   granularity,
   domainStart,
   domainEnd,
@@ -71,16 +89,19 @@ export function AnalyticsLineChart({
 }: {
   points: TokenTrendPoint[];
   metric: AnalyticsMetric;
+  groupMode?: TrendGroupMode;
   granularity?: TokenTrendGranularity;
   domainStart?: number;
   domainEnd?: number;
   pricing?: ModelPricing[];
   yFormat?: (value: number, metric: AnalyticsMetric) => string;
 }) {
+  const i18n = useI18n();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [plotWidth, setPlotWidth] = useState(SVG_WIDTH);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [visibleSeriesKeys, setVisibleSeriesKeys] = useState<string[] | null>(null);
 
   useEffect(() => {
     const element = wrapRef.current;
@@ -93,8 +114,8 @@ export function AnalyticsLineChart({
   }, []);
 
   const rawSeries = useMemo(
-    () => seriesForMetric(points, metric, pricing ?? []),
-    [points, metric, pricing],
+    () => seriesForMetric(points, metric, pricing ?? [], groupMode, i18n.t),
+    [points, metric, pricing, groupMode, i18n.locale],
   );
   const rawAllPoints = rawSeries.flatMap((entry) => entry.points);
   const rawXMin = Math.min(...rawAllPoints.map((point) => point.x));
@@ -111,7 +132,19 @@ export function AnalyticsLineChart({
     () => fillSeriesBucketGaps(rawSeries, metric, granularity, xMin, xMax),
     [rawSeries, metric, granularity, xMin, xMax],
   );
-  const sourcePointCount = Math.max(0, ...completedSeries.map((series) => series.points.length));
+  const allSeriesKeys = useMemo(() => completedSeries.map((entry) => entry.key), [completedSeries]);
+  const allSeriesKeySignature = allSeriesKeys.join("\u001f");
+  useEffect(() => {
+    setVisibleSeriesKeys(allSeriesKeys);
+  }, [allSeriesKeySignature]);
+  const activeSeriesKeys = visibleSeriesKeys ?? allSeriesKeys;
+  const activeSeriesKeySet = useMemo(() => new Set(activeSeriesKeys), [activeSeriesKeys]);
+  const hasHiddenSeries = activeSeriesKeys.length < allSeriesKeys.length;
+  const visibleCompletedSeries = useMemo(
+    () => completedSeries.filter((entry) => activeSeriesKeySet.has(entry.key)),
+    [completedSeries, activeSeriesKeySet],
+  );
+  const sourcePointCount = Math.max(0, ...visibleCompletedSeries.map((series) => series.points.length));
   const targetPointCount = resolveLttbTargetPointCount({
     plotWidth,
     minPxPerPoint: 5.5,
@@ -121,7 +154,7 @@ export function AnalyticsLineChart({
   const summarizeTrend = sourcePointCount > targetPointCount;
   const series = useMemo(
     () =>
-      completedSeries.map((entry) => ({
+      visibleCompletedSeries.map((entry) => ({
         ...entry,
         points: summarizeTrend
           ? summarizeSeries(entry.points, targetPointCount)
@@ -129,7 +162,7 @@ export function AnalyticsLineChart({
             ? lttbSample(entry.points, targetPointCount)
             : entry.points,
       })),
-    [completedSeries, summarizeTrend, targetPointCount],
+    [visibleCompletedSeries, summarizeTrend, targetPointCount],
   );
   const sampledPointCount = Math.max(0, ...series.map((entry) => entry.points.length));
   const allPoints = series.flatMap((entry) => entry.points);
@@ -168,11 +201,21 @@ export function AnalyticsLineChart({
   ) => {
     updateHoverFromClientPoint(event.clientX, event.clientY);
   };
+  const handleToggleSeries = (key: string) => {
+    setVisibleSeriesKeys((current) =>
+      nextVisibleSeriesKeys(allSeriesKeys, current ?? allSeriesKeys, key),
+    );
+    setHoverIndex(null);
+  };
+  const handleShowAllSeries = () => {
+    setVisibleSeriesKeys(allSeriesKeys);
+    setHoverIndex(null);
+  };
 
   if (!hasData) {
     return (
       <div className="analytics-line-chart analytics-line-chart--empty" ref={wrapRef}>
-        <div className="analytics-line-chart__empty">No trend data</div>
+        <div className="analytics-line-chart__empty">{i18n.t("tokenStats.trend.empty")}</div>
       </div>
     );
   }
@@ -330,23 +373,49 @@ export function AnalyticsLineChart({
       </div>
       <div className="analytics-line-chart__footer">
         <div className="analytics-line-chart__legend">
-          {series.map((entry) => (
-            <span key={entry.key} className="analytics-line-chart__legend-item">
+          {completedSeries.map((entry) => {
+            const isActive = activeSeriesKeySet.has(entry.key);
+            return (
+            <button
+              key={entry.key}
+              type="button"
+              className={`analytics-line-chart__legend-item${isActive ? "" : " analytics-line-chart__legend-item--muted"}`}
+              aria-pressed={isActive}
+              title={i18n.t(isActive ? "tokenStats.trend.hideSeries" : "tokenStats.trend.showSeries", {
+                label: entry.label,
+              })}
+              onClick={() => handleToggleSeries(entry.key)}
+            >
               <span
                 className="analytics-line-chart__legend-dot"
                 style={{ background: entry.color }}
               />
               {entry.label}
-            </span>
-          ))}
+            </button>
+            );
+          })}
         </div>
+        <button
+          type="button"
+          className="analytics-line-chart__legend-reset"
+          disabled={!hasHiddenSeries}
+          onClick={handleShowAllSeries}
+        >
+          {i18n.t("tokenStats.trend.showAll")}
+        </button>
         {summarizeTrend ? (
           <span className="analytics-line-chart__sampling">
-            Trend summarized · {sampledPointCount}/{sourcePointCount} points
+            {i18n.t("tokenStats.sampling.summarized", {
+              sampled: sampledPointCount,
+              source: sourcePointCount,
+            })}
           </span>
         ) : sourcePointCount > sampledPointCount ? (
           <span className="analytics-line-chart__sampling">
-            LTTB auto-sampled · {sampledPointCount}/{sourcePointCount} points
+            {i18n.t("tokenStats.sampling.lttb", {
+              sampled: sampledPointCount,
+              source: sourcePointCount,
+            })}
           </span>
         ) : null}
       </div>
@@ -387,6 +456,27 @@ function ChartTooltip({
       })}
     </div>
   );
+}
+
+export function nextVisibleSeriesKeys(
+  allKeys: string[],
+  currentVisibleKeys: string[],
+  toggledKey: string,
+): string[] {
+  const knownKeys = new Set(allKeys);
+  const current = new Set(currentVisibleKeys.filter((key) => knownKeys.has(key)));
+  if (!knownKeys.has(toggledKey)) {
+    return allKeys.filter((key) => current.has(key));
+  }
+  if (current.has(toggledKey)) {
+    if (current.size <= 1) {
+      return allKeys.filter((key) => current.has(key));
+    }
+    current.delete(toggledKey);
+  } else {
+    current.add(toggledKey);
+  }
+  return allKeys.filter((key) => current.has(key));
 }
 
 function buildHoverTargets(
@@ -552,8 +642,21 @@ function seriesForMetric(
   points: TokenTrendPoint[],
   metric: AnalyticsMetric,
   pricing: ModelPricing[],
+  groupMode: TrendGroupMode = "tokenType",
+  t: Translate = (key) => key,
 ): Series[] {
   const pricingByModel = new Map(pricing.map((entry) => [entry.modelId, entry]));
+  const costForPoint = (point: TokenTrendPoint) => {
+    const exactPrice = pricingByModel.get(point.model);
+    return exactPrice
+      ? estimateTrendPointCost(point, [exactPrice]) ?? 0
+      : estimateTrendPointCost(point, pricing) ?? 0;
+  };
+
+  if (groupMode === "project") {
+    return projectSeriesForMetric(points, metric, costForPoint, t);
+  }
+
   const buckets = new Map<number, TokenTrendPoint[]>();
   for (const point of points) {
     const group = buckets.get(point.bucketStart) ?? [];
@@ -571,7 +674,7 @@ function seriesForMetric(
     return [
       {
         key: "requests",
-        label: "Requests",
+        label: t("tokenStats.trend.requests"),
         color: TOKEN_COLORS.total,
         points: pointFor((bucket) => bucket.reduce((sum, point) => sum + point.requestCount, 0)),
       },
@@ -581,14 +684,11 @@ function seriesForMetric(
     return [
       {
         key: "cost",
-        label: "Cost",
+        label: t("tokenStats.trend.cost"),
         color: TOKEN_COLORS.total,
         points: pointFor((bucket) =>
           bucket.reduce((sum, point) => {
-            const exactPrice = pricingByModel.get(point.model);
-            return sum + (exactPrice
-              ? estimateTrendPointCost(point, [exactPrice]) ?? 0
-              : estimateTrendPointCost(point, pricing) ?? 0);
+            return sum + costForPoint(point);
           }, 0),
         ),
       },
@@ -598,7 +698,7 @@ function seriesForMetric(
     return [
       {
         key: "cacheHit",
-        label: "Cache Hit",
+        label: t("tokenStats.trend.cacheHit"),
         color: TOKEN_COLORS.cache,
         points: pointFor((bucket) => {
           const inputLike = bucket.reduce(
@@ -616,25 +716,25 @@ function seriesForMetric(
   return [
     {
       key: "total",
-      label: "Total",
+      label: t("tokenStats.trend.total"),
       color: TOKEN_COLORS.total,
       points: pointFor((bucket) => bucket.reduce((sum, point) => sum + point.totalTokens, 0)),
     },
     {
       key: "input",
-      label: "Input",
+      label: t("tokenStats.trend.input"),
       color: TOKEN_COLORS.input,
       points: pointFor((bucket) => bucket.reduce((sum, point) => sum + point.inputTokens, 0)),
     },
     {
       key: "output",
-      label: "Output",
+      label: t("tokenStats.trend.output"),
       color: TOKEN_COLORS.output,
       points: pointFor((bucket) => bucket.reduce((sum, point) => sum + point.outputTokens, 0)),
     },
     {
       key: "cache",
-      label: "Cache",
+      label: t("tokenStats.trend.cache"),
       color: TOKEN_COLORS.cache,
       points: pointFor((bucket) =>
         bucket.reduce(
@@ -644,6 +744,107 @@ function seriesForMetric(
       ),
     },
   ];
+}
+
+function projectSeriesForMetric(
+  points: TokenTrendPoint[],
+  metric: AnalyticsMetric,
+  costForPoint: (point: TokenTrendPoint) => number,
+  t: Translate,
+): Series[] {
+  const projectRanks = new Map<string, {
+    key: string;
+    label: string;
+    value: number;
+    unknown: boolean;
+  }>();
+
+  for (const point of points) {
+    const project = projectInfo(point);
+    const rank = projectRanks.get(project.key) ?? {
+      key: project.key,
+      label: project.label,
+      value: 0,
+      unknown: project.unknown,
+    };
+    rank.value += projectPointValue(point, metric, costForPoint);
+    projectRanks.set(project.key, rank);
+  }
+
+  const ranked = Array.from(projectRanks.values())
+    .filter((entry) => entry.value > 0)
+    .sort((a, b) =>
+      Number(a.unknown) - Number(b.unknown) ||
+      b.value - a.value ||
+      a.label.localeCompare(b.label),
+    );
+  const visible = ranked.slice(0, MAX_PROJECT_SERIES);
+  const visibleKeys = new Set(visible.map((entry) => entry.key));
+  const otherProjectCount = ranked.filter((entry) => !visibleKeys.has(entry.key)).length;
+  const hasOther = otherProjectCount > 0;
+
+  const buckets = new Map<number, Map<string, number>>();
+  for (const point of points) {
+    const bucket = buckets.get(point.bucketStart) ?? new Map<string, number>();
+    const project = projectInfo(point);
+    const key = visibleKeys.has(project.key) ? project.key : hasOther ? OTHER_PROJECTS_LABEL : project.key;
+    bucket.set(key, (bucket.get(key) ?? 0) + projectPointValue(point, metric, costForPoint));
+    buckets.set(point.bucketStart, bucket);
+  }
+
+  const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
+  const seriesTargets = [
+    ...visible.map((entry) => ({ key: entry.key, label: entry.label })),
+    ...(hasOther
+      ? [{
+          key: OTHER_PROJECTS_LABEL,
+          label: t("tokenStats.trend.otherCount", { count: otherProjectCount }),
+        }]
+      : []),
+  ];
+
+  return seriesTargets.map((entry, index) => ({
+    key: `project-${index}`,
+    label: entry.label,
+    color: PROJECT_COLORS[index] ?? PROJECT_COLORS[PROJECT_COLORS.length - 1],
+    points: sortedBuckets.map(([bucketStart, bucket]) => ({
+      x: bucketStart,
+      y: bucket.get(entry.key) ?? 0,
+    })),
+  }));
+}
+
+function projectInfo(point: TokenTrendPoint): { key: string; label: string; unknown: boolean } {
+  const projectPath = point.projectPath?.trim() || UNKNOWN_PROJECT_PATH;
+  const unknown = isUnknownProjectPath(projectPath);
+  return {
+    key: projectPath,
+    label: unknown ? UNKNOWN_PROJECT_NAME : point.projectName?.trim() || basename(projectPath),
+    unknown,
+  };
+}
+
+function projectPointValue(
+  point: TokenTrendPoint,
+  metric: AnalyticsMetric,
+  costForPoint: (point: TokenTrendPoint) => number,
+): number {
+  if (metric === "cost") {
+    return costForPoint(point);
+  }
+  if (metric === "requests") {
+    return point.requestCount;
+  }
+  if (metric === "cacheHit") {
+    const inputLike = point.inputTokens + point.cacheReadTokens + point.cacheCreationTokens;
+    return inputLike > 0 ? (point.cacheReadTokens / inputLike) * 100 : 0;
+  }
+  return point.totalTokens;
+}
+
+function basename(path: string): string {
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) ?? path;
 }
 
 function fillSeriesBucketGaps(
