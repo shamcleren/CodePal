@@ -78,6 +78,7 @@
 - v1.3.0 shipped: Daily Work Review, project grouping / attribution across sessions and analytics, live session run and context metrics, persisted Analytics filters, review noise reduction
 - v1.3.1 shipped: session noise filtering, unified token / cost formatting across monitoring surfaces, Analytics simplification, 30-day Work Review coverage, and Analytics / Work Review daily usage alignment
 - v1.3.2 shipped: clean patch release from the CI-stable follow-up commit after v1.3.1 tag checks exposed timezone-sensitive Work Review / Analytics test expectations
+- v1.3.3 shipped: compact assistant-attached tool markers, latest Codex model metadata, project/token-type Analytics trend grouping, and rounded Analytics summary cards
 - v1.3.0 local lint / test / build verification is green on 2026-05-26:
   - `npm run lint`
   - `npm test` — 976 tests across 107 files, all passing
@@ -90,6 +91,14 @@
   - `npm run build`
   - `npm run test:e2e`
   - `git diff --check`
+- v1.3.3 macOS release validation on 2026-06-03 covers the session timeline / Analytics polish patch:
+  - `npm test` — 1016 tests across 107 files, all passing
+  - `npm run lint`
+  - `npm run test:e2e` — 17 Playwright tests, all passing
+  - `npm run release:mac`
+  - zip and DMG notarization both returned `Accepted`
+  - zip-extracted and dmg-mounted apps passed `codesign --verify` and `spctl --assess`
+  - GitHub Release `v1.3.3` published with refreshed `latest-mac.yml`
 - Current post-v1.1.11 dev validation on 2026-05-21 covered the first visual-system and expanded-session usage pass:
   - semantic built-in themes: `graphite-ops` and `paper-ops`
   - footer-level per-session usage stats for requests, input, output, cache, and estimated cost
@@ -344,9 +353,9 @@ npm run dist:mac
 - team sharing, cloud sync, billing, and broader control surfaces until the individual local workflow has proven sustained value
 - any productivity-scoring or team-ranking surface
 
-### v1.1.0–v1.3.2 Release Track
+### v1.1.0–v1.3.3 Release Track
 
-v1.1.0 through v1.3.2 are shipped. See individual release notes for details:
+v1.1.0 through v1.3.3 are shipped. See individual release notes for details:
 
 - `docs/release/notes/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release/notes/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -364,6 +373,7 @@ v1.1.0 through v1.3.2 are shipped. See individual release notes for details:
 - `docs/release/notes/release-notes-v1.3.0.md` — Daily Work Review, project grouping, live run / context metrics, persisted Analytics filters, review noise reduction
 - `docs/release/notes/release-notes-v1.3.1.md` — session noise filtering, unified usage formatting, 30-day Work Review coverage, Analytics / Work Review daily usage alignment
 - `docs/release/notes/release-notes-v1.3.2.md` — clean CI-stable patch release for the v1.3.1 usage-alignment work, with timezone-stable Work Review / Analytics test coverage
+- `docs/release/notes/release-notes-v1.3.3.md` — compact session tool markers, latest model metadata, Analytics project trend grouping, and rounded summary cards
 
 ## Next Product Direction Handoff
 
