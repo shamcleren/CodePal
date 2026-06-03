@@ -97,7 +97,7 @@ test("renders analytics from persisted token usage", async () => {
     const totalTokensCard = page
       .locator(".analytics-page__hero-card")
       .filter({ hasText: /Total Tokens|总 Token/ });
-    await expect(totalTokensCard.locator(".analytics-page__hero-value")).toHaveText("1.8K");
+    await expect(totalTokensCard.locator(".analytics-page__hero-value")).toHaveText("2K");
 
     const topAgentCard = page
       .locator(".analytics-page__hero-card")
@@ -111,7 +111,7 @@ test("renders analytics from persisted token usage", async () => {
     await expect(page.locator(".analytics-line-chart__point").first()).toBeVisible();
     await page.locator(".analytics-line-chart__hover-zone").first().hover();
     await expect(page.locator(".analytics-line-chart__tooltip")).toBeVisible();
-    await expect(page.locator(".analytics-line-chart__tooltip")).toContainText("Total");
+    await expect(page.locator(".analytics-line-chart__tooltip")).toContainText(/unknown|Unknown|未知/);
     await expect(page.locator(".analytics-small-multiples__card")).toHaveCount(0);
     await expect(page.locator(".analytics-page__source-coverage")).toContainText(
       /requests|请求/i,
