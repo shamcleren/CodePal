@@ -98,6 +98,18 @@ export function formatAnalyticsHeroCost(value: number, locale: ResolvedLocale): 
   return `$${amount}`;
 }
 
+export function formatAnalyticsHeroTokens(value: number, locale: ResolvedLocale): string {
+  const absValue = Math.abs(value);
+  const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+  if (absValue >= 1_000_000) {
+    return `${formatter.format(Math.round(value / 1_000_000))}M`;
+  }
+  if (absValue >= 1_000) {
+    return `${formatter.format(Math.round(value / 1_000))}K`;
+  }
+  return formatter.format(Math.round(value));
+}
+
 export function buildAnalyticsCoverageSummary(
   data: TokenStatsResult | null,
   trendData: TokenTrendResult | null,
@@ -440,15 +452,15 @@ export function AnalyticsPage() {
   ];
 
   const heroStats = [
-    { label: i18n.t("tokenStats.totalTokens"), value: formatUsageTokens(totalTokens, i18n.locale) },
-    { label: i18n.t("tokenStats.requests"), value: String(totalRequests) },
-    { label: i18n.t("tokenStats.input"), value: formatUsageTokens(totalInput, i18n.locale) },
-    { label: i18n.t("tokenStats.output"), value: formatUsageTokens(totalOutput, i18n.locale) },
+    { label: i18n.t("tokenStats.totalTokens"), value: formatAnalyticsHeroTokens(totalTokens, i18n.locale) },
+    { label: i18n.t("tokenStats.requests"), value: new Intl.NumberFormat(i18n.locale).format(totalRequests) },
+    { label: i18n.t("tokenStats.input"), value: formatAnalyticsHeroTokens(totalInput, i18n.locale) },
+    { label: i18n.t("tokenStats.output"), value: formatAnalyticsHeroTokens(totalOutput, i18n.locale) },
     {
       label: i18n.t("tokenStats.topAgent"),
       value: topAgent ? agentLabel(topAgent.agent) : "—",
       detail: topAgent
-        ? i18n.t("tokenStats.tokensValue", { value: formatUsageTokens(topAgent.totalTokens, i18n.locale) })
+        ? i18n.t("tokenStats.tokensValue", { value: formatAnalyticsHeroTokens(topAgent.totalTokens, i18n.locale) })
         : undefined,
     },
     {

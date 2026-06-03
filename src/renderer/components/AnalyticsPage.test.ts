@@ -14,6 +14,7 @@ import {
   buildAvailableModels,
   buildAvailableProjects,
   formatAnalyticsHeroCost,
+  formatAnalyticsHeroTokens,
 } from "./AnalyticsPage";
 import type { TokenStatsResult } from "../../shared/usageTypes";
 import { createI18nValue } from "../i18n";
@@ -128,6 +129,13 @@ describe("AnalyticsPage helpers", () => {
     expect(formatAnalyticsHeroCost(56.5, "en")).toBe("$57");
     expect(formatAnalyticsHeroCost(0.42, "zh-CN")).toBe("<$1");
     expect(formatAnalyticsHeroCost(0, "en")).toBe("$0");
+  });
+
+  it("formats analytics hero token cards as rounded compact values", () => {
+    expect(formatAnalyticsHeroTokens(4_356_100_000, "zh-CN")).toBe("4,356M");
+    expect(formatAnalyticsHeroTokens(237_100_000, "en")).toBe("237M");
+    expect(formatAnalyticsHeroTokens(13_700_000, "en")).toBe("14M");
+    expect(formatAnalyticsHeroTokens(12_400, "en")).toBe("12K");
   });
 
   it("does not render temporary report redaction toggles", () => {
