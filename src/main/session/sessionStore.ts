@@ -8,6 +8,7 @@ import {
   type PendingClosed,
   type ResponseTarget,
   type SessionOutcome,
+  type SessionModelSource,
   type SessionRecord,
   type SessionStatus,
   type TerminalContext,
@@ -555,6 +556,7 @@ function toLegacyActivities(activityItems: ActivityItem[]): string[] {
 
 function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
   const model = firstMetaString(internal.meta, "model");
+  const modelSource = toSessionModelSource(firstMetaString(internal.meta, "model_source"));
   const base: SessionRecord = {
     id: internal.id,
     tool: internal.tool,
@@ -563,6 +565,7 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
     ...(internal.firstUserPrompt ? { firstUserPrompt: internal.firstUserPrompt } : {}),
     task: internal.task,
     ...(model ? { model } : {}),
+    ...(model && modelSource ? { modelSource } : {}),
     ...(internal.projectPath ? { projectPath: internal.projectPath } : {}),
     ...(internal.projectName ? { projectName: internal.projectName } : {}),
     updatedAt: internal.updatedAt,
@@ -593,6 +596,13 @@ function toSessionRecord(internal: InternalSessionRecord): SessionRecord {
     pendingActions: [...internal.pendingById.values()].map((s) => s.action),
     ...(internal.externalApproval ? { externalApproval: internal.externalApproval } : {}),
   };
+}
+
+function toSessionModelSource(value: string | undefined): SessionModelSource | undefined {
+  if (value === "event-meta" || value === "history" || value === "token-usage") {
+    return value;
+  }
+  return undefined;
 }
 
 function isCurrentStatus(status: SessionStatus): boolean {
@@ -1109,13 +1119,18 @@ function mergeSessionMeta(
   },
 ): Record<string, unknown> | undefined {
   if (!previous) {
-    return next;
+    return withEventModelSource(next);
   }
   if (!next) {
     return previous;
   }
 
   const merged: Record<string, unknown> = { ...previous, ...next };
+  if (firstMetaString(next, "model")) {
+    merged.model_source = "event-meta";
+  } else if (firstMetaString(merged, "model") && merged.model_source === undefined) {
+    merged.model_source = "event-meta";
+  }
 
   if (options?.preserveCodexParentIdentity) {
     for (const key of CODEX_IDENTITY_META_KEYS) {
@@ -1141,6 +1156,13 @@ function mergeSessionMeta(
   }
 
   return merged;
+}
+
+function withEventModelSource(meta: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!firstMetaString(meta, "model") || meta.model_source !== undefined) {
+    return meta;
+  }
+  return { ...meta, model_source: "event-meta" };
 }
 
 export function createSessionStore(options?: SessionStoreOptions) {
@@ -1632,6 +1654,7 @@ export function createSessionStore(options?: SessionStoreOptions) {
       title: string | null;
       latestTask: string | null;
       model?: string | null;
+      modelSource?: SessionModelSource | null;
       updatedAt: number;
       lastUserMessageAt: number | null;
       startedAt?: number | null;
@@ -1667,7 +1690,9 @@ export function createSessionStore(options?: SessionStoreOptions) {
         task: record.latestTask ?? undefined,
         ...(record.projectPath ? { projectPath: record.projectPath } : {}),
         ...(record.projectName ? { projectName: record.projectName } : {}),
-        meta: record.model ? { model: record.model } : undefined,
+        meta: record.model
+          ? { model: record.model, model_source: record.modelSource ?? "history" }
+          : undefined,
         updatedAt: record.updatedAt,
         lastUserMessageAt: record.lastUserMessageAt ?? undefined,
         startedAt: record.startedAt ?? record.lastUserMessageAt ?? record.updatedAt,

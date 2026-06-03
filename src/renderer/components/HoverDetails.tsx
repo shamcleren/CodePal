@@ -420,6 +420,8 @@ export function summarizeToolGroup(items: TimelineItem[]): {
   uniqueToolCount: number;
   latestToolLabel: string;
   phaseCounts: { call: number; result: number };
+  callLabel: string;
+  toolLabel: string;
   summary: string;
 } {
   const toolLabels = items
@@ -439,9 +441,11 @@ export function summarizeToolGroup(items: TimelineItem[]): {
     { call: 0, result: 0 },
   );
 
-  const summaryParts = [`${items.length} calls`, `${uniqueToolCount} tools`, `latest ${latestToolLabel}`];
+  const callLabel = formatCount(items.length, "tool call");
+  const toolLabel = formatCount(uniqueToolCount, "tool");
+  const summaryParts = [callLabel, toolLabel, `latest ${latestToolLabel}`];
   if (phaseCounts.call > 0 && phaseCounts.result > 0) {
-    summaryParts.push(`${phaseCounts.call} call / ${phaseCounts.result} result`);
+    summaryParts.push(`${formatCount(phaseCounts.call, "call")} / ${formatCount(phaseCounts.result, "result")}`);
   }
 
   return {
@@ -449,8 +453,14 @@ export function summarizeToolGroup(items: TimelineItem[]): {
     uniqueToolCount,
     latestToolLabel,
     phaseCounts,
+    callLabel,
+    toolLabel,
     summary: summaryParts.join(" · "),
   };
+}
+
+function formatCount(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function estimatePrimaryEntryHeight(entry: PrimaryRenderEntry): number {
@@ -535,6 +545,9 @@ function ToolGroupMarker({
 }) {
   const i18n = useI18n();
   const summary = summarizeToolGroup(items);
+  const actionLabel = `${expanded ? i18n.t("session.collapse") : i18n.t("session.expand")} ${
+    summary.callLabel
+  }, latest ${summary.latestToolLabel}`;
 
   return (
     <div className={`session-stream__tool-marker ${expanded ? "session-stream__tool-marker--expanded" : ""}`}>
@@ -542,6 +555,7 @@ function ToolGroupMarker({
         type="button"
         className="session-stream__tool-marker-button"
         aria-expanded={expanded}
+        aria-label={actionLabel}
         title={summary.summary}
         onClick={(event) => {
           event.preventDefault();

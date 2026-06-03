@@ -54,7 +54,10 @@ describe("createSessionStore", () => {
       meta: { model: "gpt-5.5" },
     });
 
-    expect(store.getSession("s1")?.model).toBe("gpt-5.5");
+    expect(store.getSession("s1")).toMatchObject({
+      model: "gpt-5.5",
+      modelSource: "event-meta",
+    });
   });
 
   it("uses the latest model metadata for an existing session", () => {
@@ -2459,6 +2462,7 @@ describe("createSessionStore", () => {
       expect(session!.title).toBe("Fix bug");
       expect(session!.task).toBe("debug task");
       expect(session!.model).toBe("gpt-5.5");
+      expect(session!.modelSource).toBe("history");
     });
 
     it("normalizes running status to idle on restore", () => {

@@ -15,6 +15,8 @@ export const SESSION_STATUSES: readonly SessionStatus[] = [
   "offline",
 ] as const;
 
+export type SessionModelSource = "event-meta" | "history" | "token-usage";
+
 export function isSessionStatus(value: string): value is SessionStatus {
   return (SESSION_STATUSES as readonly string[]).includes(value);
 }
@@ -366,6 +368,7 @@ export interface SessionRecord {
   firstUserPrompt?: string;
   task?: string;
   model?: string;
+  modelSource?: SessionModelSource;
   projectPath?: string;
   projectName?: string;
   updatedAt: number;

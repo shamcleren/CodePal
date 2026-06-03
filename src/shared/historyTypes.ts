@@ -1,4 +1,4 @@
-import type { ActivityItem, SessionStatus } from "./sessionTypes";
+import type { ActivityItem, SessionModelSource, SessionStatus } from "./sessionTypes";
 
 export type SessionHistoryPageRequest = {
   sessionId: string;
@@ -30,6 +30,7 @@ export type SessionHistorySummary = {
   title?: string;
   task?: string;
   model?: string;
+  modelSource?: SessionModelSource;
   projectPath?: string;
   projectName?: string;
   updatedAt: number;

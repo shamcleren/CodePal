@@ -924,7 +924,10 @@ describe("SessionRow pending action", () => {
 
     expect(html).toContain("session-stream__item--message-assistant");
     expect(html).toContain("session-stream__tool-marker");
+    expect(html).toContain('aria-label="Expand 1 tool call, latest Bash"');
+    expect(html).toContain('title="1 tool call · 1 tool · latest Bash"');
     expect(html).not.toContain("session-stream__item--artifact-group");
+    expect(html).not.toContain("1 calls");
     expect(html).not.toContain("git diff --stat");
   });
 

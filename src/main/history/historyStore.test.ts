@@ -928,6 +928,7 @@ describe("createHistoryStore", () => {
           title: "Model-aware session",
           latestTask: "inspect model",
           model: "gpt-5.5",
+          modelSource: "event-meta",
           updatedAt: now() - 1_000,
           lastUserMessageAt: now() - 2_000,
           hasPendingActions: false,
@@ -939,6 +940,7 @@ describe("createHistoryStore", () => {
         expect.objectContaining({
           id: "model-session",
           model: "gpt-5.5",
+          modelSource: "event-meta",
         }),
       ]);
     });
@@ -997,6 +999,7 @@ describe("createHistoryStore", () => {
         expect.objectContaining({
           id: "legacy-model-session",
           model: "gpt-5.5",
+          modelSource: "token-usage",
         }),
       ]);
     });
@@ -1103,6 +1106,7 @@ describe("createHistoryStore", () => {
         expect.objectContaining({
           id: "usage-later-session",
           model: "claude-opus-4-7",
+          modelSource: "token-usage",
         }),
       ]);
     });
