@@ -65,6 +65,28 @@ describe("gatewaySecrets", () => {
     expect(JSON.stringify(store)).not.toContain("secret-value");
   });
 
+  it("distinguishes locally saved, env fallback, and missing provider tokens", () => {
+    const filePath = tempFile();
+    fs.writeFileSync(filePath, JSON.stringify({ "local.token": "secret-value" }), "utf8");
+    const store = createGatewaySecretStore({
+      filePath,
+      env: { ENV_TOKEN: "from-env" },
+    });
+
+    expect(store.tokenStatus(makeProvider({ tokenRef: "local.token", envFallback: "ENV_TOKEN" }))).toEqual({
+      configured: true,
+      source: "local",
+    });
+    expect(store.tokenStatus(makeProvider({ tokenRef: "missing.token", envFallback: "ENV_TOKEN" }))).toEqual({
+      configured: true,
+      source: "env",
+    });
+    expect(store.tokenStatus(makeProvider({ tokenRef: "missing.token", envFallback: "MISSING_ENV" }))).toEqual({
+      configured: false,
+      source: "missing",
+    });
+  });
+
   it("writes replacement tokens with owner-only permissions", () => {
     const filePath = tempFile();
     const store = createGatewaySecretStore({ filePath, env: {} });

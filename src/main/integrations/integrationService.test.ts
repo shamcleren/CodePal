@@ -712,6 +712,38 @@ describe("createIntegrationService", () => {
     expect(codex?.configPath).not.toBe(hooksPath);
   });
 
+  it("keeps Codex session-log monitoring active when legacy hooks are incompatible and config.toml has no notify", () => {
+    const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const codexDir = join(homeDir, ".codex");
+    const codexSessionsRoot = join(codexDir, "sessions");
+    const hooksPath = join(codexDir, "hooks.json");
+    const configPath = join(codexDir, "config.toml");
+    mkdirSync(codexSessionsRoot, { recursive: true });
+    writeFileSync(hooksPath, JSON.stringify({ hooks: [] }));
+    writeFileSync(configPath, "model = \"gpt-5\"\n");
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: false,
+      execPath,
+      appPath,
+    });
+
+    const codex = service.getDiagnostics().agents.find((agent) => agent.id === "codex");
+    expect(codex).toMatchObject({
+      id: "codex",
+      health: "active",
+      hookInstalled: false,
+      statusMessage: "已接入 Codex 监控（基于 session 日志）",
+      statusMessageKey: "integration.message.codex.monitoring",
+      configPath: codexSessionsRoot,
+    });
+    expect(codex?.statusMessage).not.toContain("hooks.json");
+    expect(codex?.configPath).not.toBe(hooksPath);
+    expect(codex?.configPath).not.toBe(configPath);
+  });
+
   it("reports active Codex diagnostics when hooks.json is configured", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
     const hooksPath = join(homeDir, ".codex", "hooks.json");

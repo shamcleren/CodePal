@@ -4,6 +4,7 @@ import type {
   ProviderGatewayHealthCheckSummary,
   ProviderGatewayListenerStatus,
   ProviderGatewayStatus,
+  ProviderGatewayTokenSource,
 } from "../../shared/providerGatewayTypes";
 
 export type ProviderGatewayListenerInput =
@@ -14,6 +15,7 @@ export type ProviderGatewayListenerInput =
 type BuildProviderGatewayStatusInput = {
   settings: AppSettings;
   tokenConfigured: boolean;
+  tokenStatusByProvider?: Record<string, { configured: boolean; source: ProviderGatewayTokenSource }>;
   listener: ProviderGatewayListenerInput;
   lastHealthCheck: ProviderGatewayHealthCheckSummary | null;
   claudeDesktopSetup?: ProviderGatewayClientSetupStatus;
@@ -75,14 +77,11 @@ function codexProfileModel(
   modelMappings: Array<{ claudeModel: string; upstreamModel: string }>,
 ): string | null {
   const preferredKeys = new Set([
-    "anthropic/mimo-v2.5-pro",
     "claude-opus-4-7",
     "opus",
   ]);
   const preferredMapping = modelMappings.find(
-    (mapping) =>
-      mapping.upstreamModel.toLowerCase() === "mimo-v2.5-pro" ||
-      preferredKeys.has(mapping.claudeModel.toLowerCase()),
+    (mapping) => preferredKeys.has(mapping.claudeModel.toLowerCase()),
   );
   return preferredMapping?.upstreamModel ?? modelMappings[0]?.upstreamModel ?? null;
 }
@@ -93,6 +92,25 @@ export function buildProviderGatewayStatus(
   const gateway = input.settings.providerGateway;
   const provider = gateway.providers[gateway.activeProvider] ?? null;
   const listener = listenerStatus(input.listener);
+  const fallbackActiveTokenStatus = {
+    configured: input.tokenConfigured,
+    source: input.tokenConfigured ? "local" : "missing",
+  } satisfies { configured: boolean; source: ProviderGatewayTokenSource };
+  const tokenStatusForProvider = (id: string) =>
+    input.tokenStatusByProvider?.[id] ??
+    (id === gateway.activeProvider ? fallbackActiveTokenStatus : { configured: false, source: "missing" as const });
+  const providerOptions = Object.entries(gateway.providers).map(([id, item]) => ({
+    id,
+    type: item.type,
+    displayName: item.displayName,
+    baseUrl: item.baseUrl,
+    authScheme: item.authScheme,
+    tokenConfigured: tokenStatusForProvider(id).configured,
+    tokenSource: tokenStatusForProvider(id).source,
+    envFallback: item.envFallback,
+    headers: item.headers,
+    modelMappings: item.modelMappings,
+  }));
   const healthByModel = new Map(
     (input.lastHealthCheck?.models ?? []).map((model) => [model.claudeModel, model]),
   );
@@ -114,6 +132,7 @@ export function buildProviderGatewayStatus(
     enabled: gateway.enabled,
     listener,
     activeProviderId: provider ? gateway.activeProvider : null,
+    providerOptions,
     provider: provider
       ? {
           id: gateway.activeProvider,
@@ -121,7 +140,8 @@ export function buildProviderGatewayStatus(
           displayName: provider.displayName,
           baseUrl: provider.baseUrl,
           authScheme: provider.authScheme,
-          tokenConfigured: input.tokenConfigured,
+          tokenConfigured: tokenStatusForProvider(gateway.activeProvider).configured,
+          tokenSource: tokenStatusForProvider(gateway.activeProvider).source,
           envFallback: provider.envFallback,
         }
       : null,
@@ -139,7 +159,7 @@ export function buildProviderGatewayStatus(
     codexDesktop: {
       baseUrl: `${listener.localUrl.replace(/\/$/, "")}/v1`,
       providerId: "codepal",
-      profileId: "codepal-mimo",
+      profileId: "codepal-gateway",
       wireApi: "responses",
       model: codexProfileModel(allModelMappings),
       apiKey: "local-proxy",

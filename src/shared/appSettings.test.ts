@@ -183,7 +183,7 @@ describe("appSettings", () => {
     expect(settings.cookieNames).not.toBe(endpointDefaults.cookieNames);
   });
 
-  it("adds the default MiMo provider gateway profile without storing a token", () => {
+  it("adds default provider gateway profiles without storing tokens", () => {
     const settings = normalizeAppSettings({});
 
     expect(settings.providerGateway).toMatchObject({
@@ -214,6 +214,35 @@ describe("appSettings", () => {
         },
       },
     });
+    expect(Object.keys(settings.providerGateway.providers)).toEqual([
+      "mimo",
+      "deepseek",
+      "minimax",
+      "qwen",
+      "kimi",
+      "zhipu",
+      "siliconflow",
+      "openrouter",
+    ]);
+    expect(settings.providerGateway.providers.deepseek).toMatchObject({
+      type: "anthropic-compatible",
+      displayName: "DeepSeek",
+      baseUrl: "https://api.deepseek.com/anthropic",
+      envFallback: "DEEPSEEK_API_KEY",
+      modelMappings: {
+        "claude-sonnet-4-6": "deepseek-v4-flash",
+        "claude-opus-4-7": "deepseek-v4-pro",
+      },
+    });
+    expect(settings.providerGateway.providers.qwen).toMatchObject({
+      type: "openai-chat-compatible",
+      displayName: "Qwen DashScope",
+      baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      envFallback: "DASHSCOPE_API_KEY",
+      modelMappings: {
+        "claude-sonnet-4-6": "qwen3.7-plus",
+      },
+    });
     expect(JSON.stringify(settings.providerGateway)).not.toContain("sk-");
     expect(JSON.stringify(settings.providerGateway)).not.toContain("token-plan-secret");
   });
@@ -228,7 +257,7 @@ describe("appSettings", () => {
         activeProvider: "custom",
         providers: {
           custom: {
-            type: "anthropic-compatible",
+            type: "openai-chat-compatible",
             displayName: " Custom ",
             baseUrl: "http://127.0.0.1:9999/root/",
             authScheme: "bearer",
@@ -253,7 +282,7 @@ describe("appSettings", () => {
     expect(settings.providerGateway.port).toBe(15721);
     expect(settings.providerGateway.activeProvider).toBe("custom");
     expect(settings.providerGateway.providers.custom).toEqual({
-      type: "anthropic-compatible",
+      type: "openai-chat-compatible",
       displayName: "Custom",
       baseUrl: "http://127.0.0.1:9999/root",
       authScheme: "bearer",

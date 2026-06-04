@@ -2,7 +2,7 @@ import { BrowserWindow, Tray, app, clipboard, dialog, ipcMain, shell } from "ele
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AppSettingsPatch } from "../shared/appSettings";
+import { defaultProviderGatewaySettings, type AppSettingsPatch, type ProviderGatewayConfig } from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
 import { generateHtmlReport } from "./report/generateHtmlReport";
 import { buildReportFacts } from "../shared/reportFacts";
@@ -176,9 +176,16 @@ function providerGatewayStatusForRenderer(
 ) {
   const settings = settingsService.getSettings();
   const provider = settings.providerGateway.providers[settings.providerGateway.activeProvider];
+  const tokenStatusByProvider = Object.fromEntries(
+    Object.entries(settings.providerGateway.providers).map(([id, item]) => [
+      id,
+      gatewaySecretStore.tokenStatus(item),
+    ]),
+  );
   const baseStatus = buildProviderGatewayStatus({
     settings,
     tokenConfigured: provider ? gatewaySecretStore.hasToken(provider) : false,
+    tokenStatusByProvider,
     listener: providerGatewayListener,
     lastHealthCheck: providerGatewayHealthCheck,
   });
@@ -195,6 +202,7 @@ function providerGatewayStatusForRenderer(
   return buildProviderGatewayStatus({
     settings,
     tokenConfigured: provider ? gatewaySecretStore.hasToken(provider) : false,
+    tokenStatusByProvider,
     listener: providerGatewayListener,
     lastHealthCheck: providerGatewayHealthCheck,
     claudeDesktopSetup,
@@ -476,6 +484,54 @@ function wireActionResponseIpc(
       throw new Error("provider not configured");
     }
     gatewaySecretStore.updateToken(provider, token);
+    return {
+      ok: true,
+      status: providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir),
+    };
+  });
+  ipcMain.handle("codepal:update-provider-gateway-provider", (_event, payload: unknown) => {
+    const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+    const providerId = typeof record.providerId === "string" ? record.providerId.trim() : "";
+    const provider = record.provider && typeof record.provider === "object"
+      ? record.provider as ProviderGatewayConfig
+      : null;
+    if (!providerId || !provider) {
+      throw new Error("provider payload is required");
+    }
+    const settings = settingsService.getSettings();
+    const existingProvider = settings.providerGateway.providers[providerId];
+    settings.providerGateway.providers[providerId] = {
+      ...provider,
+      tokenRef: existingProvider?.tokenRef ?? provider.tokenRef,
+    };
+    settingsService.replaceSettings(settings);
+    return {
+      ok: true,
+      status: providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir),
+    };
+  });
+  ipcMain.handle("codepal:delete-provider-gateway-provider", (_event, payload: unknown) => {
+    const providerId =
+      payload &&
+      typeof payload === "object" &&
+      typeof (payload as Record<string, unknown>).providerId === "string"
+        ? (payload as Record<string, unknown>).providerId.trim()
+        : "";
+    if (!providerId) {
+      throw new Error("provider id is required");
+    }
+    if (providerId in defaultProviderGatewaySettings.providers) {
+      throw new Error("built-in providers cannot be deleted");
+    }
+    const settings = settingsService.getSettings();
+    if (!(providerId in settings.providerGateway.providers)) {
+      throw new Error("provider not configured");
+    }
+    delete settings.providerGateway.providers[providerId];
+    if (settings.providerGateway.activeProvider === providerId) {
+      settings.providerGateway.activeProvider = Object.keys(settings.providerGateway.providers)[0] ?? "mimo";
+    }
+    settingsService.replaceSettings(settings);
     return {
       ok: true,
       status: providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir),

@@ -335,12 +335,15 @@ function buildForwardHeaders(
   provider: ProviderGatewayConfig,
   token: string,
 ): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     ...provider.headers,
     authorization: `Bearer ${token}`,
-    "anthropic-version": getHeader(request, "anthropic-version") ?? DEFAULT_ANTHROPIC_VERSION,
     "content-type": "application/json",
   };
+  if (provider.type === "anthropic-compatible") {
+    headers["anthropic-version"] = getHeader(request, "anthropic-version") ?? DEFAULT_ANTHROPIC_VERSION;
+  }
+  return headers;
 }
 
 function copyHeaders(upstream: Response, response: ServerResponse) {
@@ -530,6 +533,249 @@ function codexResponseFromAnthropic(payload: Record<string, unknown>, claudeMode
   };
 }
 
+function openAiMessageText(message: Record<string, unknown> | undefined): string {
+  if (!message) {
+    return "";
+  }
+  const content = message.content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        const object = asObject(item);
+        return object?.type === "text" && typeof object.text === "string" ? object.text : "";
+      })
+      .filter(Boolean)
+      .join("");
+  }
+  return typeof message.reasoning_content === "string" ? message.reasoning_content : "";
+}
+
+function openAiUsage(payload: Record<string, unknown>): {
+  inputTokens: number;
+  outputTokens: number;
+} {
+  const usage = asObject(payload.usage);
+  return {
+    inputTokens: positiveInteger(usage?.prompt_tokens, 0),
+    outputTokens: positiveInteger(usage?.completion_tokens, 0),
+  };
+}
+
+function anthropicResponseFromOpenAi(payload: Record<string, unknown>, claudeModel: string) {
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const firstChoice = asObject(choices[0]);
+  const message = asObject(firstChoice?.message);
+  const outputText = openAiMessageText(message ?? undefined);
+  const { inputTokens, outputTokens } = openAiUsage(payload);
+  return {
+    id: typeof payload.id === "string" ? payload.id : responseId("msg"),
+    type: "message",
+    role: "assistant",
+    model: claudeModel,
+    content: [{ type: "text", text: outputText }],
+    stop_reason: firstChoice?.finish_reason === "length" ? "max_tokens" : "end_turn",
+    stop_sequence: null,
+    usage: {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+    },
+  };
+}
+
+function codexResponseFromOpenAi(payload: Record<string, unknown>, claudeModel: string) {
+  const choices = Array.isArray(payload.choices) ? payload.choices : [];
+  const firstChoice = asObject(choices[0]);
+  const message = asObject(firstChoice?.message);
+  const outputText = openAiMessageText(message ?? undefined);
+  const { inputTokens, outputTokens } = openAiUsage(payload);
+  const createdAt = positiveInteger(payload.created, Math.floor(Date.now() / 1000));
+  const messageId = typeof payload.id === "string" ? payload.id : responseId("msg");
+  return {
+    id: responseId("resp"),
+    object: "response",
+    created_at: createdAt,
+    status: "completed",
+    error: null,
+    incomplete_details: null,
+    instructions: null,
+    max_output_tokens: null,
+    model: claudeModel,
+    output: [
+      {
+        id: messageId,
+        type: "message",
+        status: "completed",
+        role: "assistant",
+        content: [
+          {
+            type: "output_text",
+            text: outputText,
+            annotations: [],
+          },
+        ],
+      },
+    ],
+    output_text: outputText,
+    usage: {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+    },
+  };
+}
+
+function anthropicToOpenAiMessages(body: Record<string, unknown>): Array<{ role: string; content: string }> {
+  const messages: Array<{ role: string; content: string }> = [];
+  const system = asStringArrayText(body.system);
+  if (system) {
+    messages.push({ role: "system", content: system });
+  }
+  const sourceMessages = Array.isArray(body.messages) ? body.messages : [];
+  for (const message of sourceMessages) {
+    const object = asObject(message);
+    if (!object) continue;
+    const role = typeof object.role === "string" ? object.role : "";
+    if (role !== "user" && role !== "assistant") continue;
+    const content = asStringArrayText(object.content);
+    if (content) {
+      messages.push({ role, content });
+    }
+  }
+  return messages.length ? messages : [{ role: "user", content: "." }];
+}
+
+function codexInputToOpenAi(
+  body: Record<string, unknown>,
+): Array<{ role: string; content: string }> {
+  const anthropicInput = codexInputToAnthropic(body);
+  const messages: Array<{ role: string; content: string }> = [];
+  if (anthropicInput.system) {
+    messages.push({ role: "system", content: anthropicInput.system });
+  }
+  messages.push(...anthropicInput.messages);
+  return messages;
+}
+
+function anthropicToolsToOpenAiTools(tools: unknown): unknown {
+  if (!Array.isArray(tools)) {
+    return undefined;
+  }
+  const converted = tools
+    .map((tool) => {
+      const object = asObject(tool);
+      if (!object || typeof object.name !== "string") {
+        return null;
+      }
+      return {
+        type: "function",
+        function: {
+          name: object.name,
+          description: typeof object.description === "string" ? object.description : "",
+          parameters: object.input_schema ?? { type: "object", properties: {} },
+        },
+      };
+    })
+    .filter(Boolean);
+  return converted.length ? converted : undefined;
+}
+
+function anthropicBodyToOpenAiChat(
+  body: Record<string, unknown>,
+  upstreamModel: string,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {
+    model: upstreamModel,
+    messages: anthropicToOpenAiMessages(body),
+    max_tokens: positiveInteger(body.max_tokens, 4096),
+  };
+  for (const key of ["temperature", "top_p", "stop"] as const) {
+    if (body[key] !== undefined) {
+      next[key] = body[key];
+    }
+  }
+  const tools = anthropicToolsToOpenAiTools(body.tools);
+  if (tools) {
+    next.tools = tools;
+  }
+  if (body.stream === true) {
+    next.stream = true;
+  }
+  return next;
+}
+
+function codexBodyToOpenAiChat(
+  body: Record<string, unknown>,
+  upstreamModel: string,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = {
+    model: upstreamModel,
+    messages: codexInputToOpenAi(body),
+    max_tokens: positiveInteger(body.max_output_tokens ?? body.max_tokens, 4096),
+  };
+  if (body.temperature !== undefined) {
+    next.temperature = body.temperature;
+  }
+  if (body.stream === true) {
+    next.stream = true;
+  }
+  return next;
+}
+
+async function proxyOpenAiAsAnthropicTextResponse(
+  upstream: Response,
+  response: ServerResponse,
+  claudeModel: string,
+) {
+  const text = await upstream.text();
+  if (!upstream.ok) {
+    response.statusCode = upstream.status;
+    copyHeaders(upstream, response);
+    response.setHeader("content-length", Buffer.byteLength(text));
+    response.end(text);
+    return;
+  }
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    const payload = asObject(parsed);
+    if (!payload) {
+      throw new Error("upstream JSON object expected");
+    }
+    jsonResponse(response, upstream.status, anthropicResponseFromOpenAi(payload, claudeModel));
+  } catch {
+    const error = anthropicError(502, "api_error", "Invalid upstream response");
+    jsonResponse(response, error.status, error.payload);
+  }
+}
+
+async function proxyCodexTextResponseFromOpenAi(
+  upstream: Response,
+  response: ServerResponse,
+  claudeModel: string,
+) {
+  const text = await upstream.text();
+  if (!upstream.ok) {
+    response.statusCode = upstream.status;
+    copyHeaders(upstream, response);
+    response.setHeader("content-length", Buffer.byteLength(text));
+    response.end(text);
+    return;
+  }
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    const payload = asObject(parsed);
+    if (!payload) {
+      throw new Error("upstream JSON object expected");
+    }
+    jsonResponse(response, upstream.status, codexResponseFromOpenAi(payload, claudeModel));
+  } catch {
+    const error = openAiError(502, "api_error", "Invalid upstream response");
+    jsonResponse(response, error.status, error.payload);
+  }
+}
+
 async function proxyCodexTextResponse(
   upstream: Response,
   response: ServerResponse,
@@ -715,6 +961,216 @@ async function streamCodexResponseFromAnthropic(
   }
 }
 
+function openAiStreamDeltaText(object: Record<string, unknown>): string {
+  const choices = Array.isArray(object.choices) ? object.choices : [];
+  const firstChoice = asObject(choices[0]);
+  const delta = asObject(firstChoice?.delta);
+  if (!delta) {
+    return "";
+  }
+  return typeof delta.content === "string" ? delta.content : "";
+}
+
+async function streamAnthropicResponseFromOpenAi(
+  upstream: Response,
+  response: ServerResponse,
+  claudeModel: string,
+) {
+  if (!upstream.ok) {
+    await streamUpstreamResponse(upstream, response);
+    return;
+  }
+  response.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+  if (!upstream.body) {
+    response.end();
+    return;
+  }
+  const messageId = responseId("msg");
+  let initialized = false;
+  const emitStart = () => {
+    if (initialized) return;
+    initialized = true;
+    writeSse(response, "message_start", {
+      type: "message_start",
+      message: {
+        id: messageId,
+        type: "message",
+        role: "assistant",
+        model: claudeModel,
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+    });
+    writeSse(response, "content_block_start", {
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "text", text: "" },
+    });
+  };
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split(/\n\n/);
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const data = frame
+          .split(/\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .join("\n");
+        if (!data || data === "[DONE]") continue;
+        const event = JSON.parse(data) as unknown;
+        const object = asObject(event);
+        if (!object) continue;
+        const delta = openAiStreamDeltaText(object);
+        if (!delta) continue;
+        emitStart();
+        writeSse(response, "content_block_delta", {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: delta },
+        });
+      }
+    }
+    emitStart();
+    writeSse(response, "content_block_stop", { type: "content_block_stop", index: 0 });
+    writeSse(response, "message_delta", {
+      type: "message_delta",
+      delta: { stop_reason: "end_turn", stop_sequence: null },
+      usage: { output_tokens: 0 },
+    });
+    writeSse(response, "message_stop", { type: "message_stop" });
+    response.end();
+  } catch (error) {
+    response.destroy(error instanceof Error ? error : new Error(String(error)));
+  }
+}
+
+async function streamCodexResponseFromOpenAi(
+  upstream: Response,
+  response: ServerResponse,
+  claudeModel: string,
+) {
+  if (!upstream.ok) {
+    await streamUpstreamResponse(upstream, response);
+    return;
+  }
+  response.writeHead(200, {
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+  if (!upstream.body) {
+    response.end();
+    return;
+  }
+  const createdAt = Math.floor(Date.now() / 1000);
+  const id = responseId("resp");
+  const outputId = responseId("msg");
+  let outputText = "";
+  let initialized = false;
+  const emitStart = () => {
+    if (initialized) return;
+    initialized = true;
+    writeSse(response, "response.created", {
+      type: "response.created",
+      response: { id, object: "response", created_at: createdAt, status: "in_progress", model: claudeModel, output: [] },
+    });
+    writeSse(response, "response.output_item.added", {
+      type: "response.output_item.added",
+      output_index: 0,
+      item: { id: outputId, type: "message", status: "in_progress", role: "assistant", content: [] },
+    });
+    writeSse(response, "response.content_part.added", {
+      type: "response.content_part.added",
+      item_id: outputId,
+      output_index: 0,
+      content_index: 0,
+      part: { type: "output_text", text: "", annotations: [] },
+    });
+  };
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split(/\n\n/);
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const data = frame
+          .split(/\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .join("\n");
+        if (!data || data === "[DONE]") continue;
+        const event = JSON.parse(data) as unknown;
+        const object = asObject(event);
+        if (!object) continue;
+        const delta = openAiStreamDeltaText(object);
+        if (!delta) continue;
+        emitStart();
+        outputText += delta;
+        writeSse(response, "response.output_text.delta", {
+          type: "response.output_text.delta",
+          item_id: outputId,
+          output_index: 0,
+          content_index: 0,
+          delta,
+        });
+      }
+    }
+    emitStart();
+    writeSse(response, "response.output_text.done", {
+      type: "response.output_text.done",
+      item_id: outputId,
+      output_index: 0,
+      content_index: 0,
+      text: outputText,
+    });
+    writeSse(response, "response.content_part.done", {
+      type: "response.content_part.done",
+      item_id: outputId,
+      output_index: 0,
+      content_index: 0,
+      part: { type: "output_text", text: outputText, annotations: [] },
+    });
+    writeSse(response, "response.output_item.done", {
+      type: "response.output_item.done",
+      output_index: 0,
+      item: {
+        id: outputId,
+        type: "message",
+        status: "completed",
+        role: "assistant",
+        content: [{ type: "output_text", text: outputText, annotations: [] }],
+      },
+    });
+    writeSse(response, "response.completed", {
+      type: "response.completed",
+      response: { id, object: "response", created_at: createdAt, status: "completed", model: claudeModel, output_text: outputText },
+    });
+    response.end();
+  } catch (error) {
+    response.destroy(error instanceof Error ? error : new Error(String(error)));
+  }
+}
+
 async function handleMessages(
   request: IncomingMessage,
   response: ServerResponse,
@@ -769,11 +1225,14 @@ async function handleMessages(
       return;
     }
     isStream = body.stream === true;
-    const upstreamBody = {
-      ...body,
-      model: upstreamModel,
-    };
-    const upstream = await fetchImpl(upstreamUrl(provider, path), {
+    const upstreamPath = provider.type === "openai-chat-compatible" ? "/chat/completions" : path;
+    const upstreamBody = provider.type === "openai-chat-compatible"
+      ? anthropicBodyToOpenAiChat(body, upstreamModel)
+      : {
+          ...body,
+          model: upstreamModel,
+        };
+    const upstream = await fetchImpl(upstreamUrl(provider, upstreamPath), {
       method: "POST",
       headers: buildForwardHeaders(request, provider, token),
       body: JSON.stringify(upstreamBody),
@@ -783,10 +1242,18 @@ async function handleMessages(
       `[CodePal Gateway] ${request.method ?? "GET"} ${path} provider=${providerId} model=${claudeModel} -> ${upstreamModel} status=${upstream.status} durationMs=${durationMs} stream=${isStream}`,
     );
     if (isStream) {
-      await streamUpstreamResponse(upstream, response);
+      if (provider.type === "openai-chat-compatible") {
+        await streamAnthropicResponseFromOpenAi(upstream, response, claudeModel);
+      } else {
+        await streamUpstreamResponse(upstream, response);
+      }
       return;
     }
-    await proxyTextResponse(upstream, response, claudeModel);
+    if (provider.type === "openai-chat-compatible") {
+      await proxyOpenAiAsAnthropicTextResponse(upstream, response, claudeModel);
+    } else {
+      await proxyTextResponse(upstream, response, claudeModel);
+    }
   } catch (error) {
     const durationMs = Date.now() - startedAt;
     logger.warn(
@@ -844,16 +1311,18 @@ async function handleCodexResponses(
       return;
     }
     isStream = body.stream === true;
-    const anthropicInput = codexInputToAnthropic(body);
-    const upstreamBody: Record<string, unknown> = {
-      model: upstreamModel,
-      max_tokens: positiveInteger(body.max_output_tokens ?? body.max_tokens, 4096),
-      ...anthropicInput,
-    };
-    if (isStream) {
-      upstreamBody.stream = true;
-    }
-    const upstream = await fetchImpl(upstreamUrl(provider, "/v1/messages"), {
+    const upstreamPath = provider.type === "openai-chat-compatible"
+      ? "/chat/completions"
+      : "/v1/messages";
+    const upstreamBody: Record<string, unknown> = provider.type === "openai-chat-compatible"
+      ? codexBodyToOpenAiChat(body, upstreamModel)
+      : {
+          model: upstreamModel,
+          max_tokens: positiveInteger(body.max_output_tokens ?? body.max_tokens, 4096),
+          ...codexInputToAnthropic(body),
+          ...(isStream ? { stream: true } : {}),
+        };
+    const upstream = await fetchImpl(upstreamUrl(provider, upstreamPath), {
       method: "POST",
       headers: buildForwardHeaders(request, provider, token),
       body: JSON.stringify(upstreamBody),
@@ -863,10 +1332,18 @@ async function handleCodexResponses(
       `[CodePal Gateway] ${request.method ?? "GET"} /v1/responses provider=${providerId} model=${claudeModel} -> ${upstreamModel} status=${upstream.status} durationMs=${durationMs} stream=${isStream}`,
     );
     if (isStream) {
-      await streamCodexResponseFromAnthropic(upstream, response, claudeModel);
+      if (provider.type === "openai-chat-compatible") {
+        await streamCodexResponseFromOpenAi(upstream, response, claudeModel);
+      } else {
+        await streamCodexResponseFromAnthropic(upstream, response, claudeModel);
+      }
       return;
     }
-    await proxyCodexTextResponse(upstream, response, claudeModel);
+    if (provider.type === "openai-chat-compatible") {
+      await proxyCodexTextResponseFromOpenAi(upstream, response, claudeModel);
+    } else {
+      await proxyCodexTextResponse(upstream, response, claudeModel);
+    }
   } catch (error) {
     const durationMs = Date.now() - startedAt;
     logger.warn(
@@ -975,20 +1452,24 @@ export async function runProviderHealthCheck(
     let health = upstreamHealth.get(upstreamModel);
     if (!health) {
       try {
-        const response = await fetchImpl(upstreamUrl(provider, "/v1/messages"), {
-          method: "POST",
-          headers: {
-            ...provider.headers,
-            authorization: `Bearer ${token}`,
-            "anthropic-version": DEFAULT_ANTHROPIC_VERSION,
-            "content-type": "application/json",
+        const isOpenAiChat = provider.type === "openai-chat-compatible";
+        const response = await fetchImpl(
+          upstreamUrl(provider, isOpenAiChat ? "/chat/completions" : "/v1/messages"),
+          {
+            method: "POST",
+            headers: {
+              ...provider.headers,
+              authorization: `Bearer ${token}`,
+              ...(isOpenAiChat ? {} : { "anthropic-version": DEFAULT_ANTHROPIC_VERSION }),
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model: upstreamModel,
+              max_tokens: 1,
+              messages: [{ role: "user", content: "." }],
+            }),
           },
-          body: JSON.stringify({
-            model: upstreamModel,
-            max_tokens: 1,
-            messages: [{ role: "user", content: "." }],
-          }),
-        });
+        );
         health = {
           ok: response.ok,
           status: response.status,

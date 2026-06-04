@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   AnalyticsPage,
+  ANALYTICS_AUTO_REFRESH_INTERVAL_MS,
   BREAKDOWN_MODES,
   TREND_GROUP_MODES,
   TREND_METRICS,
@@ -15,6 +16,7 @@ import {
   buildAvailableProjects,
   formatAnalyticsHeroCost,
   formatAnalyticsHeroTokens,
+  loadAnalyticsPageData,
 } from "./AnalyticsPage";
 import type { TokenStatsResult } from "../../shared/usageTypes";
 import { createI18nValue } from "../i18n";
@@ -362,5 +364,33 @@ describe("AnalyticsPage helpers", () => {
 
     expect(source).not.toContain("generateLlmReport");
     expect(source).not.toContain("LLM Report");
+  });
+
+  it("loads token stats and trend data together for a full analytics refresh", async () => {
+    const statsCalls: Array<[number, number]> = [];
+    const trendCalls: Array<[number, number, string, unknown]> = [];
+    const result = await loadAnalyticsPageData({
+      start: 10,
+      end: 20,
+      granularity: "hour",
+      filters: { agent: "codex", model: "gpt-5.5", projectPath: "/repo" },
+      getTokenStats: async (start, end) => {
+        statsCalls.push([start, end]);
+        return baseStats;
+      },
+      getTokenTrend: async (start, end, granularity, filters) => {
+        trendCalls.push([start, end, granularity, filters]);
+        return { granularity: "hour", points: [] };
+      },
+    });
+
+    expect(result.stats).toBe(baseStats);
+    expect(result.trend).toEqual({ granularity: "hour", points: [] });
+    expect(statsCalls).toEqual([[10, 20]]);
+    expect(trendCalls).toEqual([[10, 20, "hour", { agent: "codex", model: "gpt-5.5", projectPath: "/repo" }]]);
+  });
+
+  it("uses a monitor-friendly analytics auto refresh interval", () => {
+    expect(ANALYTICS_AUTO_REFRESH_INTERVAL_MS).toBe(30_000);
   });
 });

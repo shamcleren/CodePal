@@ -1,3 +1,7 @@
+import type { ProviderGatewayType } from "./appSettings";
+
+export type ProviderGatewayTokenSource = "local" | "env" | "missing";
+
 export type ProviderGatewayListenerStatus =
   | { state: "listening"; localUrl: string; host: string; port: number }
   | { state: "disabled"; localUrl: string; host: string; port: number }
@@ -5,12 +9,21 @@ export type ProviderGatewayListenerStatus =
 
 export type ProviderGatewayProviderSummary = {
   id: string;
-  type: "anthropic-compatible";
+  type: ProviderGatewayType;
   displayName: string;
   baseUrl: string;
   authScheme: "bearer";
   tokenConfigured: boolean;
+  tokenSource: ProviderGatewayTokenSource;
   envFallback: string;
+};
+
+export type ProviderGatewayProviderOption = Pick<
+  ProviderGatewayProviderSummary,
+  "id" | "type" | "displayName" | "baseUrl" | "authScheme" | "tokenConfigured" | "tokenSource" | "envFallback"
+> & {
+  headers: Record<string, string>;
+  modelMappings: Record<string, string>;
 };
 
 export type ProviderGatewayModelMappingStatus = {
@@ -40,6 +53,7 @@ export type ProviderGatewayStatus = {
   enabled: boolean;
   listener: ProviderGatewayListenerStatus;
   activeProviderId: string | null;
+  providerOptions: ProviderGatewayProviderOption[];
   provider: ProviderGatewayProviderSummary | null;
   modelMappings: ProviderGatewayModelMappingStatus[];
   claudeDesktop: {
@@ -52,7 +66,7 @@ export type ProviderGatewayStatus = {
   codexDesktop: {
     baseUrl: string;
     providerId: "codepal";
-    profileId: "codepal-mimo";
+    profileId: "codepal-gateway";
     wireApi: "responses";
     model: string | null;
     apiKey: "local-proxy";
@@ -62,6 +76,12 @@ export type ProviderGatewayStatus = {
 };
 
 export type ProviderGatewayTokenUpdateResult = {
+  ok: boolean;
+  status: ProviderGatewayStatus;
+  message?: string;
+};
+
+export type ProviderGatewayProviderUpdateResult = {
   ok: boolean;
   status: ProviderGatewayStatus;
   message?: string;

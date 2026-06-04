@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppSettings, AppSettingsPatch } from "../../shared/appSettings";
+import type { AppSettings, AppSettingsPatch, ProviderGatewayConfig } from "../../shared/appSettings";
 import type { AnalyticsMetric, TokenTrendGranularity, TokenTrendResult } from "../../shared/analyticsTypes";
 import type { ResolvedLocale } from "../../shared/i18nTypes";
 import type {
@@ -22,6 +22,7 @@ import type {
   ProviderGatewayClientSetupResult,
   ProviderGatewayClientSetupTarget,
   ProviderGatewayStatus,
+  ProviderGatewayProviderUpdateResult,
   ProviderGatewayTokenUpdateResult,
 } from "../../shared/providerGatewayTypes";
 
@@ -114,6 +115,17 @@ contextBridge.exposeInMainWorld("codepal", {
       providerId,
       token,
     }) as Promise<ProviderGatewayTokenUpdateResult>;
+  },
+  updateProviderGatewayProvider(providerId: string, provider: ProviderGatewayConfig) {
+    return ipcRenderer.invoke("codepal:update-provider-gateway-provider", {
+      providerId,
+      provider,
+    }) as Promise<ProviderGatewayProviderUpdateResult>;
+  },
+  deleteProviderGatewayProvider(providerId: string) {
+    return ipcRenderer.invoke("codepal:delete-provider-gateway-provider", {
+      providerId,
+    }) as Promise<ProviderGatewayProviderUpdateResult>;
   },
   runProviderGatewayHealthCheck() {
     return ipcRenderer.invoke(

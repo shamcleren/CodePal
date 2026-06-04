@@ -13,6 +13,36 @@ const status: ProviderGatewayStatus = {
     port: 15721,
   },
   activeProviderId: "mimo",
+  providerOptions: [
+    {
+      id: "mimo",
+      type: "anthropic-compatible",
+      displayName: "MiMo Gateway",
+      baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
+      authScheme: "bearer",
+      tokenConfigured: true,
+      tokenSource: "local",
+      envFallback: "MIMO_GATEWAY_TOKEN",
+      headers: {},
+      modelMappings: {
+        "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
+      },
+    },
+    {
+      id: "qwen",
+      type: "openai-chat-compatible",
+      displayName: "Qwen DashScope",
+      baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      authScheme: "bearer",
+      tokenConfigured: false,
+      tokenSource: "missing",
+      envFallback: "DASHSCOPE_API_KEY",
+      headers: {},
+      modelMappings: {
+        default: "qwen-plus",
+      },
+    },
+  ],
   provider: {
     id: "mimo",
     type: "anthropic-compatible",
@@ -20,6 +50,7 @@ const status: ProviderGatewayStatus = {
     baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
     authScheme: "bearer",
     tokenConfigured: true,
+    tokenSource: "local",
     envFallback: "MIMO_GATEWAY_TOKEN",
   },
   modelMappings: [
@@ -43,7 +74,7 @@ const status: ProviderGatewayStatus = {
   codexDesktop: {
     baseUrl: "http://127.0.0.1:15721/v1",
     providerId: "codepal",
-    profileId: "codepal-mimo",
+    profileId: "codepal-gateway",
     wireApi: "responses",
     model: "anthropic/MiMo-V2.5-Pro",
     apiKey: "local-proxy",
@@ -67,6 +98,9 @@ function renderPanel(nextStatus: ProviderGatewayStatus | null = status) {
         feedback={null}
         error={null}
         onRefresh={vi.fn()}
+        onSelectProvider={vi.fn()}
+        onSaveProvider={vi.fn()}
+        onDeleteProvider={vi.fn()}
         onSaveToken={vi.fn()}
         onRunHealthCheck={vi.fn()}
         onConfigureClient={vi.fn()}
@@ -81,6 +115,11 @@ describe("ProviderGatewayPanel", () => {
     const html = renderPanel();
 
     expect(html).toContain("MiMo Gateway");
+    expect(html).toContain("Qwen DashScope");
+    expect(html).toContain("Local token");
+    expect(html).toContain("Token missing");
+    expect(html).toContain("Add provider");
+    expect(html).toContain("Edit");
     expect(html).toContain("http://127.0.0.1:15721");
     expect(html).toContain("http://127.0.0.1:15721/v1");
     expect(html).toContain("Codex Desktop setup");
@@ -92,6 +131,16 @@ describe("ProviderGatewayPanel", () => {
     expect(html).toContain("local-proxy");
     expect(html).toContain("Token configured");
     expect(html).not.toContain("mimo.gateway.token");
+  });
+
+  it("keeps advanced gateway configuration collapsed by default", () => {
+    const html = renderPanel();
+
+    expect(html).toContain("View model mappings");
+    expect(html).toContain("View connection details");
+    expect(html).toContain("1 mappings · 1 OK · 0 errors");
+    expect(html).not.toContain("Header-Name=value");
+    expect(html).not.toContain("<details open");
   });
 
   it("renders a missing token state", () => {

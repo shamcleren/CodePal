@@ -15,6 +15,7 @@ type BreakdownMode = "project" | "model" | "agent";
 export const TREND_METRICS = ["tokens", "cost"] as const satisfies readonly AnalyticsMetric[];
 export const TREND_GROUP_MODES = ["project", "tokenType"] as const satisfies readonly TrendGroupMode[];
 export const BREAKDOWN_MODES = ["project", "model", "agent"] as const satisfies readonly BreakdownMode[];
+export const ANALYTICS_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 export type AnalyticsBreakdownRow = {
   key: string;
@@ -40,6 +41,32 @@ type ProjectFilterOption = {
   projectPath: string;
   projectName: string;
 };
+
+type AnalyticsDataFilters = {
+  projectPath?: string;
+  agent?: string;
+  model?: string;
+};
+
+export async function loadAnalyticsPageData(input: {
+  start: number;
+  end: number;
+  granularity: TokenTrendGranularity;
+  filters: AnalyticsDataFilters;
+  getTokenStats: (start: number, end: number) => Promise<TokenStatsResult>;
+  getTokenTrend: (
+    start: number,
+    end: number,
+    granularity: TokenTrendGranularity,
+    filters?: AnalyticsDataFilters,
+  ) => Promise<TokenTrendResult>;
+}): Promise<{ stats: TokenStatsResult; trend: TokenTrendResult }> {
+  const [stats, trend] = await Promise.all([
+    input.getTokenStats(input.start, input.end),
+    input.getTokenTrend(input.start, input.end, input.granularity, input.filters),
+  ]);
+  return { stats, trend };
+}
 
 const AGENT_LABELS: Record<string, string> = {
   claude: "Claude",
@@ -319,6 +346,8 @@ export function AnalyticsPage() {
     initialPreferencesRef.current = readAnalyticsPagePreferences();
   }
   const initialPreferences = initialPreferencesRef.current;
+  const fetchInFlightRef = useRef(false);
+  const fetchRequestIdRef = useRef(0);
   const [range, setRange] = useState<RangePreset>(initialPreferences.range);
   const [customStart, setCustomStart] = useState(initialPreferences.customStart || weekAgoStr());
   const [customEnd, setCustomEnd] = useState(initialPreferences.customEnd || todayStr());
@@ -332,6 +361,7 @@ export function AnalyticsPage() {
   const [agentFilter, setAgentFilter] = useState<string | undefined>(initialPreferences.agentFilter);
   const [modelFilter, setModelFilter] = useState<string | undefined>(initialPreferences.modelFilter);
   const [loading, setLoading] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
 
   useEffect(() => {
     writeAnalyticsPagePreferences({
@@ -360,40 +390,52 @@ export function AnalyticsPage() {
   ]);
 
   const fetchData = useCallback(async (preset: RangePreset) => {
+    if (fetchInFlightRef.current) {
+      return;
+    }
+    fetchInFlightRef.current = true;
+    const requestId = fetchRequestIdRef.current + 1;
+    fetchRequestIdRef.current = requestId;
     setLoading(true);
     try {
       const resolved = resolveRange(preset, customStart, customEnd);
-      const result = await window.codepal.getTokenStats(resolved.start, resolved.end);
-      setData(result);
-      setGranularity((current) => {
-        const preferred = defaultGranularity(preset, resolved.start, resolved.end);
-        return current === preferred || preset === "custom" ? current : preferred;
+      const result = await loadAnalyticsPageData({
+        start: resolved.start,
+        end: resolved.end,
+        granularity,
+        filters: {
+          projectPath: projectFilter,
+          agent: agentFilter,
+          model: modelFilter,
+        },
+        getTokenStats: window.codepal.getTokenStats,
+        getTokenTrend: window.codepal.getTokenTrend,
       });
+      if (fetchRequestIdRef.current === requestId) {
+        setData(result.stats);
+        setTrendData(result.trend);
+        setLastRefreshedAt(Date.now());
+      }
     } finally {
-      setLoading(false);
+      if (fetchRequestIdRef.current === requestId) {
+        setLoading(false);
+      }
+      fetchInFlightRef.current = false;
     }
-  }, [customStart, customEnd]);
+  }, [customStart, customEnd, granularity, projectFilter, agentFilter, modelFilter]);
 
   useEffect(() => {
     void fetchData(range);
   }, [range, fetchData]);
 
   useEffect(() => {
-    const { start, end } = resolveRange(range, customStart, customEnd);
-    let cancelled = false;
-    void window.codepal
-      .getTokenTrend(start, end, granularity, {
-        projectPath: projectFilter,
-        agent: agentFilter,
-        model: modelFilter,
-      })
-      .then((result) => {
-        if (!cancelled) setTrendData(result);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [range, customStart, customEnd, granularity, projectFilter, agentFilter, modelFilter]);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "hidden") {
+        void fetchData(range);
+      }
+    }, ANALYTICS_AUTO_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [range, fetchData]);
 
   const handleOpenReport = useCallback(async () => {
     const { start, end } = resolveRange(range, customStart, customEnd);
@@ -477,6 +519,15 @@ export function AnalyticsPage() {
 
   const breakdownRows = buildAnalyticsBreakdownRows(breakdownMode, data);
   const coverageSummary = buildAnalyticsCoverageSummary(data, trendData, i18n.t);
+  const refreshStatus = lastRefreshedAt
+    ? i18n.t("tokenStats.lastRefreshed", {
+        time: new Intl.DateTimeFormat(i18n.locale, {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }).format(lastRefreshedAt),
+      })
+    : i18n.t("tokenStats.autoRefresh");
 
   return (
     <div className="analytics-page">
@@ -542,7 +593,7 @@ export function AnalyticsPage() {
       </div>
       {coverageSummary ? (
         <div className="analytics-page__source-coverage" aria-label={i18n.t("tokenStats.coverage.label")}>
-          {coverageSummary}
+          {coverageSummary} · {refreshStatus}
         </div>
       ) : null}
 

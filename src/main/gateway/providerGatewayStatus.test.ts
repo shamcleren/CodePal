@@ -8,11 +8,24 @@ describe("providerGatewayStatus", () => {
     const status = buildProviderGatewayStatus({
       settings,
       tokenConfigured: true,
+      tokenStatusByProvider: {
+        mimo: { configured: true, source: "local" },
+        qwen: { configured: true, source: "env" },
+        deepseek: { configured: false, source: "missing" },
+      },
       listener: { state: "listening", host: "127.0.0.1", port: 15721 },
       lastHealthCheck: null,
     });
 
     expect(status.provider?.tokenConfigured).toBe(true);
+    expect(status.provider?.tokenSource).toBe("local");
+    expect(status.providerOptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "mimo", tokenConfigured: true, tokenSource: "local" }),
+        expect.objectContaining({ id: "qwen", tokenConfigured: true, tokenSource: "env" }),
+        expect.objectContaining({ id: "deepseek", tokenConfigured: false, tokenSource: "missing" }),
+      ]),
+    );
     expect(status.listener).toMatchObject({
       state: "listening",
       localUrl: "http://127.0.0.1:15721",
@@ -39,7 +52,7 @@ describe("providerGatewayStatus", () => {
     expect(status.codexDesktop).toEqual({
       baseUrl: "http://127.0.0.1:15721/v1",
       providerId: "codepal",
-      profileId: "codepal-mimo",
+      profileId: "codepal-gateway",
       wireApi: "responses",
       model: "mimo-v2.5-pro",
       apiKey: "local-proxy",

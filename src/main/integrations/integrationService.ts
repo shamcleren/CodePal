@@ -687,10 +687,10 @@ function inspectCodexConfig(
         ? "integration.message.codex.enhancedWithSessions"
         : "integration.message.codex.enhanced";
       displayPath = configPath;
-    } else if (sessionsExist) {
-      useSessionLogMonitoringStatus();
     }
-  } else if (sessionsExist) {
+  }
+
+  if (sessionsExist && health !== "active") {
     useSessionLogMonitoringStatus();
   }
 

@@ -1,4 +1,4 @@
-import type { AppSettings, AppSettingsPatch } from "../shared/appSettings";
+import type { AppSettings, AppSettingsPatch, ProviderGatewayConfig } from "../shared/appSettings";
 import type { AnalyticsMetric, TokenTrendGranularity, TokenTrendResult } from "../shared/analyticsTypes";
 import type { ResolvedLocale } from "../shared/i18nTypes";
 import type {
@@ -20,6 +20,7 @@ import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry, 
 import type {
   ProviderGatewayClientSetupResult,
   ProviderGatewayClientSetupTarget,
+  ProviderGatewayProviderUpdateResult,
   ProviderGatewayStatus,
   ProviderGatewayTokenUpdateResult,
 } from "../shared/providerGatewayTypes";
@@ -64,6 +65,13 @@ export type CodePalApi = {
     providerId: string,
     token: string,
   ) => Promise<ProviderGatewayTokenUpdateResult>;
+  updateProviderGatewayProvider: (
+    providerId: string,
+    provider: ProviderGatewayConfig,
+  ) => Promise<ProviderGatewayProviderUpdateResult>;
+  deleteProviderGatewayProvider: (
+    providerId: string,
+  ) => Promise<ProviderGatewayProviderUpdateResult>;
   runProviderGatewayHealthCheck: () => Promise<ProviderGatewayStatus>;
   configureProviderGatewayClient: (
     target: ProviderGatewayClientSetupTarget,

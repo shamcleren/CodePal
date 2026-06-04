@@ -56,7 +56,7 @@ export type ReportSettings = {
 
 export type ProviderGatewayAuthScheme = "bearer";
 
-export type ProviderGatewayType = "anthropic-compatible";
+export type ProviderGatewayType = "anthropic-compatible" | "openai-chat-compatible";
 
 export type ProviderGatewayConfig = {
   type: ProviderGatewayType;
@@ -173,6 +173,135 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         "claude-sonnet-4-6": MIMO_DEFAULT_UPSTREAM_MODEL,
         "claude-opus-4-7": "mimo-v2.5-pro",
         [CLAUDE_HAIKU_ROUTE_ID]: MIMO_DEFAULT_UPSTREAM_MODEL,
+      },
+    },
+    deepseek: {
+      type: "anthropic-compatible",
+      displayName: "DeepSeek",
+      baseUrl: "https://api.deepseek.com/anthropic",
+      authScheme: "bearer",
+      tokenRef: "deepseek.api_key",
+      envFallback: "DEEPSEEK_API_KEY",
+      headers: {},
+      modelMappings: {
+        default: "deepseek-v4-flash",
+        sonnet: "deepseek-v4-flash",
+        opus: "deepseek-v4-pro",
+        haiku: "deepseek-v4-flash",
+        "claude-sonnet-4-6": "deepseek-v4-flash",
+        "claude-opus-4-7": "deepseek-v4-pro",
+        [CLAUDE_HAIKU_ROUTE_ID]: "deepseek-v4-flash",
+      },
+    },
+    minimax: {
+      type: "anthropic-compatible",
+      displayName: "MiniMax",
+      baseUrl: "https://api.minimax.io/anthropic",
+      authScheme: "bearer",
+      tokenRef: "minimax.api_key",
+      envFallback: "MINIMAX_API_KEY",
+      headers: {},
+      modelMappings: {
+        default: "MiniMax-M3",
+        sonnet: "MiniMax-M3",
+        opus: "MiniMax-M3",
+        haiku: "MiniMax-M2.7-highspeed",
+        "claude-sonnet-4-6": "MiniMax-M3",
+        "claude-opus-4-7": "MiniMax-M3",
+        [CLAUDE_HAIKU_ROUTE_ID]: "MiniMax-M2.7-highspeed",
+      },
+    },
+    qwen: {
+      type: "openai-chat-compatible",
+      displayName: "Qwen DashScope",
+      baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      authScheme: "bearer",
+      tokenRef: "qwen.dashscope.api_key",
+      envFallback: "DASHSCOPE_API_KEY",
+      headers: {},
+      modelMappings: {
+        default: "qwen3.7-plus",
+        sonnet: "qwen3.7-plus",
+        opus: "qwen3.7-plus",
+        haiku: "qwen-plus",
+        "claude-sonnet-4-6": "qwen3.7-plus",
+        "claude-opus-4-7": "qwen3.7-plus",
+        [CLAUDE_HAIKU_ROUTE_ID]: "qwen-plus",
+      },
+    },
+    kimi: {
+      type: "openai-chat-compatible",
+      displayName: "Kimi",
+      baseUrl: "https://api.moonshot.ai/v1",
+      authScheme: "bearer",
+      tokenRef: "kimi.moonshot.api_key",
+      envFallback: "MOONSHOT_API_KEY",
+      headers: {},
+      modelMappings: {
+        default: "kimi-k2.6",
+        sonnet: "kimi-k2.6",
+        opus: "kimi-k2.6",
+        haiku: "moonshot-v1-32k",
+        "claude-sonnet-4-6": "kimi-k2.6",
+        "claude-opus-4-7": "kimi-k2.6",
+        [CLAUDE_HAIKU_ROUTE_ID]: "moonshot-v1-32k",
+      },
+    },
+    zhipu: {
+      type: "openai-chat-compatible",
+      displayName: "Zhipu GLM",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+      authScheme: "bearer",
+      tokenRef: "zhipu.api_key",
+      envFallback: "ZHIPUAI_API_KEY",
+      headers: {},
+      modelMappings: {
+        default: "glm-5.1",
+        sonnet: "glm-5.1",
+        opus: "glm-5.1",
+        haiku: "glm-4-flash",
+        "claude-sonnet-4-6": "glm-5.1",
+        "claude-opus-4-7": "glm-5.1",
+        [CLAUDE_HAIKU_ROUTE_ID]: "glm-4-flash",
+      },
+    },
+    siliconflow: {
+      type: "openai-chat-compatible",
+      displayName: "SiliconFlow",
+      baseUrl: "https://api.siliconflow.cn/v1",
+      authScheme: "bearer",
+      tokenRef: "siliconflow.api_key",
+      envFallback: "SILICONFLOW_API_KEY",
+      headers: {},
+      modelMappings: {
+        default: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+        sonnet: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+        opus: "deepseek-ai/DeepSeek-V3.2-Exp",
+        haiku: "Qwen/Qwen3-30B-A3B-Instruct",
+        "claude-sonnet-4-6": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+        "claude-opus-4-7": "deepseek-ai/DeepSeek-V3.2-Exp",
+        [CLAUDE_HAIKU_ROUTE_ID]: "Qwen/Qwen3-30B-A3B-Instruct",
+      },
+    },
+    openrouter: {
+      type: "openai-chat-compatible",
+      displayName: "OpenRouter",
+      baseUrl: "https://openrouter.ai/api/v1",
+      authScheme: "bearer",
+      tokenRef: "openrouter.api_key",
+      envFallback: "OPENROUTER_API_KEY",
+      headers: {
+        "HTTP-Referer": "https://github.com/shamcleren/CodePal",
+        "X-OpenRouter-Title": "CodePal",
+      },
+      modelMappings: {
+        default: "deepseek/deepseek-v4-flash",
+        sonnet: "deepseek/deepseek-v4-flash",
+        opus: "deepseek/deepseek-v4-pro",
+        haiku: "qwen/qwen-plus",
+        "claude-sonnet-4-6": "deepseek/deepseek-v4-flash",
+        "claude-opus-4-7": "deepseek/deepseek-v4-pro",
+        [CLAUDE_HAIKU_ROUTE_ID]: "qwen/qwen-plus",
       },
     },
   },
@@ -484,6 +613,10 @@ function normalizeModelMappings(
   return entries.length > 0 ? Object.fromEntries(entries) : { ...defaults };
 }
 
+function isProviderGatewayType(value: unknown): value is ProviderGatewayType {
+  return value === "anthropic-compatible" || value === "openai-chat-compatible";
+}
+
 function migrateMimoModelMappings(
   mappings: Record<string, string>,
   defaults: Record<string, string>,
@@ -513,10 +646,7 @@ function normalizeProviderConfig(
   }
   const modelMappings = normalizeModelMappings(candidate.modelMappings, defaults.modelMappings);
   return {
-    type:
-      candidate.type === "anthropic-compatible"
-        ? candidate.type
-        : defaults.type,
+    type: isProviderGatewayType(candidate.type) ? candidate.type : defaults.type,
     displayName: normalizeProviderString(candidate.displayName, defaults.displayName),
     baseUrl: normalizeHttpUrl(candidate.baseUrl, defaults.baseUrl),
     authScheme: candidate.authScheme === "bearer" ? candidate.authScheme : defaults.authScheme,
@@ -547,29 +677,29 @@ function normalizeProviderGatewaySettings(value: unknown): ProviderGatewaySettin
       ),
     };
   }
-  const defaultProvider = defaultProviderGatewaySettings.providers.mimo;
+  const fallbackDefaultProvider = defaultProviderGatewaySettings.providers.mimo;
   const rawProviders = asRecord(candidate.providers);
-  const providerEntries = rawProviders
-    ? Object.entries(rawProviders)
-        .filter(([id]) => Boolean(id.trim()))
-        .map(([id, provider]) => {
-          const providerId = id.trim();
-          return [
-            providerId,
-            normalizeProviderConfig(provider, defaultProvider, providerId),
-          ] as const;
-        })
-    : [];
-  const providers =
-    providerEntries.length > 0
-      ? Object.fromEntries(providerEntries)
-      : {
-          mimo: {
-            ...defaultProvider,
-            headers: { ...defaultProvider.headers },
-            modelMappings: { ...defaultProvider.modelMappings },
-          },
-        };
+  const providers = Object.fromEntries(
+    Object.entries(defaultProviderGatewaySettings.providers).map(([id, provider]) => [
+      id,
+      {
+        ...provider,
+        headers: { ...provider.headers },
+        modelMappings: { ...provider.modelMappings },
+      },
+    ]),
+  );
+  if (rawProviders) {
+    for (const [id, provider] of Object.entries(rawProviders)) {
+      const providerId = id.trim();
+      if (!providerId) continue;
+      providers[providerId] = normalizeProviderConfig(
+        provider,
+        defaultProviderGatewaySettings.providers[providerId] ?? fallbackDefaultProvider,
+        providerId,
+      );
+    }
+  }
   const requestedActiveProvider = normalizeProviderString(
     candidate.activeProvider,
     defaultProviderGatewaySettings.activeProvider,

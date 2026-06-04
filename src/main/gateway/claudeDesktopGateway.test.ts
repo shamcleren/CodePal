@@ -2,7 +2,7 @@ import http from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normalizeAppSettings } from "../../shared/appSettings";
+import { normalizeAppSettings, type AppSettingsPatch } from "../../shared/appSettings";
 import { createClaudeDesktopGatewayServer, runProviderHealthCheck } from "./claudeDesktopGateway";
 import type { GatewaySecretResolver } from "./gatewaySecrets";
 
@@ -89,8 +89,9 @@ function createTestGateway(options: {
   token?: string;
   fetchImpl?: typeof fetch;
   log?: (...args: unknown[]) => void;
+  settingsPatch?: AppSettingsPatch;
 }) {
-  const settings = normalizeAppSettings({});
+  const settings = normalizeAppSettings(options.settingsPatch ?? {});
   const secrets: GatewaySecretResolver = {
     resolveToken: vi.fn(() => options.token ?? ""),
   };
@@ -255,6 +256,127 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     });
     await expect(response.json()).resolves.toMatchObject({
       model: "claude-haiku-4-5",
+    });
+  });
+
+  it("translates Claude messages to OpenAI-compatible chat completions for OpenAI-style providers", async () => {
+    const calls: FetchCall[] = [];
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return Response.json({
+        id: "chatcmpl_1",
+        object: "chat.completion",
+        model: "qwen3.7-plus",
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: "hello from qwen" },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 3, completion_tokens: 4, total_tokens: 7 },
+      });
+    }) as typeof fetch;
+    const server = createTestGateway({
+      token: "dashscope-token",
+      fetchImpl,
+      settingsPatch: {
+        providerGateway: {
+          activeProvider: "qwen",
+        },
+      },
+    });
+
+    const response = await requestGateway(server, "/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 64,
+        system: "Be brief.",
+        messages: [{ role: "user", content: "Hi" }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions");
+    expect(calls[0].init.headers).toMatchObject({
+      authorization: "Bearer dashscope-token",
+      "content-type": "application/json",
+    });
+    expect(JSON.parse(String(calls[0].init.body))).toMatchObject({
+      model: "qwen3.7-plus",
+      max_tokens: 64,
+      messages: [
+        { role: "system", content: "Be brief." },
+        { role: "user", content: "Hi" },
+      ],
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-4-6",
+      content: [{ type: "text", text: "hello from qwen" }],
+      usage: { input_tokens: 3, output_tokens: 4 },
+    });
+  });
+
+  it("translates Codex responses to OpenAI-compatible chat completions for OpenAI-style providers", async () => {
+    const calls: FetchCall[] = [];
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return Response.json({
+        id: "chatcmpl_2",
+        object: "chat.completion",
+        model: "kimi-k2.6",
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: "hello from kimi" },
+            finish_reason: "stop",
+          },
+        ],
+        usage: { prompt_tokens: 5, completion_tokens: 6, total_tokens: 11 },
+      });
+    }) as typeof fetch;
+    const server = createTestGateway({
+      token: "moonshot-token",
+      fetchImpl,
+      settingsPatch: {
+        providerGateway: {
+          activeProvider: "kimi",
+        },
+      },
+    });
+
+    const response = await requestGateway(server, "/v1/responses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-opus-4-7",
+        max_output_tokens: 128,
+        instructions: "Be direct.",
+        input: "Hi",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("https://api.moonshot.ai/v1/chat/completions");
+    expect(JSON.parse(String(calls[0].init.body))).toMatchObject({
+      model: "kimi-k2.6",
+      max_tokens: 128,
+      messages: [
+        { role: "system", content: "Be direct." },
+        { role: "user", content: "Hi" },
+      ],
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      object: "response",
+      model: "claude-opus-4-7",
+      output_text: "hello from kimi",
+      usage: { input_tokens: 5, output_tokens: 6, total_tokens: 11 },
     });
   });
 

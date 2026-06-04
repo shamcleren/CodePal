@@ -27,6 +27,22 @@ function status(): ProviderGatewayStatus {
       localUrl: "http://127.0.0.1:15721",
     },
     activeProviderId: "mimo",
+    providerOptions: [
+      {
+        id: "mimo",
+        type: "anthropic-compatible",
+        displayName: "MiMo Gateway",
+        baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
+        authScheme: "bearer",
+        tokenConfigured: true,
+        tokenSource: "local",
+        envFallback: "MIMO_GATEWAY_TOKEN",
+        headers: {},
+        modelMappings: {
+          "claude-sonnet-4-6": "mimo-v2.5",
+        },
+      },
+    ],
     provider: {
       id: "mimo",
       type: "anthropic-compatible",
@@ -34,6 +50,7 @@ function status(): ProviderGatewayStatus {
       baseUrl: "https://token-plan-cn.xiaomimimo.com/anthropic",
       authScheme: "bearer",
       tokenConfigured: true,
+      tokenSource: "local",
       envFallback: "MIMO_GATEWAY_TOKEN",
     },
     modelMappings: [
@@ -57,7 +74,7 @@ function status(): ProviderGatewayStatus {
     codexDesktop: {
       baseUrl: "http://127.0.0.1:15721/v1",
       providerId: "codepal",
-      profileId: "codepal-mimo",
+      profileId: "codepal-gateway",
       wireApi: "responses",
       model: "mimo-v2.5-pro",
       apiKey: "local-proxy",
@@ -210,7 +227,7 @@ describe("provider gateway client setup", () => {
     expect(contents).toContain('model = "mimo-v2.5-pro"');
     expect(contents).toContain('model_provider = "codepal"');
     expect(contents).toContain("[model_providers.codepal]");
-    expect(contents).toContain("[profiles.codepal-mimo]");
+    expect(contents).toContain("[profiles.codepal-gateway]");
     expect(contents).toContain('base_url = "http://127.0.0.1:15721/v1"');
     expect(contents).toContain('wire_api = "responses"');
     expect(contents).toContain("requires_openai_auth = false");
@@ -235,7 +252,7 @@ describe("provider gateway client setup", () => {
     expect(restoredRoot).toContain('model = "gpt-5.5"');
     expect(restoredRoot).toContain('model_provider = "openai"');
     expect(restoredRoot).not.toContain('model_provider = "codepal"');
-    expect(restored).toContain("[profiles.codepal-mimo]");
+    expect(restored).toContain("[profiles.codepal-gateway]");
     expect(fs.existsSync(path.join(configDir, "codepal-provider-gateway-state.json"))).toBe(false);
   });
 
@@ -257,7 +274,7 @@ describe("provider gateway client setup", () => {
     expect(root).not.toContain('model = "mimo-v2.5-pro"');
     expect(root).not.toContain('model_provider = "codepal"');
     expect(root).toContain('model_reasoning_effort = "high"');
-    expect(contents).toContain("[profiles.codepal-mimo]");
+    expect(contents).toContain("[profiles.codepal-gateway]");
     expect(contents).toContain('model = "mimo-v2.5-pro"');
     expect(contents).toContain('model_provider = "codepal"');
   });

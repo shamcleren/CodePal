@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type { ProviderGatewayConfig } from "../../shared/appSettings";
+import type { ProviderGatewayTokenSource } from "../../shared/providerGatewayTypes";
 
 export type GatewaySecretResolver = {
   resolveToken(provider: ProviderGatewayConfig): string;
@@ -14,6 +15,10 @@ type GatewaySecretStoreOptions = {
 
 export type GatewaySecretStore = GatewaySecretResolver & {
   hasToken(provider: ProviderGatewayConfig): boolean;
+  tokenStatus(provider: ProviderGatewayConfig): {
+    configured: boolean;
+    source: ProviderGatewayTokenSource;
+  };
   updateToken(provider: ProviderGatewayConfig, token: string): void;
 };
 
@@ -72,6 +77,20 @@ export function createGatewaySecretStore(
     resolveToken: resolver.resolveToken,
     hasToken(provider: ProviderGatewayConfig): boolean {
       return resolver.resolveToken(provider).length > 0;
+    },
+    tokenStatus(provider: ProviderGatewayConfig) {
+      const tokenRef = provider.tokenRef.trim();
+      if (tokenRef) {
+        const secrets = readSecretMap(options.filePath);
+        if (secrets[tokenRef]?.trim()) {
+          return { configured: true, source: "local" };
+        }
+      }
+      const envName = provider.envFallback.trim();
+      if (envName && (options.env ?? process.env)[envName]?.trim()) {
+        return { configured: true, source: "env" };
+      }
+      return { configured: false, source: "missing" };
     },
     updateToken(provider: ProviderGatewayConfig, token: string): void {
       const cleaned = token.trim();

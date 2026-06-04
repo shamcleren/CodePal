@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { defaultAppSettings, type AppSettings, type AppSettingsPatch } from "../shared/appSettings";
+import {
+  defaultAppSettings,
+  type AppSettings,
+  type AppSettingsPatch,
+  type ProviderGatewayConfig,
+} from "../shared/appSettings";
 import type { TokenTrendPoint } from "../shared/analyticsTypes";
 import type { HistoryDiagnostics, SessionHistorySummary } from "../shared/historyTypes";
 import type { IntegrationAgentId, IntegrationDiagnostics } from "../shared/integrationTypes";
@@ -247,6 +252,63 @@ export function App() {
       });
   }
 
+  function selectProviderGatewayProvider(providerId: string) {
+    setProviderGatewayLoading(true);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
+    return window.codepal
+      .updateAppSettings({ providerGateway: { activeProvider: providerId } })
+      .then((settings) => {
+        setAppSettings(settings);
+        return loadProviderGatewayStatus();
+      })
+      .then(() => {
+        setProviderGatewayFeedback(i18n.t("providerGateway.provider.switched"));
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+      })
+      .finally(() => {
+        setProviderGatewayLoading(false);
+      });
+  }
+
+  function saveProviderGatewayProvider(providerId: string, provider: ProviderGatewayConfig) {
+    setProviderGatewayLoading(true);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
+    return window.codepal
+      .updateProviderGatewayProvider(providerId, provider)
+      .then((result) => {
+        setProviderGatewayStatus(result.status);
+        setProviderGatewayFeedback(i18n.t("providerGateway.provider.saved"));
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+      })
+      .finally(() => {
+        setProviderGatewayLoading(false);
+      });
+  }
+
+  function deleteProviderGatewayProvider(providerId: string) {
+    setProviderGatewayLoading(true);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
+    return window.codepal
+      .deleteProviderGatewayProvider(providerId)
+      .then((result) => {
+        setProviderGatewayStatus(result.status);
+        setProviderGatewayFeedback(i18n.t("providerGateway.provider.deleted"));
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+      })
+      .finally(() => {
+        setProviderGatewayLoading(false);
+      });
+  }
+
   function runProviderGatewayHealthCheck() {
     setProviderGatewayHealthChecking(true);
     setProviderGatewayFeedback(null);
@@ -306,10 +368,22 @@ export function App() {
     void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
   }
 
+  function refreshSettingsSection(section: SettingsSectionId) {
+    if (section === "providerGateway") {
+      void loadProviderGatewayStatus();
+      return;
+    }
+    if (section === "advanced") {
+      void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
+      return;
+    }
+    refreshIntegrations();
+  }
+
   function openSettingsSection(section: SettingsSectionId) {
     setActiveSettingsSection(section);
     setSettingsOpen(true);
-    refreshIntegrations();
+    refreshSettingsSection(section);
   }
 
   function openSettingsDrawer() {
@@ -417,6 +491,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (activeView !== "review") return;
     let active = true;
     void window.codepal
       .getSessionHistorySummaries({
@@ -436,9 +511,10 @@ export function App() {
     return () => {
       active = false;
     };
-  }, [historyStoreVersion]);
+  }, [activeView, historyStoreVersion]);
 
   useEffect(() => {
+    if (activeView !== "review") return;
     let active = true;
     const timeoutId = window.setTimeout(() => {
       const { start, end } = workReviewTokenRange();
@@ -465,7 +541,7 @@ export function App() {
       active = false;
       window.clearTimeout(timeoutId);
     };
-  }, [historyStoreVersion, workReviewTokenRefreshKey]);
+  }, [activeView, historyStoreVersion, workReviewTokenRefreshKey]);
 
   useEffect(() => {
     let active = true;
@@ -514,8 +590,12 @@ export function App() {
   }, []);
 
   function updateAppSettings(nextValue: AppSettingsPatch) {
+    const previousHistoryEnabled = appSettings.history.persistenceEnabled;
     return window.codepal.updateAppSettings(nextValue).then((settings) => {
       setAppSettings(settings);
+      if (settings.history.persistenceEnabled === previousHistoryEnabled) {
+        return settings;
+      }
       return loadHistoryDiagnostics(settings.history.persistenceEnabled).then(() => settings);
     });
   }
@@ -789,6 +869,9 @@ export function App() {
                   onRefresh={() => {
                     void loadProviderGatewayStatus();
                   }}
+                  onSelectProvider={(providerId) => selectProviderGatewayProvider(providerId)}
+                  onSaveProvider={(providerId, provider) => saveProviderGatewayProvider(providerId, provider)}
+                  onDeleteProvider={(providerId) => deleteProviderGatewayProvider(providerId)}
                   onSaveToken={(providerId, token) => saveProviderGatewayToken(providerId, token)}
                   onRunHealthCheck={() => runProviderGatewayHealthCheck()}
                   onConfigureClient={(target) => configureProviderGatewayClient(target)}

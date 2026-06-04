@@ -389,7 +389,7 @@ function stripCodexGatewayRootDefaults(contents: string): string {
 }
 
 function codexProviderBlock(status: ProviderGatewayStatus): string {
-  const model = status.codexDesktop.model ?? "mimo-v2.5-pro";
+  const model = status.codexDesktop.model ?? "default";
   return [
     CODEX_PROVIDER_BLOCK_START,
     "[model_providers.codepal]",
@@ -399,7 +399,7 @@ function codexProviderBlock(status: ProviderGatewayStatus): string {
     "requires_openai_auth = false",
     'http_headers = { Authorization = "Bearer local-proxy" }',
     "",
-    "[profiles.codepal-mimo]",
+    "[profiles.codepal-gateway]",
     `model = "${model}"`,
     'model_provider = "codepal"',
     CODEX_PROVIDER_BLOCK_END,
@@ -425,7 +425,7 @@ function configureCodexDesktop(
 ): ProviderGatewayClientSetupResult {
   const configPath = codexConfigPath(homeDir);
   const previous = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
-  const model = status.codexDesktop.model ?? "mimo-v2.5-pro";
+  const model = status.codexDesktop.model ?? "default";
   if (!isCodexGatewayActive(previous)) {
     writeCodexGatewayRestoreState(
       homeDir,
