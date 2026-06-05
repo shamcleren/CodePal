@@ -77,20 +77,24 @@ const AGENT_LABELS: Record<string, string> = {
   pycharm: "PyCharm",
 };
 
-function resolveRange(preset: RangePreset, customStart?: string, customEnd?: string): { start: number; end: number } {
-  const now = Date.now();
-  const startOfDay = new Date();
+function resolveRange(
+  preset: RangePreset,
+  customStart?: string,
+  customEnd?: string,
+  nowMs = Date.now(),
+): { start: number; end: number } {
+  const startOfDay = new Date(nowMs);
   startOfDay.setHours(0, 0, 0, 0);
   switch (preset) {
     case "today":
-      return { start: startOfDay.getTime(), end: now };
+      return { start: startOfDay.getTime(), end: nowMs };
     case "7d":
-      return { start: startOfDay.getTime() - 6 * 24 * 60 * 60 * 1000, end: now };
+      return { start: startOfDay.getTime() - 6 * 24 * 60 * 60 * 1000, end: nowMs };
     case "30d":
-      return { start: startOfDay.getTime() - 29 * 24 * 60 * 60 * 1000, end: now };
+      return { start: startOfDay.getTime() - 29 * 24 * 60 * 60 * 1000, end: nowMs };
     case "custom": {
       const start = customStart ? new Date(customStart + "T00:00:00").getTime() : startOfDay.getTime();
-      const end = customEnd ? new Date(customEnd + "T23:59:59").getTime() : now;
+      const end = customEnd ? new Date(customEnd + "T23:59:59").getTime() : nowMs;
       return { start, end };
     }
   }
@@ -102,6 +106,16 @@ function defaultGranularity(preset: RangePreset, start: number, end: number): To
     return end - start >= 24 * 60 * 60 * 1000 ? "hour" : "minute";
   }
   return "hour";
+}
+
+export function resolveAnalyticsCurrentRange(
+  preset: RangePreset,
+  customStart?: string,
+  customEnd?: string,
+  nowMs = Date.now(),
+): { startMs: number; endMs: number } {
+  const { start, end } = resolveRange(preset, customStart, customEnd, nowMs);
+  return { startMs: start, endMs: end };
 }
 
 function agentLabel(agent: string): string {
@@ -482,9 +496,8 @@ export function AnalyticsPage() {
   );
 
   const currentRange = useMemo(() => {
-    const { start, end } = resolveRange(range, customStart, customEnd);
-    return { startMs: start, endMs: end };
-  }, [range, customStart, customEnd]);
+    return resolveAnalyticsCurrentRange(range, customStart, customEnd, lastRefreshedAt ?? undefined);
+  }, [range, customStart, customEnd, lastRefreshedAt]);
 
   const rangeButtons: Array<{ key: RangePreset; label: string }> = [
     { key: "today", label: i18n.t("tokenStats.range.today") },

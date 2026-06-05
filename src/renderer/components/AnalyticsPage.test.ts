@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { createElement } from "react";
@@ -17,6 +17,7 @@ import {
   formatAnalyticsHeroCost,
   formatAnalyticsHeroTokens,
   loadAnalyticsPageData,
+  resolveAnalyticsCurrentRange,
 } from "./AnalyticsPage";
 import type { TokenStatsResult } from "../../shared/usageTypes";
 import { createI18nValue } from "../i18n";
@@ -392,5 +393,21 @@ describe("AnalyticsPage helpers", () => {
 
   it("uses a monitor-friendly analytics auto refresh interval", () => {
     expect(ANALYTICS_AUTO_REFRESH_INTERVAL_MS).toBe(30_000);
+  });
+
+  it("recomputes the live chart range end after an analytics refresh", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-06-04T09:35:00.000Z"));
+      const initial = resolveAnalyticsCurrentRange("today", "", "", Date.now());
+
+      vi.setSystemTime(new Date("2026-06-04T09:38:32.000Z"));
+      const refreshed = resolveAnalyticsCurrentRange("today", "", "", Date.now());
+
+      expect(refreshed.endMs).toBeGreaterThan(initial.endMs);
+      expect(new Date(refreshed.endMs).toISOString()).toBe("2026-06-04T09:38:32.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

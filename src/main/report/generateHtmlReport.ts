@@ -10,11 +10,13 @@ import type {
   DailyTokenStats,
   ModelPricing,
   ModelTokenStats,
+  ProjectTokenStats,
   SessionStatsEntry,
   SessionTokenStats,
   UsageContext,
   UsageImportStatus,
 } from "../../shared/usageTypes";
+import { isUnknownProjectPath, sortProjectRows, UNKNOWN_PROJECT_PATH } from "../../shared/projectAttribution";
 
 export type ReportRedactionOptions = {
   /** Replace session titles with generic labels */
@@ -40,6 +42,7 @@ export type HtmlReportInput = {
   endDate: string;
   sessionStats: SessionStatsEntry[];
   daily: DailyTokenStats[];
+  byProject?: ProjectTokenStats[];
   byModel: ModelTokenStats[];
   byAgent?: AgentTokenStats[];
   topSessions?: SessionTokenStats[];
@@ -88,8 +91,13 @@ type ReportCopy = {
   cacheHit: string;
   cacheHitRate: string;
   estimatedCost: string;
+  topAgent: string;
+  topModel: string;
   dailyTrend: string;
   workHealth: string;
+  compactBreakdown: string;
+  project: string;
+  unknownProject: string;
   byModel: string;
   byAgent: string;
   topSessions: string;
@@ -135,8 +143,13 @@ const REPORT_COPY: Record<ResolvedLocale, ReportCopy> = {
     cacheHit: "Cache Hit",
     cacheHitRate: "Cache Hit Rate",
     estimatedCost: "Estimated Cost",
+    topAgent: "Top Agent",
+    topModel: "Top Model",
     dailyTrend: "Daily Trend",
     workHealth: "Work Health",
+    compactBreakdown: "Compact Breakdown",
+    project: "Project",
+    unknownProject: "Unidentified Project",
     byModel: "By Model",
     byAgent: "By Agent",
     topSessions: "Top Sessions",
@@ -210,8 +223,13 @@ const REPORT_COPY: Record<ResolvedLocale, ReportCopy> = {
     cacheHit: "Cache 命中",
     cacheHitRate: "Cache 命中率",
     estimatedCost: "估算费用",
+    topAgent: "主要 Agent",
+    topModel: "主要模型",
     dailyTrend: "每日趋势",
     workHealth: "工作健康",
+    compactBreakdown: "精简拆分",
+    project: "项目",
+    unknownProject: "未识别项目",
     byModel: "按模型",
     byAgent: "按 Agent",
     topSessions: "高用量会话",
@@ -280,8 +298,22 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-function fmtCost(usd: number): string {
-  return `$${usd.toFixed(2)}`;
+function fmtCost(usd: number, locale: ResolvedLocale = "en"): string {
+  return locale === "zh-CN" ? `US$${usd.toFixed(2)}` : `$${usd.toFixed(2)}`;
+}
+
+function fmtHeroCost(usd: number, locale: ResolvedLocale = "en"): string {
+  if (usd > 0 && usd < 1) {
+    return locale === "zh-CN" ? "<US$1" : "<$1";
+  }
+  const rounded = Math.round(usd);
+  return locale === "zh-CN" ? `US$${rounded}` : `$${rounded}`;
+}
+
+function fmtHeroTokens(n: number): string {
+  if (n >= 1_000_000) return `${Math.round(n / 1_000_000)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return String(Math.round(n));
 }
 
 function contextPercent(context: UsageContext | undefined): number | null {
@@ -709,7 +741,12 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   const totalRequests = input.daily.reduce((s, d) => s + d.requestCount, 0);
   const cacheHitRate = totalCacheRead + totalInput > 0
     ? totalCacheRead / (totalCacheRead + totalInput + totalCacheCreation) : 0;
-  const totalCost = input.byModel.reduce((s, m) => s + estimateCost(m, pricingMap, m.model), 0);
+  const projectCost = (input.byProject ?? []).reduce((sum, project) => sum + (project.estimatedCost ?? 0), 0);
+  const totalCost = projectCost > 0
+    ? projectCost
+    : input.byModel.reduce((s, m) => s + estimateCost(m, pricingMap, m.model), 0);
+  const topAgent = input.byAgent?.[0];
+  const topModel = input.byModel[0];
 
   // Session stats
   const byAgent = new Map<string, Array<{ status: string; count: number }>>();
@@ -744,7 +781,25 @@ export function generateHtmlReport(input: HtmlReportInput): string {
       <td class="num">${fmtTokens(m.outputTokens)}</td>
       <td class="num">${modelCacheRate > 0 ? Math.round(modelCacheRate * 100) + "%" : "&mdash;"}</td>
       <td class="num">${fmtTokens(m.cacheReadTokens)}</td>
-      <td class="num">${fmtCost(cost)}</td>
+      <td class="num">${fmtCost(cost, locale)}</td>
+    </tr>\n`;
+  }
+
+  let projectRows = "";
+  for (const project of sortProjectRows(input.byProject ?? [])) {
+    const inputLikeTotal = project.inputTokens + project.cacheReadTokens + project.cacheCreationTokens;
+    const cacheRate = inputLikeTotal > 0 ? project.cacheReadTokens / inputLikeTotal : 0;
+    const projectName = project.projectPath === UNKNOWN_PROJECT_PATH || isUnknownProjectPath(project.projectPath)
+      ? copy.unknownProject
+      : project.projectName;
+    projectRows += `<tr>
+      <td title="${isUnknownProjectPath(project.projectPath) ? "" : esc(project.projectPath)}">${esc(projectName)}</td>
+      <td class="num">${project.requestCount}</td>
+      <td class="num">${fmtTokens(project.totalTokens)}</td>
+      <td class="num">${fmtTokens(project.inputTokens)}</td>
+      <td class="num">${fmtTokens(project.outputTokens)}</td>
+      <td class="num">${cacheRate > 0 ? Math.round(cacheRate * 100) + "%" : "&mdash;"}</td>
+      <td class="num">${fmtCost(project.estimatedCost ?? 0, locale)}</td>
     </tr>\n`;
   }
 
@@ -842,6 +897,7 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   }
   .hero-card .label { font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
   .hero-card .value { font-size: 22px; font-weight: 700; }
+  .hero-card .detail { margin-top: 3px; color: var(--muted); font-size: 12px; }
 
   /* Trend chart */
   .report-trend {
@@ -978,13 +1034,14 @@ export function generateHtmlReport(input: HtmlReportInput): string {
 
   <h2>${esc(copy.tokenUsage)}</h2>
   <div class="hero-grid">
-    <div class="hero-card"><div class="label">${esc(copy.totalTokens)}</div><div class="value">${fmtTokens(totalTokens)}</div></div>
+    <div class="hero-card"><div class="label">${esc(copy.totalTokens)}</div><div class="value">${fmtHeroTokens(totalTokens)}</div></div>
     <div class="hero-card"><div class="label">${esc(copy.requests)}</div><div class="value">${totalRequests}</div></div>
-    <div class="hero-card"><div class="label">${esc(copy.input)}</div><div class="value">${fmtTokens(totalInput)}</div></div>
-    <div class="hero-card"><div class="label">${esc(copy.output)}</div><div class="value">${fmtTokens(totalOutput)}</div></div>
-    <div class="hero-card"><div class="label">${esc(copy.cacheRead)}</div><div class="value">${fmtTokens(totalCacheRead)}</div></div>
-    <div class="hero-card"><div class="label">${esc(copy.cacheHitRate)}</div><div class="value">${Math.round(cacheHitRate * 100)}%</div></div>
-    <div class="hero-card"><div class="label">${esc(copy.estimatedCost)}</div><div class="value">${fmtCost(totalCost)}</div></div>
+    <div class="hero-card"><div class="label">${esc(copy.input)}</div><div class="value">${fmtHeroTokens(totalInput)}</div></div>
+    <div class="hero-card"><div class="label">${esc(copy.output)}</div><div class="value">${fmtHeroTokens(totalOutput)}</div></div>
+    <div class="hero-card"><div class="label">${esc(copy.topAgent)}</div><div class="value">${topAgent ? esc(AGENT_LABELS[topAgent.agent] ?? topAgent.agent) : "&mdash;"}</div>${topAgent ? `<div class="detail">${fmtHeroTokens(topAgent.totalTokens)} tokens</div>` : ""}</div>
+    <div class="hero-card"><div class="label">${esc(copy.topModel)}</div><div class="value">${topModel ? esc(input.redaction?.redactModelNames ? copy.redactedModel : topModel.model) : "&mdash;"}</div>${topModel ? `<div class="detail">${esc(AGENT_LABELS[topModel.agent] ?? topModel.agent)}</div>` : ""}</div>
+    <div class="hero-card"><div class="label">${esc(copy.cacheHit)}</div><div class="value">${Math.round(cacheHitRate * 100)}%</div></div>
+    <div class="hero-card"><div class="label">${esc(copy.estimatedCost)}</div><div class="value">${fmtHeroCost(totalCost, locale)}</div></div>
   </div>
 
   ${workHealth}
@@ -992,6 +1049,12 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   ${trendChart ? `<h2>${esc(copy.dailyTrend)}</h2>
   ${trendChart}
   ${renderTrendLegend(input.metric ?? "tokens", copy)}` : ""}
+
+  ${projectRows ? `<h2>${esc(copy.compactBreakdown)}</h2>
+  <div class="table-wrap"><table class="table--wide"><thead><tr>
+    <th>${esc(copy.project)}</th><th class="num">${esc(copy.requests)}</th><th class="num">${esc(copy.totalTokens)}</th>
+    <th class="num">${esc(copy.input)}</th><th class="num">${esc(copy.output)}</th><th class="num">${esc(copy.cacheHit)}</th><th class="num">${esc(copy.estimatedCost)}</th>
+  </tr></thead><tbody>${projectRows}</tbody></table></div>` : ""}
 
   ${input.byModel.length > 0 ? `<h2>${esc(copy.byModel)}</h2>
   <div class="table-wrap"><table class="table--wide"><thead><tr>

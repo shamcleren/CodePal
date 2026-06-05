@@ -160,9 +160,12 @@ describe("generateHtmlReport", () => {
       pricing: [],
     });
 
-    expect(html).toContain("1.0M"); // input
-    expect(html).toContain("500.0K"); // output
-    expect(html).toContain("2.0M"); // cache
+    expect(html).toContain("1M"); // input
+    expect(html).toContain("500K"); // output
+    expect(html).toContain("Cache Hit");
+    expect(html).toContain("Top Agent");
+    expect(html).toContain("Top Model");
+    expect(html).not.toContain("Cache Read</div><div class=\"value\"");
     expect(html).toContain("50"); // requests
   });
 
@@ -298,6 +301,89 @@ describe("generateHtmlReport", () => {
     expect(html).toContain("By Model");
     expect(html).toContain("claude-sonnet-4-5-20250929");
     expect(html).toContain("$18.00"); // 1M*3 + 1M*15 = $18
+  });
+
+  it("aligns opened reports with the Analytics summary and compact project breakdown", () => {
+    const html = generateHtmlReport({
+      startDate: "2026-06-04",
+      endDate: "2026-06-04",
+      locale: "zh-CN",
+      sessionStats: [],
+      daily: [
+        {
+          date: "2026-06-04",
+          agent: "codex",
+          inputTokens: 11_000_000,
+          outputTokens: 606_000,
+          cacheReadTokens: 151_000_000,
+          cacheCreationTokens: 400_000,
+          reasoningTokens: 0,
+          totalTokens: 163_006_000,
+          requestCount: 1_562,
+        },
+      ],
+      byProject: [
+        {
+          projectPath: "/repo/bk-aidev-team",
+          projectName: "bk-aidev-team",
+          requestCount: 1_230,
+          inputTokens: 9_300_000,
+          outputTokens: 501_000,
+          cacheReadTokens: 111_900_000,
+          cacheCreationTokens: 0,
+          totalTokens: 121_700_000,
+          estimatedCost: 108.06,
+          firstSeenAt: 1,
+          lastSeenAt: 2,
+        },
+        {
+          projectPath: "/repo/CodePal",
+          projectName: "CodePal",
+          requestCount: 332,
+          inputTokens: 2_100_000,
+          outputTokens: 104_000,
+          cacheReadTokens: 38_796_000,
+          cacheCreationTokens: 0,
+          totalTokens: 41_000_000,
+          estimatedCost: 31.99,
+          firstSeenAt: 1,
+          lastSeenAt: 2,
+        },
+      ],
+      byModel: [
+        {
+          agent: "codex",
+          model: "gpt-5.5",
+          requestCount: 1_562,
+          inputTokens: 11_000_000,
+          outputTokens: 606_000,
+          cacheReadTokens: 151_000_000,
+          cacheCreationTokens: 400_000,
+          totalTokens: 163_006_000,
+        },
+      ],
+      byAgent: [
+        {
+          agent: "codex",
+          requestCount: 1_562,
+          inputTokens: 11_000_000,
+          outputTokens: 606_000,
+          cacheReadTokens: 151_000_000,
+          cacheCreationTokens: 400_000,
+          totalTokens: 163_006_000,
+        },
+      ],
+      pricing: [],
+    } as Parameters<typeof generateHtmlReport>[0]);
+
+    expect(html).toContain("主要 Agent");
+    expect(html).toContain("主要模型");
+    expect(html).toContain("精简拆分");
+    expect(html).toContain("<th>项目</th>");
+    expect(html).toContain("bk-aidev-team");
+    expect(html).toContain("CodePal");
+    expect(html).toContain("US$108.06");
+    expect(html).not.toContain("Cache 读取</div><div class=\"value\"");
   });
 
   it("includes detailed analytics sections for agents, sessions, and backfill status", () => {

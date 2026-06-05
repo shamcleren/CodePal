@@ -351,6 +351,7 @@ function wireActionResponseIpc(
     const pricing = currentHistoryStore.getModelPricing();
     const currentStats = {
       daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs, agent),
+      byProject: currentHistoryStore.getTokenUsageByProject(startMs, endMs, agent),
       byModel: currentHistoryStore.getTokenUsageByModel(startMs, endMs, agent),
       byAgent: currentHistoryStore.getTokenUsageByAgent(startMs, endMs, agent),
       topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, agent, 25),
@@ -384,6 +385,7 @@ function wireActionResponseIpc(
       endDate,
       sessionStats: currentHistoryStore.getSessionStats(startMs, endMs),
       daily: currentStats.daily,
+      byProject: currentStats.byProject,
       byModel: currentStats.byModel,
       byAgent: currentStats.byAgent,
       topSessions: currentStats.topSessions,
