@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import { defaultProviderGatewaySettings } from "../../shared/appSettings";
 import { resolveLlmReportGatewayForReport } from "./llmReportGateway";
 
+const enabledGateway = {
+  ...defaultProviderGatewaySettings,
+  enabled: true,
+};
+
 describe("resolveLlmReportGatewayForReport", () => {
   it("uses the actual listener address when env overrides the configured gateway port", () => {
     const result = resolveLlmReportGatewayForReport({
       gateway: {
-        ...defaultProviderGatewaySettings,
+        ...enabledGateway,
         port: 15721,
       },
       listener: {
@@ -25,7 +30,7 @@ describe("resolveLlmReportGatewayForReport", () => {
 
   it("returns an actionable error when the local gateway is not listening", () => {
     const result = resolveLlmReportGatewayForReport({
-      gateway: defaultProviderGatewaySettings,
+      gateway: enabledGateway,
       listener: {
         state: "unavailable",
         host: "127.0.0.1",
@@ -44,7 +49,7 @@ describe("resolveLlmReportGatewayForReport", () => {
 
   it("returns an actionable error when the provider token is missing", () => {
     const result = resolveLlmReportGatewayForReport({
-      gateway: defaultProviderGatewaySettings,
+      gateway: enabledGateway,
       listener: {
         state: "listening",
         host: "127.0.0.1",

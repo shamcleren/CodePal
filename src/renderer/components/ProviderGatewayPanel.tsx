@@ -139,7 +139,8 @@ export function ProviderGatewayPanel({
   const [providerForm, setProviderForm] = useState(emptyProviderForm);
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const providerId = status?.activeProviderId ?? "";
-  const canSaveToken = Boolean(tokenProviderId && tokenDraft.trim() && !tokenSaving);
+  const gatewayOffline = status ? !status.enabled : true;
+  const canSaveToken = Boolean(tokenProviderId && tokenDraft.trim() && !tokenSaving && !gatewayOffline);
 
   useEffect(() => {
     if (!status) return;
@@ -233,6 +234,7 @@ export function ProviderGatewayPanel({
 
       {feedback ? <p className="integration-panel__feedback">{feedback}</p> : null}
       {error ? <p className="integration-panel__error">{error}</p> : null}
+      {gatewayOffline ? <p className="integration-panel__feedback">{i18n.t("providerGateway.disabledHotfix")}</p> : null}
 
       <div className="provider-gateway-panel__status-grid">
         <div className="display-panel__card">
@@ -246,7 +248,7 @@ export function ProviderGatewayPanel({
           <select
             className="provider-gateway-panel__token-input"
             value={providerId}
-            disabled={loading || status.providerOptions.length === 0}
+            disabled={loading || gatewayOffline || status.providerOptions.length === 0}
             aria-label={i18n.t("providerGateway.status.provider")}
             onChange={(event) => {
               void onSelectProvider(event.currentTarget.value);
@@ -280,7 +282,7 @@ export function ProviderGatewayPanel({
           <select
             className="provider-gateway-panel__token-input"
             value={tokenProviderId}
-            disabled={tokenSaving || status.providerOptions.length === 0}
+            disabled={tokenSaving || gatewayOffline || status.providerOptions.length === 0}
             aria-label={i18n.t("providerGateway.token.provider")}
             onChange={(event) => setTokenProviderId(event.currentTarget.value)}
           >
@@ -295,11 +297,13 @@ export function ProviderGatewayPanel({
             type={tokenVisible ? "text" : "password"}
             value={tokenDraft}
             placeholder={i18n.t("providerGateway.token.placeholder")}
+            disabled={gatewayOffline}
             onChange={(event) => setTokenDraft(event.currentTarget.value)}
           />
           <button
             type="button"
             className="provider-gateway-panel__token-toggle"
+            disabled={gatewayOffline}
             onClick={() => setTokenVisible((v) => !v)}
             aria-label={tokenVisible ? i18n.t("providerGateway.token.hide") : i18n.t("providerGateway.token.show")}
           >
@@ -324,6 +328,7 @@ export function ProviderGatewayPanel({
           <button
             type="button"
             className="integration-panel__refresh"
+            disabled={gatewayOffline}
             onClick={() => {
               setEditingProviderId("new");
               setProviderForm(emptyProviderForm);
@@ -352,6 +357,7 @@ export function ProviderGatewayPanel({
                   <button
                     type="button"
                     className="integration-panel__refresh integration-panel__refresh--secondary provider-gateway-panel__row-action"
+                    disabled={gatewayOffline}
                     onClick={() => {
                       void onSelectProvider(provider.id);
                     }}
@@ -362,6 +368,7 @@ export function ProviderGatewayPanel({
                 <button
                   type="button"
                   className="integration-panel__refresh integration-panel__refresh--secondary provider-gateway-panel__row-action"
+                  disabled={gatewayOffline}
                   onClick={() => {
                     const config = {
                       type: provider.type,
@@ -383,6 +390,7 @@ export function ProviderGatewayPanel({
                   <button
                     type="button"
                     className="integration-panel__refresh integration-panel__refresh--secondary provider-gateway-panel__row-action"
+                    disabled={gatewayOffline}
                     onClick={() => {
                       void onDeleteProvider(provider.id);
                     }}
@@ -400,7 +408,7 @@ export function ProviderGatewayPanel({
               <input
                 className="provider-gateway-panel__token-input"
                 value={providerForm.id}
-                disabled={editingProviderId !== "new"}
+                disabled={gatewayOffline || editingProviderId !== "new"}
                 placeholder="provider-id"
                 onChange={(event) => {
                   const value = event.currentTarget.value;
@@ -410,6 +418,7 @@ export function ProviderGatewayPanel({
               <input
                 className="provider-gateway-panel__token-input"
                 value={providerForm.displayName}
+                disabled={gatewayOffline}
                 placeholder={i18n.t("providerGateway.provider.name")}
                 onChange={(event) => {
                   const value = event.currentTarget.value;
@@ -419,6 +428,7 @@ export function ProviderGatewayPanel({
               <select
                 className="provider-gateway-panel__token-input"
                 value={providerForm.type}
+                disabled={gatewayOffline}
                 onChange={(event) => {
                   const value = event.currentTarget.value as ProviderGatewayConfig["type"];
                   setProviderForm((current) => ({ ...current, type: value }));
@@ -430,6 +440,7 @@ export function ProviderGatewayPanel({
               <input
                 className="provider-gateway-panel__token-input"
                 value={providerForm.baseUrl}
+                disabled={gatewayOffline}
                 placeholder="https://api.example.com/v1"
                 onChange={(event) => {
                   const value = event.currentTarget.value;
@@ -443,6 +454,7 @@ export function ProviderGatewayPanel({
                 <input
                   className="provider-gateway-panel__token-input"
                   value={providerForm.envFallback}
+                  disabled={gatewayOffline}
                   placeholder={i18n.t("providerGateway.provider.env")}
                   onChange={(event) => {
                     const value = event.currentTarget.value;
@@ -452,6 +464,7 @@ export function ProviderGatewayPanel({
                 <textarea
                   className="provider-gateway-panel__token-input"
                   value={providerForm.modelMappings}
+                  disabled={gatewayOffline}
                   placeholder="claude-sonnet-4-6=upstream-model"
                   onChange={(event) => {
                     const value = event.currentTarget.value;
@@ -461,6 +474,7 @@ export function ProviderGatewayPanel({
                 <textarea
                   className="provider-gateway-panel__token-input"
                   value={providerForm.headers}
+                  disabled={gatewayOffline}
                   placeholder="Header-Name=value"
                   onChange={(event) => {
                     const value = event.currentTarget.value;
@@ -470,7 +484,7 @@ export function ProviderGatewayPanel({
               </div>
             </details>
             <div className="provider-gateway-panel__actions">
-              <button type="submit" className="integration-panel__refresh">
+              <button type="submit" className="integration-panel__refresh" disabled={gatewayOffline}>
                 {i18n.t("providerGateway.provider.save")}
               </button>
               <button
@@ -494,7 +508,7 @@ export function ProviderGatewayPanel({
           <button
             type="button"
             className="integration-panel__refresh"
-            disabled={healthChecking}
+            disabled={gatewayOffline || healthChecking}
             onClick={() => {
               void onRunHealthCheck();
             }}
@@ -537,7 +551,7 @@ export function ProviderGatewayPanel({
             <button
               type="button"
               className="integration-panel__refresh"
-              disabled={clientSetupTarget !== null || claudeActive}
+              disabled={gatewayOffline || clientSetupTarget !== null || claudeActive}
               onClick={() => {
                 void onConfigureClient("claude-desktop");
               }}
@@ -554,7 +568,7 @@ export function ProviderGatewayPanel({
               <button
                 type="button"
                 className="integration-panel__refresh integration-panel__refresh--secondary"
-                disabled={clientSetupTarget !== null || !claudeActive}
+                disabled={gatewayOffline || clientSetupTarget !== null || !claudeActive}
                 onClick={() => {
                   void onConfigureClient("claude-desktop-restore");
                 }}
@@ -609,7 +623,7 @@ export function ProviderGatewayPanel({
             <button
               type="button"
               className="integration-panel__refresh"
-              disabled={clientSetupTarget !== null || codexActive}
+              disabled={gatewayOffline || clientSetupTarget !== null || codexActive}
               onClick={() => {
                 void onConfigureClient("codex-desktop");
               }}
@@ -626,7 +640,7 @@ export function ProviderGatewayPanel({
               <button
                 type="button"
                 className="integration-panel__refresh integration-panel__refresh--secondary"
-                disabled={clientSetupTarget !== null || !codexActive}
+                disabled={gatewayOffline || clientSetupTarget !== null || !codexActive}
                 onClick={() => {
                   void onConfigureClient("codex-desktop-restore");
                 }}

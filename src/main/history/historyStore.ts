@@ -547,6 +547,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   `);
   const DEFAULT_PRICING: Array<[string, string, string, string, string, string]> = [
     // Claude (Anthropic)
+    ["claude-opus-4-8", "Claude Opus 4.8", "5", "25", "0.50", "6.25"],
+    ["claude-opus-4-8-fast", "Claude Opus 4.8 Fast", "10", "50", "1", "12.5"],
     ["claude-opus-4-7", "Claude Opus 4.7", "5", "25", "0.50", "6.25"],
     ["claude-opus-4-6-20260206", "Claude Opus 4.6", "5", "25", "0.50", "6.25"],
     ["claude-sonnet-4-6-20260217", "Claude Sonnet 4.6", "3", "15", "0.30", "3.75"],

@@ -16,6 +16,7 @@ import type {
   UsageContext,
   UsageImportStatus,
 } from "../../shared/usageTypes";
+import { estimateTokenCost, resolveModelPricing } from "../../shared/modelPricing";
 import { isUnknownProjectPath, sortProjectRows, UNKNOWN_PROJECT_PATH } from "../../shared/projectAttribution";
 
 export type ReportRedactionOptions = {
@@ -369,17 +370,23 @@ function statusLabel(status: string, copy: ReportCopy): string {
 
 function estimateCost(
   stats: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number },
-  pricingMap: Map<string, ModelPricing>,
+  pricing: ModelPricing[],
   model?: string,
 ): number {
-  const pricing = (model ? pricingMap.get(model) : null) ?? pricingMap.get("claude-sonnet-4-5-20250929");
-  if (!pricing) return 0;
-  return (
-    (stats.inputTokens / 1_000_000) * Number(pricing.inputPerMillion) +
-    (stats.outputTokens / 1_000_000) * Number(pricing.outputPerMillion) +
-    (stats.cacheReadTokens / 1_000_000) * Number(pricing.cacheReadPerMillion) +
-    (stats.cacheCreationTokens / 1_000_000) * Number(pricing.cacheCreationPerMillion)
-  );
+  const match = (model
+    ? resolveModelPricing({ model }, pricing, { allowModelFallback: false })
+    : undefined) ?? resolveModelPricing({ model: "claude-sonnet-4-5-20250929" }, pricing, {
+      allowModelFallback: false,
+    });
+  if (!match) return 0;
+  return estimateTokenCost(
+    {
+      ...stats,
+      model: match.pricing.modelId,
+    },
+    [match.pricing],
+    { allowModelFallback: false },
+  ) ?? 0;
 }
 
 const AGENT_LABELS: Record<string, string> = {
@@ -443,7 +450,6 @@ function metricLabel(metric: AnalyticsMetric = "tokens", copy: ReportCopy = REPO
 function buildReportTrendPoints(input: HtmlReportInput): ReportTrendPoint[] {
   const metric = input.metric ?? "tokens";
   if (input.trend?.points.length) {
-    const pricingMap = new Map(input.pricing.map((pricing) => [pricing.modelId, pricing]));
     const byBucket = new Map<number, ReportTrendPoint & { cacheRead: number; inputLike: number }>();
     for (const point of input.trend.points) {
       const existing = byBucket.get(point.bucketStart) ?? {
@@ -461,7 +467,7 @@ function buildReportTrendPoints(input: HtmlReportInput): ReportTrendPoint[] {
       if (metric === "requests") {
         existing.total += point.requestCount;
       } else if (metric === "cost") {
-        existing.total += estimateCost(point, pricingMap.get(point.model));
+        existing.total += estimateCost(point, input.pricing, point.model);
       } else if (metric === "cacheHit") {
         existing.inputLike += point.inputTokens + point.cacheReadTokens + point.cacheCreationTokens;
         existing.cacheRead += point.cacheReadTokens;
@@ -728,10 +734,6 @@ function reportTrendScript(): string {
 export function generateHtmlReport(input: HtmlReportInput): string {
   const locale = input.locale ?? input.redaction?.locale ?? "en";
   const copy = REPORT_COPY[locale] ?? REPORT_COPY.en;
-  const pricingMap = new Map<string, ModelPricing>();
-  for (const p of input.pricing) {
-    pricingMap.set(p.modelId, p);
-  }
 
   const totalInput = input.daily.reduce((s, d) => s + d.inputTokens, 0);
   const totalOutput = input.daily.reduce((s, d) => s + d.outputTokens, 0);
@@ -744,7 +746,7 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   const projectCost = (input.byProject ?? []).reduce((sum, project) => sum + (project.estimatedCost ?? 0), 0);
   const totalCost = projectCost > 0
     ? projectCost
-    : input.byModel.reduce((s, m) => s + estimateCost(m, pricingMap, m.model), 0);
+    : input.byModel.reduce((s, m) => s + estimateCost(m, input.pricing, m.model), 0);
   const topAgent = input.byAgent?.[0];
   const topModel = input.byModel[0];
 
@@ -770,7 +772,7 @@ export function generateHtmlReport(input: HtmlReportInput): string {
   // Model table
   let modelRows = "";
   for (const m of input.byModel) {
-    const cost = estimateCost(m, pricingMap, m.model);
+    const cost = estimateCost(m, input.pricing, m.model);
     const modelTotal = m.inputTokens + m.cacheReadTokens + m.cacheCreationTokens;
     const modelCacheRate = modelTotal > 0 ? m.cacheReadTokens / modelTotal : 0;
     const modelDisplayName = input.redaction?.redactModelNames ? copy.redactedModel : m.model;

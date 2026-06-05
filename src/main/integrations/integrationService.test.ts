@@ -1169,6 +1169,70 @@ describe("createIntegrationService", () => {
     });
   });
 
+  it("does not rewrite Claude gateway env during startup migration", () => {
+    const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const wrapperHookPath = join(homeDir, ".codepal", "bin", "claude-hook");
+    const wrapperStatusLinePath = join(homeDir, ".codepal", "bin", "claude-statusline");
+    mkdirSync(dirname(wrapperHookPath), { recursive: true });
+    writeExecutable(wrapperHookPath);
+    writeExecutable(wrapperStatusLinePath);
+    mkdirSync(dirname(join(homeDir, ".codepal", "runtime", "active-codepal.env")), { recursive: true });
+    writeFileSync(
+      join(homeDir, ".codepal", "runtime", "active-codepal.env"),
+      `CODEPAL_PACKAGED=0\nCODEPAL_EXEC_PATH='${execPath}'\nCODEPAL_APP_PATH='${appPath}'\n`,
+    );
+    const configPath = join(homeDir, ".claude", "settings.json");
+    mkdirSync(dirname(configPath), { recursive: true });
+    const currentHook = { hooks: [{ type: "command", command: `"${wrapperHookPath}"` }] };
+    const currentMatchedHook = { matcher: "*", ...currentHook };
+    writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_MODEL: "user-sonnet",
+            ANTHROPIC_DEFAULT_OPUS_MODEL: "user-opus",
+          },
+          hooks: {
+            SessionStart: [currentMatchedHook],
+            UserPromptSubmit: [currentHook],
+            Notification: [currentHook],
+            PermissionRequest: [currentMatchedHook],
+            PostToolUse: [currentMatchedHook],
+            PostToolUseFailure: [currentMatchedHook],
+            Stop: [currentHook],
+            SessionEnd: [currentHook],
+          },
+          statusLine: {
+            type: "command",
+            command: `"${wrapperStatusLinePath}"`,
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: false,
+      execPath,
+      appPath,
+      getProviderGatewayBaseUrl: () => null,
+      now: () => 987,
+    });
+
+    const result = service.autoMigrateExistingCodePalHooks();
+    const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+
+    expect(result.map((item) => item.agentId)).toEqual([]);
+    expect(parsed.env).toEqual({
+      ANTHROPIC_MODEL: "user-sonnet",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "user-opus",
+    });
+  });
+
   it("reports legacy_path for CodeBuddy when hooks use shell script commands", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
     const configPath = join(homeDir, ".codebuddy", "settings.json");

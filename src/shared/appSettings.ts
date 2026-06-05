@@ -149,7 +149,7 @@ export const defaultReportSettings: ReportSettings = {
 };
 
 export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
-  enabled: true,
+  enabled: false,
   host: "127.0.0.1",
   port: 15721,
   activeProvider: "mimo",

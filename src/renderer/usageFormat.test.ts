@@ -108,6 +108,75 @@ describe("usageFormat", () => {
     ).toBeCloseTo(20.05);
   });
 
+  it("matches Claude Opus 4.8 pricing across model aliases without falling back to legacy Opus 4", () => {
+    const pricing = [
+      {
+        modelId: "claude-opus-4-20250514",
+        displayName: "Claude Opus 4",
+        inputPerMillion: "15",
+        outputPerMillion: "75",
+        cacheReadPerMillion: "1.50",
+        cacheCreationPerMillion: "18.75",
+      },
+      {
+        modelId: "claude-opus-4-8",
+        displayName: "Claude Opus 4.8",
+        inputPerMillion: "5",
+        outputPerMillion: "25",
+        cacheReadPerMillion: "0.50",
+        cacheCreationPerMillion: "6.25",
+      },
+      {
+        modelId: "claude-opus-4-8-fast",
+        displayName: "Claude Opus 4.8 Fast",
+        inputPerMillion: "10",
+        outputPerMillion: "50",
+        cacheReadPerMillion: "1",
+        cacheCreationPerMillion: "12.5",
+      },
+    ];
+
+    const baseTokens = {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+    };
+
+    expect(
+      estimateTokenCost(
+        {
+          ...baseTokens,
+          model: "anthropic/claude-opus-4-8-20260601",
+        },
+        pricing,
+        { allowModelFallback: false },
+      ),
+    ).toBeCloseTo(30);
+
+    expect(
+      estimateTokenCost(
+        {
+          ...baseTokens,
+          model: "Claude Opus 4.8",
+        },
+        pricing,
+        { allowModelFallback: false },
+      ),
+    ).toBeCloseTo(30);
+
+    expect(
+      estimateTokenCost(
+        {
+          ...baseTokens,
+          model: "claude-opus-4-8-fast",
+        },
+        pricing,
+        { allowModelFallback: false },
+      ),
+    ).toBeCloseTo(60);
+  });
+
   it("uses the same metric formatter for analytics chart values", () => {
     expect(formatMetricValue(1_600_000, "tokens" satisfies AnalyticsMetric, "en")).toBe("1.6M");
     expect(formatMetricValue(17.55, "cost" satisfies AnalyticsMetric, "zh-CN")).toBe("US$18");

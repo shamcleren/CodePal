@@ -49,6 +49,32 @@ describe("createHistoryStore", () => {
     expect(diagnostics.dbSizeBytes).toBeGreaterThan(0);
   });
 
+  it("seeds Claude Opus 4.8 pricing, including fast mode", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+
+    store = createHistoryStore({ dbPath, now: () => 1_000 });
+
+    expect(store.getModelPricing()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          modelId: "claude-opus-4-8",
+          inputPerMillion: "5",
+          outputPerMillion: "25",
+          cacheReadPerMillion: "0.50",
+          cacheCreationPerMillion: "6.25",
+        }),
+        expect.objectContaining({
+          modelId: "claude-opus-4-8-fast",
+          inputPerMillion: "10",
+          outputPerMillion: "50",
+          cacheReadPerMillion: "1",
+          cacheCreationPerMillion: "12.5",
+        }),
+      ]),
+    );
+  });
+
   it("migrates legacy token usage columns before creating the source key index", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
     const dbPath = path.join(tmpDir, "history.sqlite");

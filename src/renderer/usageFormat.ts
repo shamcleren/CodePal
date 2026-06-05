@@ -1,6 +1,10 @@
 import type { AnalyticsMetric, TokenTrendPoint } from "../shared/analyticsTypes";
 import type { ModelPricing, UsageCost } from "../shared/usageTypes";
 import type { ResolvedLocale } from "../shared/i18nTypes";
+import {
+  estimateTokenCost as estimateSharedTokenCost,
+  type TokenCostInput,
+} from "../shared/modelPricing";
 
 export type UsageCostKind = "reported" | "estimated";
 
@@ -10,14 +14,7 @@ export type SelectedUsageCost = {
   currency?: string;
 };
 
-export type TokenCostInput = {
-  agent?: string;
-  model?: string;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-};
+export type { TokenCostInput };
 
 export function formatUsageTokens(value: number, locale: ResolvedLocale): string {
   const absValue = Math.abs(value);
@@ -96,26 +93,7 @@ export function estimateTokenCost(
   pricing: ModelPricing[],
   options: { allowModelFallback?: boolean } = {},
 ): number | undefined {
-  const price = pricingForTokenCost(tokens, pricing, options);
-  if (!price) return undefined;
-  const inputPerMillion = parsePricePerMillion(price.inputPerMillion);
-  const outputPerMillion = parsePricePerMillion(price.outputPerMillion);
-  const cacheReadPerMillion = parsePricePerMillion(price.cacheReadPerMillion);
-  const cacheCreationPerMillion = parsePricePerMillion(price.cacheCreationPerMillion);
-  if (
-    inputPerMillion === null ||
-    outputPerMillion === null ||
-    cacheReadPerMillion === null ||
-    cacheCreationPerMillion === null
-  ) {
-    return undefined;
-  }
-  const cost =
-    (tokens.inputTokens / 1_000_000) * inputPerMillion +
-    (tokens.outputTokens / 1_000_000) * outputPerMillion +
-    (tokens.cacheReadTokens / 1_000_000) * cacheReadPerMillion +
-    (tokens.cacheCreationTokens / 1_000_000) * cacheCreationPerMillion;
-  return cost > 0 ? cost : undefined;
+  return estimateSharedTokenCost(tokens, pricing, options);
 }
 
 export function estimateTrendPointCost(
@@ -140,41 +118,4 @@ function formatCompactUnit(value: number, locale: ResolvedLocale, maximumFractio
   return new Intl.NumberFormat(locale, {
     maximumFractionDigits,
   }).format(value);
-}
-
-function parsePricePerMillion(value: string): number | null {
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed)) return null;
-  return parsed;
-}
-
-function fallbackModelForAgent(agent: string | undefined): string | undefined {
-  if (agent === "codex") return "codex-default";
-  if (agent === "claude") return "claude-sonnet-4-5-20250929";
-  return undefined;
-}
-
-function pricingForTokenCost(
-  tokens: Pick<TokenCostInput, "agent" | "model">,
-  pricing: ModelPricing[],
-  options: { allowModelFallback?: boolean },
-): ModelPricing | undefined {
-  const normalizedModel = tokens.model?.trim();
-  const candidates = [
-    normalizedModel && normalizedModel !== "unknown" ? normalizedModel : "",
-    options.allowModelFallback === false ? "" : fallbackModelForAgent(tokens.agent) ?? "",
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    const exactMatch = pricing.find(
-      (price) =>
-        price.modelId === candidate ||
-        price.displayName === candidate,
-    );
-    if (exactMatch) return exactMatch;
-    const containedMatch = pricing
-      .filter((price) => candidate.includes(price.modelId))
-      .sort((a, b) => b.modelId.length - a.modelId.length)[0];
-    if (containedMatch) return containedMatch;
-  }
-  return undefined;
 }

@@ -1,6 +1,7 @@
 import type { TokenStatsResult, UsageOverview, ModelPricing } from "./usageTypes";
 import type { WorkItem, WorkItemList } from "./workItems";
 import type { WorkHealthSignal, WorkHealthSummary } from "./analyticsTypes";
+import { estimateTokenCost } from "./modelPricing";
 
 const CONTEXT_WARNING_PERCENT = 85;
 
@@ -166,27 +167,21 @@ function costSignal(currentCost: number, previousCost: number): WorkHealthSignal
 }
 
 function estimateStatsCost(stats: TokenStatsResult): number {
-  const pricingByModel = new Map(stats.pricing.map((pricing) => [pricing.modelId, pricing]));
   return stats.byModel.reduce((sum, modelStats) => {
-    const pricing = pricingByModel.get(modelStats.model);
-    return sum + estimateCost(modelStats, pricing);
+    return sum + estimateCost(modelStats, stats.pricing);
   }, 0);
 }
 
 function estimateCost(
   stats: {
+    agent?: string;
+    model?: string;
     inputTokens: number;
     outputTokens: number;
     cacheReadTokens: number;
     cacheCreationTokens: number;
   },
-  pricing?: ModelPricing,
+  pricing: ModelPricing[],
 ): number {
-  if (!pricing) return 0;
-  return (
-    (stats.inputTokens / 1_000_000) * Number(pricing.inputPerMillion) +
-    (stats.outputTokens / 1_000_000) * Number(pricing.outputPerMillion) +
-    (stats.cacheReadTokens / 1_000_000) * Number(pricing.cacheReadPerMillion) +
-    (stats.cacheCreationTokens / 1_000_000) * Number(pricing.cacheCreationPerMillion)
-  );
+  return estimateTokenCost(stats, pricing, { allowModelFallback: false }) ?? 0;
 }

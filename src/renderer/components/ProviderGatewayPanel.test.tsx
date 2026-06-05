@@ -152,6 +152,24 @@ describe("ProviderGatewayPanel", () => {
     expect(html).toContain("Token missing");
   });
 
+  it("disables gateway mutation actions when the gateway is offline", () => {
+    const html = renderPanel({
+      ...status,
+      enabled: false,
+      listener: {
+        state: "disabled",
+        localUrl: "http://127.0.0.1:15721",
+        host: "127.0.0.1",
+        port: 15721,
+      },
+    });
+
+    expect(html).toContain("temporarily disabled");
+    expect(html).toContain("Configure Claude");
+    expect(html).toContain("Configure Codex");
+    expect(html).toContain("disabled=\"\"");
+  });
+
   it("disables client setup actions after matching config is detected", () => {
     const html = renderPanel({
       ...status,

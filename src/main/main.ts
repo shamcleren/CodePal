@@ -113,6 +113,9 @@ let providerGatewayListener: ProviderGatewayListenerInput = {
   message: "Provider gateway not started",
 };
 let providerGatewayHealthCheck: ProviderGatewayHealthCheckSummary | null = null;
+const PROVIDER_GATEWAY_DISABLED_MESSAGE =
+  "Provider Gateway is temporarily disabled in this hotfix build.";
+const PROVIDER_GATEWAY_FEATURE_ENABLED = false;
 const debugCodex = process.env.CODEPAL_DEBUG_CODEX === "1";
 const silentE2E = process.env.CODEPAL_E2E_SILENT === "1";
 const useAccessoryActivationPolicy = shouldUseAccessoryActivationPolicy({
@@ -174,7 +177,16 @@ function providerGatewayStatusForRenderer(
   gatewaySecretStore: GatewaySecretStore,
   homeDir: string,
 ) {
-  const settings = settingsService.getSettings();
+  const rawSettings = settingsService.getSettings();
+  const settings = PROVIDER_GATEWAY_FEATURE_ENABLED
+    ? rawSettings
+    : {
+        ...rawSettings,
+        providerGateway: {
+          ...rawSettings.providerGateway,
+          enabled: false,
+        },
+      };
   const provider = settings.providerGateway.providers[settings.providerGateway.activeProvider];
   const tokenStatusByProvider = Object.fromEntries(
     Object.entries(settings.providerGateway.providers).map(([id, item]) => [
@@ -540,6 +552,10 @@ function wireActionResponseIpc(
     };
   });
   ipcMain.handle("codepal:run-provider-gateway-health-check", async () => {
+    if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
+      providerGatewayHealthCheck = null;
+      return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+    }
     const settings = settingsService.getSettings();
     const result = await runProviderHealthCheck({
       settings,
@@ -559,6 +575,9 @@ function wireActionResponseIpc(
     return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
   });
   ipcMain.handle("codepal:configure-provider-gateway-client", (_event, payload: unknown) => {
+    if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
+      throw new Error(PROVIDER_GATEWAY_DISABLED_MESSAGE);
+    }
     const target =
       payload &&
       typeof payload === "object" &&
@@ -964,13 +983,17 @@ async function startClaudeDesktopProviderGateway(
   gatewaySecretStore: GatewaySecretStore,
 ): Promise<void> {
   const settings = settingsService.getSettings().providerGateway;
-  if (!settings.enabled) {
+  if (!PROVIDER_GATEWAY_FEATURE_ENABLED || !settings.enabled) {
     providerGatewayListener = {
       state: "disabled",
       host: settings.host,
       port: settings.port,
     };
-    console.log("[CodePal Gateway] disabled");
+    console.log(
+      PROVIDER_GATEWAY_FEATURE_ENABLED
+        ? "[CodePal Gateway] disabled"
+        : `[CodePal Gateway] disabled: ${PROVIDER_GATEWAY_DISABLED_MESSAGE}`,
+    );
     return;
   }
   const host = settings.host;
@@ -1159,6 +1182,9 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         execPath: process.execPath,
         appPath: resolvedAppPath,
         getProviderGatewayBaseUrl: () => {
+          if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
+            return null;
+          }
           const gateway = settingsService.getSettings().providerGateway;
           return `http://${gateway.host}:${gateway.port}`;
         },

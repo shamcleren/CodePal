@@ -187,7 +187,7 @@ describe("appSettings", () => {
     const settings = normalizeAppSettings({});
 
     expect(settings.providerGateway).toMatchObject({
-      enabled: true,
+      enabled: false,
       host: "127.0.0.1",
       port: 15721,
       activeProvider: "mimo",

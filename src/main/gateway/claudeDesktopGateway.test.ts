@@ -91,7 +91,13 @@ function createTestGateway(options: {
   log?: (...args: unknown[]) => void;
   settingsPatch?: AppSettingsPatch;
 }) {
-  const settings = normalizeAppSettings(options.settingsPatch ?? {});
+  const settings = normalizeAppSettings({
+    ...(options.settingsPatch ?? {}),
+    providerGateway: {
+      enabled: true,
+      ...(options.settingsPatch?.providerGateway ?? {}),
+    },
+  });
   const secrets: GatewaySecretResolver = {
     resolveToken: vi.fn(() => options.token ?? ""),
   };

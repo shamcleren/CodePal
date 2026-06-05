@@ -74,14 +74,6 @@ function estimatePersistedUsageCost(
   let matched = false;
 
   for (const row of persisted) {
-    const price = pricing.find(
-      (candidate) =>
-        candidate.modelId === row.model ||
-        candidate.displayName === row.model ||
-        row.model.includes(candidate.modelId),
-    );
-    if (!price) continue;
-
     const cost = estimateTokenCost(
       {
         agent: row.agent,
@@ -91,7 +83,7 @@ function estimatePersistedUsageCost(
         cacheReadTokens: row.cacheReadTokens,
         cacheCreationTokens: row.cacheCreationTokens,
       },
-      [price],
+      pricing,
       { allowModelFallback: false },
     );
     if (cost === undefined) continue;

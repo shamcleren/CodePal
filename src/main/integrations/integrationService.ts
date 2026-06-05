@@ -29,7 +29,7 @@ type IntegrationServiceOptions = {
   packaged: boolean;
   execPath: string;
   appPath: string;
-  getProviderGatewayBaseUrl?: () => string;
+  getProviderGatewayBaseUrl?: () => string | null;
   now?: () => number;
 };
 
@@ -1164,7 +1164,7 @@ function inspectClaudeConfig(
   hookCtx: HookCommandContext,
   lastEvent?: LastEvent,
   def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
-  providerGatewayBaseUrl = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
+  providerGatewayBaseUrl: string | null = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
 ): IntegrationAgentDiagnostics {
   const configPath = claudeConfigPath(homeDir, def);
   const config = readOptionalJson(configPath);
@@ -1190,10 +1190,10 @@ function inspectClaudeConfig(
     const hasStatusLine = checksStatusLine
       ? hasClaudeStatusLineForHome(config.parsed, homeDir) && wrapperFilesReady
       : true;
-    const hasGatewayEnv =
-      def.id === "claude"
-        ? hasClaudeGatewayEnv(config.parsed, providerGatewayBaseUrl)
-        : true;
+    const shouldCheckGatewayEnv = def.id === "claude" && providerGatewayBaseUrl !== null;
+    const hasGatewayEnv = shouldCheckGatewayEnv
+      ? hasClaudeGatewayEnv(config.parsed, providerGatewayBaseUrl)
+      : true;
     const hooksValue = config.parsed.hooks;
     const hasMatchingHooks =
       hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)
@@ -1220,7 +1220,7 @@ function inspectClaudeConfig(
             },
           ]
         : []),
-      ...(def.id === "claude"
+      ...(shouldCheckGatewayEnv
         ? [
             {
               id: "gatewayModelDiscovery",
@@ -1242,7 +1242,7 @@ function inspectClaudeConfig(
           ? `已配置用户级 ${def.label} hooks 与 statusLine`
           : `已配置用户级 ${def.label} hooks`;
         statusMessageKey = `${def.messageKeyPrefix}.active`;
-      } else if (def.id === "claude" && claudeHooksMatch(hooks, required) && hasStatusLine) {
+      } else if (shouldCheckGatewayEnv && claudeHooksMatch(hooks, required) && hasStatusLine) {
         health = "repair_needed";
         statusMessage = `${def.label} hooks 已配置，但缺少 CodePal Gateway model discovery env`;
         statusMessageKey = `${def.messageKeyPrefix}.missingGatewayEnv`;
@@ -1372,7 +1372,7 @@ function codeBuddyConfigNeedsCleanup(homeDir: string): boolean {
 function claudeConfigNeedsCleanup(
   homeDir: string,
   def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
-  providerGatewayBaseUrl = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
+  providerGatewayBaseUrl: string | null = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
 ): boolean {
   const required = claudeRequiredEntriesForHome(homeDir, def);
   const entriesByEvent = Object.fromEntries(
@@ -1383,7 +1383,11 @@ function claudeConfigNeedsCleanup(
   }
   if (def.id === "claude") {
     const config = readOptionalJson(claudeConfigPath(homeDir, def));
-    if (config.parsed && !hasClaudeGatewayEnv(config.parsed, providerGatewayBaseUrl)) {
+    if (
+      providerGatewayBaseUrl !== null &&
+      config.parsed &&
+      !hasClaudeGatewayEnv(config.parsed, providerGatewayBaseUrl)
+    ) {
       return true;
     }
     return claudeDeprecatedEntriesPresent(homeDir);
@@ -1637,7 +1641,7 @@ function installClaudeHooksFile(
   hookCtx: HookCommandContext,
   now: () => number,
   def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
-  providerGatewayBaseUrl = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
+  providerGatewayBaseUrl: string | null = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
 ): { changed: boolean; backupPath?: string } {
   const wrapperResult = ensureAgentWrapperFiles(homeDir, hookCtx);
   const configPath = claudeConfigPath(homeDir, def);
@@ -1715,7 +1719,7 @@ function installClaudeHooksFile(
     }
   }
 
-  if (def.id === "claude") {
+  if (def.id === "claude" && providerGatewayBaseUrl !== null) {
     const envResult = mergeClaudeGatewayEnv(next, providerGatewayBaseUrl);
     if (envResult.changed) {
       changed = true;

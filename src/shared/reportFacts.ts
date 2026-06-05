@@ -1,4 +1,5 @@
 import type { ModelPricing } from "./usageTypes";
+import { estimateTokenCost, resolveModelPricing } from "./modelPricing";
 
 /** Data provenance: how this fact was obtained */
 export type FactSource = "live" | "backfill" | "estimated" | "manual";
@@ -204,19 +205,27 @@ function estimateCost(
     cacheReadTokens: number;
     cacheCreationTokens: number;
   },
-  pricingMap: Map<string, ModelPricing>,
+  pricing: ModelPricing[],
   model?: string,
 ): CostFacts {
-  const pricing = (model ? pricingMap.get(model) : null) ?? pricingMap.get("claude-sonnet-4-5-20250929");
-  if (!pricing) return { estimatedUsd: 0, pricingSource: "none" };
-  const cost =
-    (tokens.inputTokens / 1_000_000) * Number(pricing.inputPerMillion) +
-    (tokens.outputTokens / 1_000_000) * Number(pricing.outputPerMillion) +
-    (tokens.cacheReadTokens / 1_000_000) * Number(pricing.cacheReadPerMillion) +
-    (tokens.cacheCreationTokens / 1_000_000) * Number(pricing.cacheCreationPerMillion);
+  const directMatch = model
+    ? resolveModelPricing({ model }, pricing, { allowModelFallback: false })
+    : undefined;
+  const match = directMatch ??
+    resolveModelPricing({ model: "claude-sonnet-4-5-20250929" }, pricing, { allowModelFallback: false });
+  if (!match) return { estimatedUsd: 0, pricingSource: "none" };
+  const cost = estimateTokenCost(
+    {
+      ...tokens,
+      model: match.pricing.modelId,
+    },
+    [match.pricing],
+    { allowModelFallback: false },
+  );
+  if (cost === undefined) return { estimatedUsd: 0, pricingSource: "none" };
   return {
     estimatedUsd: Math.round(cost * 100) / 100,
-    pricingSource: model && pricingMap.has(model) ? "model-pricing" : "fallback",
+    pricingSource: directMatch && match.source !== "fallback" ? "model-pricing" : "fallback",
   };
 }
 
@@ -251,11 +260,6 @@ function sumTokens(
 }
 
 export function buildReportFacts(input: ReportFactsInput): ReportFacts {
-  const pricingMap = new Map<string, ModelPricing>();
-  for (const p of input.pricing) {
-    pricingMap.set(p.modelId, p);
-  }
-
   // Aggregate tokens across all daily rows
   const aggregateTokens = sumTokens(input.daily);
   const aggregateCost = estimateCost(
@@ -265,7 +269,7 @@ export function buildReportFacts(input: ReportFactsInput): ReportFacts {
       cacheReadTokens: aggregateTokens.cacheReadTokens,
       cacheCreationTokens: aggregateTokens.cacheCreationTokens,
     },
-    pricingMap,
+    input.pricing,
   );
 
   // Per-day rows with cost and source
@@ -282,7 +286,7 @@ export function buildReportFacts(input: ReportFactsInput): ReportFacts {
       totalTokens: row.totalTokens,
       requestCount: row.requestCount,
     },
-    cost: estimateCost(row, pricingMap),
+    cost: estimateCost(row, input.pricing),
     source: (hasBackfill ? "backfill" : "live") as FactSource,
   }));
 
@@ -298,7 +302,7 @@ export function buildReportFacts(input: ReportFactsInput): ReportFacts {
       totalTokens: row.totalTokens,
       requestCount: row.requestCount,
     },
-    cost: estimateCost(row, pricingMap),
+    cost: estimateCost(row, input.pricing),
   }));
 
   // Per-model rows
@@ -314,7 +318,7 @@ export function buildReportFacts(input: ReportFactsInput): ReportFacts {
       totalTokens: row.totalTokens,
       requestCount: row.requestCount,
     },
-    cost: estimateCost(row, pricingMap, row.model),
+    cost: estimateCost(row, input.pricing, row.model),
   }));
 
   // Session status distribution
@@ -350,7 +354,7 @@ export function buildReportFacts(input: ReportFactsInput): ReportFacts {
       totalTokens: row.totalTokens,
       requestCount: row.requestCount,
     },
-    cost: estimateCost(row, pricingMap, row.model),
+    cost: estimateCost(row, input.pricing, row.model),
     duration: row.lastSeenAt > row.firstSeenAt ? row.lastSeenAt - row.firstSeenAt : null,
   }));
 
