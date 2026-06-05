@@ -540,6 +540,7 @@ providerGateway:
     await page.waitForTimeout(700);
     await captureElement(page, ".app-shell", "walkthrough/02-expanded-session.png");
     await captureElement(page, ".app-shell", "hero-main.png");
+    await captureElement(page, ".app-shell", "codepal-dashboard-preview.png");
 
     await page.getByRole("button", { name: /Analytics|分析/ }).click();
     await page.locator(".analytics-page").waitFor({ timeout: 15_000 });

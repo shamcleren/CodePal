@@ -57,8 +57,10 @@ These are release-facing user documents. Keep them aligned before changing telem
 
 - `docs/assets/icon.png`
   App icon used by the repository README.
+- `docs/assets/codepal-dashboard-preview.png`
+  Primary README and GitHub Pages hero screenshot. Use this cache-busting public filename for the current English sanitized dashboard preview.
 - `docs/assets/hero-main.png`
-  Primary dashboard screenshot for README and release-facing material.
+  Backward-compatible copy of the dashboard screenshot for older links.
 - `docs/assets/analytics-overview.png`
   Usage Analytics screenshot for README, GitHub Pages, and release material.
 - `docs/assets/work-review.png`

@@ -41,7 +41,7 @@ CodePal is a dashboard, not a middleman. The agents you already use stay in char
 
 ## Preview
 
-![CodePal Dashboard](docs/assets/hero-main.png)
+![CodePal Dashboard](docs/assets/codepal-dashboard-preview.png)
 
 <p align="center">
   <a href="docs/assets/codepal-demo.mp4"><strong>Watch the scripted walkthrough video</strong></a>

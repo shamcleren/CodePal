@@ -6,7 +6,7 @@ The goal is to make README and GitHub Releases feel product-facing rather than l
 
 ## Priority Order
 
-1. `docs/assets/hero-main.png`
+1. `docs/assets/codepal-dashboard-preview.png`
 2. `docs/assets/analytics-overview.png`
 3. `docs/assets/work-review.png`
 4. `docs/index.html`
@@ -17,7 +17,7 @@ Do not start with the video. Get the main dashboard, Analytics, and Work Review 
 
 ## 1. Hero Main
 
-Target file: `docs/assets/hero-main.png`
+Target file: `docs/assets/codepal-dashboard-preview.png`
 
 Purpose:
 
@@ -207,7 +207,7 @@ Constraints:
 
 Recommended order:
 
-1. `hero-main.png`
+1. `codepal-dashboard-preview.png`
 2. `analytics-overview.png`
 3. `work-review.png`
 4. `codepal-demo.mp4` or `docs/index.html` when richer media is useful
@@ -220,7 +220,7 @@ Prefer `codepal-demo.mp4` over the legacy GIF. If the GIF exists, place it after
 Current files:
 
 - `docs/assets/icon.png`
-- `docs/assets/hero-main.png`
+- `docs/assets/codepal-dashboard-preview.png`
 - `docs/assets/analytics-overview.png`
 - `docs/assets/work-review.png`
 - `docs/assets/settings-focus.png`

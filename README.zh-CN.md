@@ -41,7 +41,7 @@ CodePal 是一个 dashboard，不是"中间层"。你原本用的 agent 仍然�
 
 ## 界面预览
 
-![CodePal Dashboard](docs/assets/hero-main.png)
+![CodePal Dashboard](docs/assets/codepal-dashboard-preview.png)
 
 <p align="center">
   <a href="docs/assets/codepal-demo.mp4"><strong>观看脚本化真实流程视频</strong></a>
