@@ -53,6 +53,10 @@ CodePal is a dashboard, not a middleman. The agents you already use stay in char
 |:---:|:---:|
 | ![CodePal Analytics](docs/assets/analytics-overview.png) | ![CodePal Work Review](docs/assets/work-review.png) |
 
+| Local Provider Gateway |
+|:---:|
+| ![CodePal Provider Gateway](docs/assets/settings-focus.png) |
+
 ## What You Get
 
 - **Unified session view**: active, waiting, completed, errored, and restored sessions across supported agents in one list.

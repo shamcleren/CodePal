@@ -53,6 +53,10 @@ CodePal 是一个 dashboard，不是"中间层"。你原本用的 agent 仍然�
 |:---:|:---:|
 | ![CodePal Analytics](docs/assets/analytics-overview.png) | ![CodePal Work Review](docs/assets/work-review.png) |
 
+| 本地 Provider Gateway |
+|:---:|
+| ![CodePal Provider Gateway](docs/assets/settings-focus.png) |
+
 ## 你能得到什么
 
 - **统一 session 视图**：支持的代理会话按活跃、等待、完成、异常和恢复历史汇聚在同一列表。

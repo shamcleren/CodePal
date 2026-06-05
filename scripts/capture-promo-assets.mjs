@@ -460,6 +460,7 @@ async function main() {
   const settingsPath = path.join(userDataPath, "settings.yaml");
   const dbPath = path.join(userDataPath, "history.sqlite");
   const now = Date.now();
+  const providerGatewayPort = await getFreePort();
   await fs.mkdir(userDataPath, { recursive: true });
   await fs.writeFile(
     settingsPath,
@@ -485,11 +486,24 @@ reports:
   llmEnabled: false
   llmDefaultModel: ""
 providerGateway:
-  enabled: false
+  enabled: true
   host: 127.0.0.1
-  port: 15721
+  port: ${providerGatewayPort}
   activeProvider: demo
-  providers: {}
+  providers:
+    demo:
+      type: openai-chat-compatible
+      displayName: Demo Gateway
+      baseUrl: https://example.invalid/v1
+      authScheme: bearer
+      tokenRef: demo.gateway.credential
+      envFallback: CODEPAL_PROMO_PROVIDER_CREDENTIAL
+      headers: {}
+      modelMappings:
+        default: demo-coder
+        sonnet: demo-coder
+        opus: demo-reasoner
+        haiku: demo-fast
 `,
     "utf8",
   );
@@ -514,6 +528,7 @@ providerGateway:
     CODEPAL_ACTION_RESPONSE_MODE: "socket",
     CODEPAL_ACTION_RESPONSE_HOST: "127.0.0.1",
     CODEPAL_ACTION_RESPONSE_PORT: String(actionResponsePort),
+    CODEPAL_PROMO_PROVIDER_CREDENTIAL: "demo-local-provider-credential",
   };
   delete env.ELECTRON_RENDERER_URL;
 
@@ -556,6 +571,8 @@ providerGateway:
 
     await page.locator(".app-settings-trigger").click();
     await page.locator(".app-settings-drawer--open").waitFor({ timeout: 15_000 });
+    await page.locator(".settings-nav__item").filter({ hasText: "Provider Gateway" }).click();
+    await page.locator(".provider-gateway-panel").waitFor({ timeout: 15_000 });
     await page.waitForTimeout(500);
     await captureElement(page, ".app-shell", "walkthrough/05-settings.png");
     await captureElement(page, ".app-shell", "settings-focus.png");

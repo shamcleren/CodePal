@@ -66,7 +66,7 @@ These are release-facing user documents. Keep them aligned before changing telem
 - `docs/assets/work-review.png`
   Daily Work Review screenshot for README, GitHub Pages, and release material.
 - `docs/assets/settings-focus.png`
-  Optional diagnostics/settings screenshot for the product page and video.
+  Provider Gateway and settings screenshot for README, GitHub Pages, and video.
 - `docs/assets/codepal-demo.mp4`
   Short Remotion-rendered scripted walkthrough video.
 - `docs/assets/walkthrough/`

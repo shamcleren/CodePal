@@ -11,7 +11,7 @@ The goal is to make README and GitHub Releases feel product-facing rather than l
 3. `docs/assets/work-review.png`
 4. `docs/index.html`
 5. `docs/assets/codepal-demo.mp4` (optional but recommended for release pages)
-6. `docs/assets/settings-focus.png` (optional)
+6. `docs/assets/settings-focus.png`
 
 Do not start with the video. Get the main dashboard, Analytics, and Work Review assets clean first.
 
@@ -127,7 +127,7 @@ Recommended sequence:
 3. click to expand one session
 4. click into Analytics
 5. click into Work Review
-6. click into Settings / diagnostics briefly
+6. click into Settings / Provider Gateway briefly
 
 Constraints:
 
@@ -136,13 +136,13 @@ Constraints:
 - use only screenshots generated from an isolated CodePal profile with synthetic data
 - render a still frame before the full video when changing layout
 
-## 6. Settings Focus
+## 6. Provider Gateway / Settings Focus
 
 Target file: `docs/assets/settings-focus.png`
 
 Purpose:
 
-- optional support screenshot for GitHub Pages / Release material
+- Provider Gateway proof point for README / GitHub Pages / Release material
 - optional support screenshot for GitHub Release page
 
 Priority:

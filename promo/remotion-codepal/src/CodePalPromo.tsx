@@ -9,11 +9,11 @@ import {
 
 const appWidth = 1120;
 const appHeight = 920;
-const cardWidth = 1220;
+const cardWidth = appWidth;
 const cardScale = cardWidth / appWidth;
 const cardHeight = appHeight * cardScale;
-const cardX = 610;
-const cardY = 40;
+const cardX = 720;
+const cardY = 70;
 
 const ink = "#ecfbf5";
 const muted = "#a9bdb5";
@@ -90,9 +90,9 @@ const steps: StepCopy[] = [
     start: 416,
     end: 518,
     eyebrow: "Step 5",
-    title: "Repair local integrations",
-    body: "Settings keeps diagnostics, Provider Gateway status and agent repair actions explicit and local.",
-    metric: "Local only",
+    title: "Route providers locally",
+    body: "Provider Gateway lets supported desktop clients use local CodePal model profiles while real provider credentials stay in CodePal.",
+    metric: "Gateway on",
   },
 ];
 
@@ -106,10 +106,11 @@ const cursorPath: CursorPoint[] = [
   { frame: 314, x: 245, y: 73 },
   { frame: 364, x: 688, y: 500 },
   { frame: 426, x: 1068, y: 30 },
-  { frame: 470, x: 800, y: 256 },
+  { frame: 468, x: 104, y: 204 },
+  { frame: 500, x: 748, y: 245 },
 ];
 
-const clickFrames = [96, 210, 316, 428];
+const clickFrames = [96, 210, 316, 428, 468];
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
