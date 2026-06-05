@@ -1194,17 +1194,8 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         execPath: process.execPath,
         appPath: resolvedAppPath,
       });
-      try {
-        const migratedIntegrations = integrationService.autoMigrateExistingCodePalHooks();
-        if (migratedIntegrations.length > 0) {
-          console.log(
-            "[CodePal Integrations] migrated existing hook config(s):",
-            migratedIntegrations.map((item) => item.agentId).join(", "),
-          );
-        }
-      } catch (error) {
-        console.error("[CodePal Integrations] failed to migrate existing hook config:", error);
-      }
+      // Startup must remain read-only for third-party agent configuration.
+      // Hook install and migration are only allowed through explicit user actions.
       const updateService = createUpdateService({
         isPackaged: app.isPackaged,
         currentVersion: app.getVersion(),
