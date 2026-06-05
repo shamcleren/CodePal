@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CodePal - Local AI Coding Control Tower</title>
+    <link rel="icon" href="./assets/icon.png" />
+    <meta
+      name="description"
+      content="CodePal is a floating local operations panel for AI coding agents: sessions, timelines, usage analytics, work review, and integration diagnostics."
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07100e;
+        --surface: #111b18;
+        --surface-2: #18241f;
+        --line: rgba(190, 220, 210, 0.18);
+        --line-strong: rgba(190, 220, 210, 0.34);
+        --text: #edf8f3;
+        --muted: #a5b9b1;
+        --quiet: #74877f;
+        --accent: #78d8b2;
+        --accent-2: #7fb3ff;
+        --warn: #f5c76b;
+        --shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--bg);
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          linear-gradient(180deg, #0b1512 0%, #07100e 42%, #101815 100%);
+        background-size: 44px 44px, 44px 44px, auto;
+        color: var(--text);
+        font-family:
+          "Avenir Next",
+          "Segoe UI",
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        letter-spacing: 0;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .page {
+        overflow: hidden;
+      }
+
+      .nav {
+        align-items: center;
+        display: flex;
+        justify-content: space-between;
+        margin: 0 auto;
+        max-width: 1180px;
+        padding: 22px 22px 0;
+      }
+
+      .brand {
+        align-items: center;
+        display: flex;
+        gap: 12px;
+        font-weight: 800;
+      }
+
+      .brand img {
+        height: 34px;
+        width: 34px;
+      }
+
+      .nav__links {
+        align-items: center;
+        display: flex;
+        gap: 10px;
+      }
+
+      .nav__links a,
+      .button {
+        align-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        display: inline-flex;
+        font-size: 14px;
+        font-weight: 750;
+        gap: 8px;
+        justify-content: center;
+        min-height: 40px;
+        padding: 10px 14px;
+        text-decoration: none;
+      }
+
+      .button--primary {
+        background: var(--text);
+        border-color: var(--text);
+        color: #07100e;
+      }
+
+      .button--accent {
+        background: rgba(120, 216, 178, 0.12);
+        border-color: rgba(120, 216, 178, 0.52);
+        color: var(--accent);
+      }
+
+      .hero {
+        display: grid;
+        gap: 44px;
+        grid-template-columns: minmax(0, 0.9fr) minmax(520px, 1.45fr);
+        margin: 0 auto;
+        max-width: 1180px;
+        min-height: min(840px, calc(100vh - 72px));
+        padding: 96px 22px 52px;
+      }
+
+      .hero__copy {
+        align-self: center;
+      }
+
+      .eyebrow {
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 850;
+        letter-spacing: 0;
+        margin: 0 0 18px;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        font-size: clamp(46px, 7vw, 86px);
+        letter-spacing: 0;
+        line-height: 0.95;
+        margin-bottom: 24px;
+      }
+
+      .hero__lead {
+        color: var(--muted);
+        font-size: 20px;
+        line-height: 1.52;
+        margin-bottom: 30px;
+        max-width: 620px;
+      }
+
+      .hero__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .hero__visual {
+        align-self: center;
+        min-width: 0;
+      }
+
+      .screenshot-shell,
+      .media-shell {
+        background: rgba(17, 27, 24, 0.86);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        padding: 12px;
+      }
+
+      .screenshot-shell img,
+      .media-shell img,
+      .media-shell video {
+        border-radius: 6px;
+        display: block;
+        height: auto;
+        width: 100%;
+      }
+
+      .signal-row {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-top: 14px;
+      }
+
+      .signal {
+        background: rgba(17, 27, 24, 0.8);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+      }
+
+      .signal strong {
+        display: block;
+        font-size: 20px;
+        margin-bottom: 4px;
+      }
+
+      .signal span {
+        color: var(--quiet);
+        font-size: 12px;
+        font-weight: 750;
+        text-transform: uppercase;
+      }
+
+      .section {
+        margin: 0 auto;
+        max-width: 1180px;
+        padding: 54px 22px;
+      }
+
+      .section__header {
+        align-items: end;
+        display: flex;
+        gap: 28px;
+        justify-content: space-between;
+        margin-bottom: 24px;
+      }
+
+      .section__header h2 {
+        font-size: clamp(34px, 5vw, 56px);
+        letter-spacing: 0;
+        line-height: 1;
+        margin-bottom: 0;
+        max-width: 760px;
+      }
+
+      .section__header p {
+        color: var(--muted);
+        line-height: 1.5;
+        margin-bottom: 0;
+        max-width: 360px;
+      }
+
+      .feature-grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .feature {
+        background: rgba(17, 27, 24, 0.78);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+      }
+
+      .feature h3 {
+        font-size: 20px;
+        margin-bottom: 10px;
+      }
+
+      .feature p {
+        color: var(--muted);
+        line-height: 1.55;
+        margin-bottom: 0;
+      }
+
+      .showcase {
+        display: grid;
+        gap: 22px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .showcase__item {
+        min-width: 0;
+      }
+
+      .showcase__item h3 {
+        font-size: 24px;
+        margin: 18px 0 8px;
+      }
+
+      .showcase__item p {
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .boundary {
+        background: #eaf5ef;
+        color: #12201a;
+      }
+
+      .boundary .section {
+        padding-bottom: 68px;
+        padding-top: 68px;
+      }
+
+      .boundary .eyebrow {
+        color: #177455;
+      }
+
+      .boundary h2 {
+        color: #12201a;
+      }
+
+      .boundary p,
+      .boundary li {
+        color: #4a5f55;
+      }
+
+      .boundary__grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .boundary__item {
+        border: 1px solid rgba(18, 32, 26, 0.16);
+        border-radius: 8px;
+        padding: 22px;
+      }
+
+      .boundary__item h3 {
+        color: #12201a;
+      }
+
+      .demo {
+        display: grid;
+        gap: 24px;
+        grid-template-columns: minmax(0, 0.78fr) minmax(520px, 1.22fr);
+      }
+
+      .demo__copy {
+        align-self: center;
+      }
+
+      .demo__copy p {
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.55;
+      }
+
+      .footer {
+        border-top: 1px solid var(--line);
+        color: var(--quiet);
+        margin: 30px auto 0;
+        max-width: 1180px;
+        padding: 28px 22px 46px;
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .demo,
+        .showcase,
+        .feature-grid,
+        .boundary__grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          padding-top: 64px;
+        }
+
+        .section__header {
+          align-items: start;
+          flex-direction: column;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .nav {
+          align-items: start;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .signal-row {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .hero {
+          min-height: auto;
+          padding-top: 48px;
+        }
+
+        .hero__lead {
+          font-size: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <nav class="nav" aria-label="Primary">
+        <a class="brand" href="./index.html" aria-label="CodePal home">
+          <img src="./assets/icon.png" alt="" />
+          <span>CodePal</span>
+        </a>
+        <div class="nav__links">
+          <a href="https://github.com/shamcleren/CodePal">GitHub</a>
+          <a href="https://github.com/shamcleren/CodePal/releases">Download</a>
+        </div>
+      </nav>
+
+      <section class="hero">
+        <div class="hero__copy">
+          <p class="eyebrow">Local-first AI coding operations</p>
+          <h1>One floating control tower for every coding agent.</h1>
+          <p class="hero__lead">
+            CodePal watches active sessions, timelines, usage, reports, daily review, and
+            integration health across Cursor, Claude Code, Codex, CodeBuddy, GoLand, and PyCharm.
+            Your agents keep their native approval and execution flow.
+          </p>
+          <div class="hero__actions">
+            <a class="button button--primary" href="https://github.com/shamcleren/CodePal/releases">
+              Download for macOS
+            </a>
+            <a class="button button--accent" href="https://github.com/shamcleren/CodePal#readme">
+              Read the README
+            </a>
+          </div>
+        </div>
+        <div class="hero__visual">
+          <div class="screenshot-shell">
+            <img src="./assets/hero-main.png" alt="CodePal session dashboard with grouped AI coding sessions" />
+          </div>
+          <div class="signal-row" aria-label="Product signals">
+            <div class="signal"><strong>6</strong><span>Live sessions</span></div>
+            <div class="signal"><strong>596K</strong><span>Tracked tokens</span></div>
+            <div class="signal"><strong>4</strong><span>Local requests</span></div>
+            <div class="signal"><strong>$3</strong><span>Estimated cost</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__header">
+          <div>
+            <p class="eyebrow">What it gives you</p>
+            <h2>Monitoring, memory, and bounded local operations.</h2>
+          </div>
+          <p>
+            CodePal is built for people running several AI coding tools at once. It reduces
+            context switching without becoming a cloud backend or approval middleman.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>Unified session visibility</h3>
+            <p>See running, waiting, completed, and errored sessions in one compact list.</p>
+          </article>
+          <article class="feature">
+            <h3>Usage analytics</h3>
+            <p>Track requests, input, output, cache, models, agents, projects, and estimated cost.</p>
+          </article>
+          <article class="feature">
+            <h3>Daily Work Review</h3>
+            <p>Review recent AI coding work by day and project without rereading every transcript.</p>
+          </article>
+          <article class="feature">
+            <h3>Attention signals</h3>
+            <p>Waiting sessions, context pressure, failed work, and follow-up needs rise to the top.</p>
+          </article>
+          <article class="feature">
+            <h3>Provider Gateway</h3>
+            <p>Point supported desktop clients at local model profiles while keeping tokens local.</p>
+          </article>
+          <article class="feature">
+            <h3>Integration diagnostics</h3>
+            <p>Repair supported local agent hooks and inspect health from one settings surface.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section__header">
+          <div>
+            <p class="eyebrow">Screenshots</p>
+            <h2>Built for scanning during real work.</h2>
+          </div>
+          <p>
+            These images are generated from synthetic demo data in an isolated local profile.
+            No real prompts, code paths, accounts, or provider tokens are shown.
+          </p>
+        </div>
+        <div class="showcase">
+          <article class="showcase__item">
+            <div class="screenshot-shell">
+              <img src="./assets/analytics-overview.png" alt="CodePal analytics page with token and cost trends" />
+            </div>
+            <h3>Usage that explains itself</h3>
+            <p>Model, agent, project, cache, and cost views share one local analytics surface.</p>
+          </article>
+          <article class="showcase__item">
+            <div class="screenshot-shell">
+              <img src="./assets/work-review.png" alt="CodePal daily work review grouped by project" />
+            </div>
+            <h3>Daily operations memory</h3>
+            <p>Work Review turns observed sessions into a project-grouped daily summary.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="boundary">
+        <div class="section">
+          <div class="section__header">
+            <div>
+              <p class="eyebrow">Trust boundary</p>
+              <h2>Local observation first. Native agents stay in charge.</h2>
+            </div>
+            <p>
+              CodePal is strongest when it adds visibility without taking ownership of execution.
+            </p>
+          </div>
+          <div class="boundary__grid">
+            <article class="boundary__item">
+              <h3>Fails open</h3>
+              <p>If CodePal is closed or updating, your agent sessions continue in their original tools.</p>
+            </article>
+            <article class="boundary__item">
+              <h3>No cloud telemetry</h3>
+              <p>CodePal does not include its own remote analytics pipeline for prompts or transcripts.</p>
+            </article>
+            <article class="boundary__item">
+              <h3>User-triggered actions</h3>
+              <p>Jump, repair, and message delivery stay capability-gated and explicitly initiated.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section demo">
+        <div class="demo__copy">
+          <p class="eyebrow">Short demo</p>
+          <h2>See the product loop in motion.</h2>
+          <p>
+            The demo video is generated with Remotion from a scripted CodePal walkthrough:
+            an isolated app profile, synthetic events, real UI clicks, and no private local data.
+          </p>
+          <a class="button button--accent" href="./assets/codepal-demo.mp4">Open video file</a>
+        </div>
+        <div class="media-shell">
+          <video controls muted playsinline poster="./assets/codepal-demo-frame.png">
+            <source src="./assets/codepal-demo.mp4" type="video/mp4" />
+            <img src="./assets/codepal-demo-frame.png" alt="CodePal promo video preview" />
+          </video>
+        </div>
+      </section>
+
+      <footer class="footer">
+        CodePal is a free local-first macOS app. Release builds are signed and notarized by Apple.
+      </footer>
+    </main>
+  </body>
+</html>

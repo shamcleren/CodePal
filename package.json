@@ -26,6 +26,7 @@
     "seed:history": "node scripts/seed-history.mjs",
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test -c playwright.e2e.config.ts",
+    "promo:capture": "node scripts/capture-promo-assets.mjs",
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts,.tsx"
   },

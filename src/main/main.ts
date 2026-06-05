@@ -1081,7 +1081,10 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       const templateSettingsPath = app.isPackaged
         ? path.join(app.getAppPath(), "config", "settings.template.yaml")
         : path.join(app.getAppPath(), "config", "settings.template.yaml");
-      const writableSettingsPath = app.isPackaged
+      const settingsPathOverride = process.env.CODEPAL_SETTINGS_PATH?.trim();
+      const writableSettingsPath = settingsPathOverride
+        ? settingsPathOverride
+        : app.isPackaged
         ? path.join(app.getPath("userData"), "settings.yaml")
         : path.join(app.getAppPath(), "config", "settings-dev.yaml");
       const settingsService = createSettingsService({

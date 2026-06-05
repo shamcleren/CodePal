@@ -1,0 +1,21 @@
+{
+  "name": "codepal-promo-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "still": "remotion still src/index.ts CodePalPromo --scale=0.25 --frame=60 ../../docs/assets/codepal-demo-frame.png",
+    "render": "remotion render src/index.ts CodePalPromo ../../docs/assets/codepal-demo.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.0",
+    "remotion": "^4.0.0",
+    "typescript": "^6.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  }
+}
