@@ -58,17 +58,17 @@ These are release-facing user documents. Keep them aligned before changing telem
 - `docs/assets/icon.png`
   App icon used by the repository README.
 - `docs/assets/codepal-dashboard-preview.png`
-  Primary README and GitHub Pages hero screenshot. Use this cache-busting public filename for the current English sanitized dashboard preview.
+  Primary README and GitHub Pages hero screenshot. Captured at 2x resolution from the current English sanitized dashboard preview.
 - `docs/assets/hero-main.png`
   Backward-compatible copy of the dashboard screenshot for older links.
 - `docs/assets/analytics-overview.png`
-  Usage Analytics screenshot for README, GitHub Pages, and release material.
+  Usage Analytics screenshot for README, GitHub Pages, and release material. Captured at 2x resolution.
 - `docs/assets/work-review.png`
-  Daily Work Review screenshot for README, GitHub Pages, and release material.
+  Daily Work Review screenshot for README, GitHub Pages, and release material. Captured at 2x resolution.
 - `docs/assets/settings-focus.png`
-  Provider Gateway and settings screenshot for README, GitHub Pages, and video.
+  Provider Gateway and settings screenshot for README, GitHub Pages, and video. Captured at 2x resolution.
 - `docs/assets/codepal-demo.mp4`
-  Short Remotion-rendered scripted walkthrough video.
+  Short Remotion-rendered 4K scripted walkthrough video.
 - `docs/assets/walkthrough/`
   Sanitized real-UI walkthrough frames captured from an isolated CodePal profile and used as Remotion inputs.
 - `docs/index.html`

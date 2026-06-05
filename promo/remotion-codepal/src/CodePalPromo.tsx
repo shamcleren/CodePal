@@ -468,22 +468,31 @@ export function CodePalPromo() {
           '"Avenir Next", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
       }}
     >
-      <Intro />
-      <Sidebar />
-      <AppWalkthrough />
-      <Outro />
-      <div
+      <AbsoluteFill
         style={{
-          bottom: 36,
-          color: quiet,
-          fontSize: 20,
-          fontWeight: 700,
-          left: 88,
-          position: "absolute",
+          height: 1080,
+          transform: "scale(2)",
+          transformOrigin: "top left",
+          width: 1920,
         }}
       >
-        Captured from CodePal with an isolated HOME and synthetic demo events.
-      </div>
+        <Intro />
+        <Sidebar />
+        <AppWalkthrough />
+        <Outro />
+        <div
+          style={{
+            bottom: 36,
+            color: quiet,
+            fontSize: 20,
+            fontWeight: 700,
+            left: 88,
+            position: "absolute",
+          }}
+        >
+          Captured from CodePal with an isolated HOME and synthetic demo events.
+        </div>
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 }

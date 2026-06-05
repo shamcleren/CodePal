@@ -5,7 +5,8 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "still": "remotion still src/index.ts CodePalPromo --scale=0.25 --frame=60 ../../docs/assets/codepal-demo-frame.png",
-    "render": "remotion render src/index.ts CodePalPromo ../../docs/assets/codepal-demo.mp4 --crf=14"
+    "render": "remotion render src/index.ts CodePalPromo ../../docs/assets/codepal-demo.mp4 --crf=10",
+    "render:prores": "remotion render src/index.ts CodePalPromo ../../docs/assets/codepal-demo.mov --codec=prores"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.0",

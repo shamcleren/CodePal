@@ -18,6 +18,8 @@ const remotionPublicScreensDir = path.join(
   "screens",
 );
 const walkthroughDir = path.join(outDir, "walkthrough");
+const captureViewport = { width: 1120, height: 920 };
+const captureScale = 2;
 
 const blockedTerms = [
   os.userInfo().username,
@@ -443,7 +445,33 @@ async function captureElement(page, selector, filename) {
   await assertNoSensitiveText(page, filename);
   const locator = page.locator(selector).first();
   await fs.mkdir(path.dirname(path.join(outDir, filename)), { recursive: true });
+  await page.setViewportSize({
+    width: captureViewport.width * captureScale,
+    height: captureViewport.height * captureScale,
+  });
+  await page.addStyleTag({
+    content: `
+      html,
+      body,
+      #root {
+        height: ${captureViewport.height * captureScale}px !important;
+        min-height: ${captureViewport.height * captureScale}px !important;
+        overflow: hidden !important;
+        width: ${captureViewport.width * captureScale}px !important;
+      }
+
+      .app-shell {
+        height: ${captureViewport.height}px !important;
+        min-height: ${captureViewport.height}px !important;
+        transform: scale(${captureScale});
+        transform-origin: top left;
+        width: ${captureViewport.width}px !important;
+      }
+    `,
+  });
   await locator.screenshot({ path: path.join(outDir, filename) });
+  await page.locator("style").last().evaluate((element) => element.remove());
+  await page.setViewportSize(captureViewport);
   await copyToRemotionPublic(filename);
 }
 
@@ -536,7 +564,7 @@ providerGateway:
   try {
     await waitForTcpListener("127.0.0.1", ipcPort);
     const page = await app.firstWindow();
-    await page.setViewportSize({ width: 1120, height: 920 });
+    await page.setViewportSize(captureViewport);
     await page.waitForLoadState("load");
     await page.getByRole("heading", { name: "CodePal" }).waitFor({ timeout: 15_000 });
     await page.locator(".app").evaluate((element) => {

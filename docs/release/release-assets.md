@@ -134,6 +134,7 @@ Constraints:
 - keep it around 15 to 20 seconds
 - drive animation with Remotion `useCurrentFrame()` and explicit frame timing
 - use only screenshots generated from an isolated CodePal profile with synthetic data
+- keep screenshot inputs at 2x resolution and render the public MP4 at 4K
 - render a still frame before the full video when changing layout
 
 ## 6. Provider Gateway / Settings Focus
