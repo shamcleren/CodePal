@@ -29,13 +29,20 @@ type IntegrationServiceOptions = {
   packaged: boolean;
   execPath: string;
   appPath: string;
-  getProviderGatewayBaseUrl?: () => string | null;
   now?: () => number;
 };
 
 type LastEvent = {
   at: number;
   status: SessionStatus;
+};
+
+type ConfigRestoreSnapshot = {
+  agentId: IntegrationAgentId;
+  configPath: string;
+  existed: boolean;
+  contents?: string;
+  savedAt: number;
 };
 
 const AGENT_LABELS: Record<IntegrationAgentId, string> = {
@@ -96,18 +103,6 @@ const CLAUDE_COMPATIBLE_AGENTS: ClaudeCompatibleAgentDef[] = [
 ];
 
 const CLAUDE_DEF = CLAUDE_COMPATIBLE_AGENTS[0];
-const DEFAULT_PROVIDER_GATEWAY_BASE_URL = "http://127.0.0.1:15721";
-const CLAUDE_GATEWAY_MODEL_DISCOVERY_ENV = "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY";
-const CLAUDE_GATEWAY_BASE_URL_ENV = "ANTHROPIC_BASE_URL";
-const CLAUDE_GATEWAY_AUTH_TOKEN_ENV = "ANTHROPIC_AUTH_TOKEN";
-const CLAUDE_MODEL_ENV = "ANTHROPIC_MODEL";
-const CLAUDE_DEFAULT_SONNET_MODEL_ENV = "ANTHROPIC_DEFAULT_SONNET_MODEL";
-const CLAUDE_DEFAULT_OPUS_MODEL_ENV = "ANTHROPIC_DEFAULT_OPUS_MODEL";
-const CLAUDE_DEFAULT_HAIKU_MODEL_ENV = "ANTHROPIC_DEFAULT_HAIKU_MODEL";
-const CLAUDE_GATEWAY_SONNET_ROUTE = "claude-sonnet-4-6";
-const CLAUDE_GATEWAY_OPUS_ROUTE = "claude-opus-4-7";
-const CLAUDE_GATEWAY_HAIKU_ROUTE = "claude-haiku-4-5";
-
 function claudeCompatAgentDef(
   agentId: IntegrationAgentId,
 ): ClaudeCompatibleAgentDef | undefined {
@@ -116,10 +111,6 @@ function claudeCompatAgentDef(
 
 function defaultNow() {
   return Date.now();
-}
-
-function defaultProviderGatewayBaseUrl() {
-  return DEFAULT_PROVIDER_GATEWAY_BASE_URL;
 }
 
 function labelsForHealth(health: IntegrationHealth): {
@@ -387,6 +378,99 @@ function backupFile(pathname: string, now: () => number): string {
   const backupPath = `${pathname}.bak.${now()}`;
   fs.copyFileSync(pathname, backupPath);
   return backupPath;
+}
+
+function restoreSnapshotPath(homeDir: string, agentId: IntegrationAgentId): string {
+  return path.join(homeDir, ".codepal", "restore", "integrations", `${agentId}.json`);
+}
+
+function readRestoreSnapshot(
+  homeDir: string,
+  agentId: IntegrationAgentId,
+): ConfigRestoreSnapshot | null {
+  const snapshotPath = restoreSnapshotPath(homeDir, agentId);
+  if (!fs.existsSync(snapshotPath)) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(snapshotPath, "utf8")) as unknown;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    const record = parsed as Record<string, unknown>;
+    if (
+      record.agentId !== agentId ||
+      typeof record.configPath !== "string" ||
+      typeof record.existed !== "boolean" ||
+      typeof record.savedAt !== "number"
+    ) {
+      return null;
+    }
+    return {
+      agentId,
+      configPath: record.configPath,
+      existed: record.existed,
+      contents: typeof record.contents === "string" ? record.contents : undefined,
+      savedAt: record.savedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeRestoreSnapshotIfMissing(
+  homeDir: string,
+  agentId: IntegrationAgentId,
+  configPath: string,
+  now: () => number,
+) {
+  const snapshotPath = restoreSnapshotPath(homeDir, agentId);
+  if (fs.existsSync(snapshotPath)) {
+    return;
+  }
+  const existed = fs.existsSync(configPath);
+  const snapshot: ConfigRestoreSnapshot = {
+    agentId,
+    configPath,
+    existed,
+    ...(existed ? { contents: fs.readFileSync(configPath, "utf8") } : {}),
+    savedAt: now(),
+  };
+  ensureParentDir(snapshotPath);
+  fs.writeFileSync(snapshotPath, JSON.stringify(snapshot, null, 2) + "\n", "utf8");
+}
+
+function clearRestoreSnapshot(homeDir: string, agentId: IntegrationAgentId) {
+  try {
+    fs.unlinkSync(restoreSnapshotPath(homeDir, agentId));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
+function restoreConfigSnapshot(homeDir: string, agentId: IntegrationAgentId): boolean {
+  const snapshot = readRestoreSnapshot(homeDir, agentId);
+  if (!snapshot) {
+    return false;
+  }
+  if (snapshot.existed) {
+    ensureParentDir(snapshot.configPath);
+    fs.writeFileSync(snapshot.configPath, snapshot.contents ?? "", "utf8");
+  } else {
+    try {
+      fs.unlinkSync(snapshot.configPath);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+  clearRestoreSnapshot(homeDir, agentId);
+  return true;
 }
 
 function formatJson(value: Record<string, unknown>): string {
@@ -711,6 +795,7 @@ function inspectCodexConfig(
     actionLabelKey: labels.actionLabelKey,
     statusMessage,
     statusMessageKey,
+    canRestore: Boolean(readRestoreSnapshot(homeDir, "codex")),
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
 }
@@ -829,6 +914,7 @@ function inspectCursorConfig(
     actionLabelKey,
     statusMessage,
     statusMessageKey,
+    canRestore: Boolean(readRestoreSnapshot(homeDir, "cursor")),
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
 }
@@ -930,58 +1016,6 @@ function firstString(payload: Record<string, unknown>, keys: readonly string[]):
     }
   }
   return undefined;
-}
-
-function claudeGatewayEnv(baseUrl: string): Record<string, string> {
-  return {
-    [CLAUDE_GATEWAY_MODEL_DISCOVERY_ENV]: "1",
-    [CLAUDE_GATEWAY_BASE_URL_ENV]: baseUrl,
-    [CLAUDE_GATEWAY_AUTH_TOKEN_ENV]: "local-proxy",
-    [CLAUDE_MODEL_ENV]: CLAUDE_GATEWAY_SONNET_ROUTE,
-    [CLAUDE_DEFAULT_SONNET_MODEL_ENV]: CLAUDE_GATEWAY_SONNET_ROUTE,
-    [CLAUDE_DEFAULT_OPUS_MODEL_ENV]: CLAUDE_GATEWAY_OPUS_ROUTE,
-    [CLAUDE_DEFAULT_HAIKU_MODEL_ENV]: CLAUDE_GATEWAY_HAIKU_ROUTE,
-  };
-}
-
-function readObjectValue(
-  payload: Record<string, unknown>,
-  key: string,
-): Record<string, unknown> | null {
-  const value = payload[key];
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function hasClaudeGatewayEnv(config: Record<string, unknown>, baseUrl: string): boolean {
-  const env = readObjectValue(config, "env");
-  if (!env) {
-    return false;
-  }
-  const expected = claudeGatewayEnv(baseUrl);
-  return Object.entries(expected).every(([key, value]) => env[key] === value);
-}
-
-function mergeClaudeGatewayEnv(
-  config: Record<string, unknown>,
-  baseUrl: string,
-): { changed: boolean } {
-  const envValue = config.env;
-  if (
-    envValue !== undefined &&
-    (!envValue || typeof envValue !== "object" || Array.isArray(envValue))
-  ) {
-    throw new Error("Claude settings.json env 结构不兼容");
-  }
-  const currentEnv = envValue ? (envValue as Record<string, unknown>) : {};
-  const nextEnv = {
-    ...currentEnv,
-    ...claudeGatewayEnv(baseUrl),
-  };
-  const changed = JSON.stringify(currentEnv) !== JSON.stringify(nextEnv);
-  config.env = nextEnv;
-  return { changed };
 }
 
 function hasClaudeStatusLineForHome(config: Record<string, unknown>, homeDir: string): boolean {
@@ -1164,7 +1198,6 @@ function inspectClaudeConfig(
   hookCtx: HookCommandContext,
   lastEvent?: LastEvent,
   def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
-  providerGatewayBaseUrl: string | null = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
 ): IntegrationAgentDiagnostics {
   const configPath = claudeConfigPath(homeDir, def);
   const config = readOptionalJson(configPath);
@@ -1189,10 +1222,6 @@ function inspectClaudeConfig(
   } else if (config.parsed) {
     const hasStatusLine = checksStatusLine
       ? hasClaudeStatusLineForHome(config.parsed, homeDir) && wrapperFilesReady
-      : true;
-    const shouldCheckGatewayEnv = def.id === "claude" && providerGatewayBaseUrl !== null;
-    const hasGatewayEnv = shouldCheckGatewayEnv
-      ? hasClaudeGatewayEnv(config.parsed, providerGatewayBaseUrl)
       : true;
     const hooksValue = config.parsed.hooks;
     const hasMatchingHooks =
@@ -1220,32 +1249,16 @@ function inspectClaudeConfig(
             },
           ]
         : []),
-      ...(shouldCheckGatewayEnv
-        ? [
-            {
-              id: "gatewayModelDiscovery",
-              label: "Gateway model discovery",
-              labelKey: "integration.check.claude.gatewayModelDiscovery",
-              ok: hasGatewayEnv,
-              statusLabel: hasGatewayEnv ? "正常" : "异常",
-              statusLabelKey: hasGatewayEnv ? "integration.check.ok" : "integration.check.error",
-            },
-          ]
-        : []),
     ];
     if (hooksValue && typeof hooksValue === "object" && !Array.isArray(hooksValue)) {
       const hooks = hooksValue as Record<string, unknown>;
-      if (claudeHooksMatch(hooks, required) && hasStatusLine && hasGatewayEnv) {
+      if (claudeHooksMatch(hooks, required) && hasStatusLine) {
         health = "active";
         hookInstalled = true;
         statusMessage = checksStatusLine
           ? `已配置用户级 ${def.label} hooks 与 statusLine`
           : `已配置用户级 ${def.label} hooks`;
         statusMessageKey = `${def.messageKeyPrefix}.active`;
-      } else if (shouldCheckGatewayEnv && claudeHooksMatch(hooks, required) && hasStatusLine) {
-        health = "repair_needed";
-        statusMessage = `${def.label} hooks 已配置，但缺少 CodePal Gateway model discovery env`;
-        statusMessageKey = `${def.messageKeyPrefix}.missingGatewayEnv`;
       } else if (claudeHooksMatch(hooks, required)) {
         health = "repair_needed";
         statusMessage = `${def.label} hooks 已配置，但缺少 CodePal statusLine`;
@@ -1294,6 +1307,7 @@ function inspectClaudeConfig(
     statusMessage,
     statusMessageKey,
     ...(checks ? { checks } : {}),
+    canRestore: Boolean(readRestoreSnapshot(homeDir, def.id)),
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
 }
@@ -1372,7 +1386,6 @@ function codeBuddyConfigNeedsCleanup(homeDir: string): boolean {
 function claudeConfigNeedsCleanup(
   homeDir: string,
   def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
-  providerGatewayBaseUrl: string | null = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
 ): boolean {
   const required = claudeRequiredEntriesForHome(homeDir, def);
   const entriesByEvent = Object.fromEntries(
@@ -1382,14 +1395,6 @@ function claudeConfigNeedsCleanup(
     return true;
   }
   if (def.id === "claude") {
-    const config = readOptionalJson(claudeConfigPath(homeDir, def));
-    if (
-      providerGatewayBaseUrl !== null &&
-      config.parsed &&
-      !hasClaudeGatewayEnv(config.parsed, providerGatewayBaseUrl)
-    ) {
-      return true;
-    }
     return claudeDeprecatedEntriesPresent(homeDir);
   }
   return false;
@@ -1525,6 +1530,7 @@ function inspectCodeBuddyConfig(
     actionLabelKey,
     statusMessage,
     statusMessageKey,
+    canRestore: Boolean(readRestoreSnapshot(homeDir, "codebuddy")),
     ...(lastEvent ? { lastEventAt: lastEvent.at, lastEventStatus: lastEvent.status } : {}),
   };
 }
@@ -1641,7 +1647,6 @@ function installClaudeHooksFile(
   hookCtx: HookCommandContext,
   now: () => number,
   def: ClaudeCompatibleAgentDef = CLAUDE_DEF,
-  providerGatewayBaseUrl: string | null = DEFAULT_PROVIDER_GATEWAY_BASE_URL,
 ): { changed: boolean; backupPath?: string } {
   const wrapperResult = ensureAgentWrapperFiles(homeDir, hookCtx);
   const configPath = claudeConfigPath(homeDir, def);
@@ -1719,13 +1724,6 @@ function installClaudeHooksFile(
     }
   }
 
-  if (def.id === "claude" && providerGatewayBaseUrl !== null) {
-    const envResult = mergeClaudeGatewayEnv(next, providerGatewayBaseUrl);
-    if (envResult.changed) {
-      changed = true;
-    }
-  }
-
   let backupPath: string | undefined;
   if (changed) {
     ensureParentDir(configPath);
@@ -1771,8 +1769,6 @@ function formatExecutableLabel(packaged: boolean, execPath: string): string {
 
 export function createIntegrationService(options: IntegrationServiceOptions) {
   const now = options.now ?? defaultNow;
-  const getProviderGatewayBaseUrl =
-    options.getProviderGatewayBaseUrl ?? defaultProviderGatewayBaseUrl;
   let listener: IntegrationListenerDiagnostics = {
     mode: "unavailable",
     message: "等待 CodePal 接收入口就绪",
@@ -1796,7 +1792,6 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
         hookCtx,
         lastEvents.get(agentId),
         compatDef,
-        getProviderGatewayBaseUrl(),
       );
     }
     if (agentId === "codex") {
@@ -1858,14 +1853,10 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
     installHooks(agentId: IntegrationAgentId): IntegrationInstallResult {
       const hookCtx = integrationHookContext();
       const compatDef = claudeCompatAgentDef(agentId);
+      const beforeDiagnostics = getAgentDiagnostics(agentId);
+      writeRestoreSnapshotIfMissing(options.homeDir, agentId, beforeDiagnostics.configPath, now);
       const result = compatDef
-        ? installClaudeHooksFile(
-            options.homeDir,
-            hookCtx,
-            now,
-            compatDef,
-            getProviderGatewayBaseUrl(),
-          )
+        ? installClaudeHooksFile(options.homeDir, hookCtx, now, compatDef)
         : agentId === "cursor"
           ? installCursorHooksFile(options.homeDir, hookCtx, now)
           : agentId === "codebuddy"
@@ -1894,6 +1885,23 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
         diagnostics,
       };
     },
+    restoreHooks(agentId: IntegrationAgentId): IntegrationInstallResult {
+      const changed = restoreConfigSnapshot(options.homeDir, agentId);
+      const diagnostics = getAgentDiagnostics(agentId);
+      return {
+        agentId,
+        configPath: diagnostics.configPath,
+        changed,
+        hookInstalled: diagnostics.hookInstalled,
+        health: diagnostics.health,
+        message: changed
+          ? `已还原 ${diagnostics.label} 配置`
+          : `${diagnostics.label} 没有可还原的 CodePal 配置快照`,
+        messageKey: changed ? "integration.restore.restored" : "integration.restore.unavailable",
+        messageParams: { label: diagnostics.label },
+        diagnostics,
+      };
+    },
     autoMigrateExistingCodePalHooks(): IntegrationInstallResult[] {
       const results: IntegrationInstallResult[] = [];
       for (const agentId of [
@@ -1917,11 +1925,11 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
           (diagnostics.health === "legacy_path" ||
             (agentId === "claude" &&
               (isClaudeAutoMigrateCandidate(options.homeDir) ||
-                claudeConfigNeedsCleanup(options.homeDir, CLAUDE_DEF, getProviderGatewayBaseUrl()) ||
+                claudeConfigNeedsCleanup(options.homeDir, CLAUDE_DEF) ||
                 claudeDeprecatedEntriesPresent(options.homeDir))) ||
             (isFork &&
               forkDef &&
-              claudeConfigNeedsCleanup(options.homeDir, forkDef, getProviderGatewayBaseUrl())) ||
+              claudeConfigNeedsCleanup(options.homeDir, forkDef)) ||
             (agentId === "cursor" &&
               cursorConfigNeedsCleanup(options.homeDir, desiredWrapperCommand)) ||
             (agentId === "codebuddy" && codeBuddyConfigNeedsCleanup(options.homeDir)) ||
@@ -1961,14 +1969,14 @@ export function createIntegrationService(options: IntegrationServiceOptions) {
             (agentId === "claude" &&
               diagnostics.health === "repair_needed" &&
               (isClaudeAutoMigrateCandidate(options.homeDir) ||
-                claudeConfigNeedsCleanup(options.homeDir, CLAUDE_DEF, getProviderGatewayBaseUrl()))) ||
+                claudeConfigNeedsCleanup(options.homeDir, CLAUDE_DEF))) ||
             (agentId === "claude" &&
               diagnostics.health === "active" &&
               claudeDeprecatedEntriesPresent(options.homeDir)) ||
             (isFork &&
               diagnostics.health === "repair_needed" &&
               forkDef &&
-              claudeConfigNeedsCleanup(options.homeDir, forkDef, getProviderGatewayBaseUrl())) ||
+              claudeConfigNeedsCleanup(options.homeDir, forkDef)) ||
             (agentId === "cursor" &&
               cursorConfigNeedsCleanup(options.homeDir, desiredWrapperCommand)) ||
             (agentId === "codebuddy" &&

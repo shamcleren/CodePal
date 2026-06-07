@@ -7,7 +7,11 @@ import {
 } from "../shared/appSettings";
 import type { TokenTrendPoint } from "../shared/analyticsTypes";
 import type { HistoryDiagnostics, SessionHistorySummary } from "../shared/historyTypes";
-import type { IntegrationAgentId, IntegrationDiagnostics } from "../shared/integrationTypes";
+import type {
+  IntegrationAgentId,
+  IntegrationDiagnostics,
+  IntegrationInstallResult,
+} from "../shared/integrationTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { ModelPricing, UsageOverview } from "../shared/usageTypes";
 import type { ProviderGatewayStatus } from "../shared/providerGatewayTypes";
@@ -327,6 +331,42 @@ export function App() {
       });
   }
 
+  function startProviderGateway() {
+    setProviderGatewayLoading(true);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
+    return window.codepal
+      .startProviderGateway()
+      .then((status) => {
+        setProviderGatewayStatus(status);
+        setProviderGatewayFeedback(i18n.t("providerGateway.start.started"));
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+      })
+      .finally(() => {
+        setProviderGatewayLoading(false);
+      });
+  }
+
+  function stopProviderGateway() {
+    setProviderGatewayLoading(true);
+    setProviderGatewayFeedback(null);
+    setProviderGatewayError(null);
+    return window.codepal
+      .stopProviderGateway()
+      .then((status) => {
+        setProviderGatewayStatus(status);
+        setProviderGatewayFeedback(i18n.t("providerGateway.stop.stopped"));
+      })
+      .catch((error: unknown) => {
+        setProviderGatewayError((error as Error).message);
+      })
+      .finally(() => {
+        setProviderGatewayLoading(false);
+      });
+  }
+
   function configureProviderGatewayClient(target: ProviderGatewayClientSetupTarget) {
     setProviderGatewayClientSetupTarget(target);
     setProviderGatewayFeedback(null);
@@ -366,6 +406,35 @@ export function App() {
 
     void loadProviderGatewayStatus();
     void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
+  }
+
+  function applyIntegrationMutation(
+    agentId: IntegrationAgentId,
+    action: (agentId: IntegrationAgentId) => Promise<IntegrationInstallResult>,
+  ) {
+    setInstallingAgentId(agentId);
+    setIntegrationError(null);
+    setIntegrationFeedback(null);
+    void action(agentId)
+      .then((result) => {
+        setIntegrationFeedback(
+          i18n.translateMessage(
+            result.message,
+            result.messageKey,
+            result.messageParams,
+          ),
+        );
+        return window.codepal.getIntegrationDiagnostics();
+      })
+      .then((diagnostics) => {
+        setIntegrationDiagnostics(diagnostics);
+      })
+      .catch((error: unknown) => {
+        setIntegrationError((error as Error).message);
+      })
+      .finally(() => {
+        setInstallingAgentId(null);
+      });
   }
 
   function refreshSettingsSection(section: SettingsSectionId) {
@@ -874,6 +943,8 @@ export function App() {
                   onDeleteProvider={(providerId) => deleteProviderGatewayProvider(providerId)}
                   onSaveToken={(providerId, token) => saveProviderGatewayToken(providerId, token)}
                   onRunHealthCheck={() => runProviderGatewayHealthCheck()}
+                  onStartGateway={() => startProviderGateway()}
+                  onStopGateway={() => stopProviderGateway()}
                   onConfigureClient={(target) => configureProviderGatewayClient(target)}
                   onCopy={(text) => {
                     void window.codepal.writeClipboardText(text);
@@ -889,32 +960,8 @@ export function App() {
                   feedbackMessage={integrationFeedback}
                   errorMessage={integrationError}
                   onRefresh={refreshIntegrations}
-                  onInstall={(agentId) => {
-                    setInstallingAgentId(agentId);
-                    setIntegrationError(null);
-                    setIntegrationFeedback(null);
-                    void window.codepal
-                      .installIntegrationHooks(agentId)
-                      .then((result) => {
-                        setIntegrationFeedback(
-                          i18n.translateMessage(
-                            result.message,
-                            result.messageKey,
-                            result.messageParams,
-                          ),
-                        );
-                        return window.codepal.getIntegrationDiagnostics();
-                      })
-                      .then((diagnostics) => {
-                        setIntegrationDiagnostics(diagnostics);
-                      })
-                      .catch((error: unknown) => {
-                        setIntegrationError((error as Error).message);
-                      })
-                      .finally(() => {
-                        setInstallingAgentId(null);
-                      });
-                  }}
+                  onInstall={(agentId) => applyIntegrationMutation(agentId, window.codepal.installIntegrationHooks)}
+                  onRestore={(agentId) => applyIntegrationMutation(agentId, window.codepal.restoreIntegrationHooks)}
                 />
               ) : null}
               {activeSettingsSection === "preferences" ? (

@@ -175,6 +175,7 @@ describe("IntegrationPanel", () => {
           errorMessage={null}
           onRefresh={vi.fn()}
           onInstall={vi.fn()}
+          onRestore={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -195,6 +196,7 @@ describe("IntegrationPanel", () => {
           errorMessage={null}
           onRefresh={vi.fn()}
           onInstall={vi.fn()}
+          onRestore={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -217,7 +219,7 @@ describe("IntegrationPanel", () => {
     expect(html).toContain("未配置 CodePal Cursor hooks");
     expect(html).toContain("最近事件：running · 03/31");
     expect(html).toContain("配置已更新");
-    expect(html).toContain("点击修复或迁移前，CodePal 会先备份原配置，再写入变更。");
+    expect(html).toContain("CodePal 只写入必要 hook 命令，并保存可一键还原的原配置快照。");
     expect(html).toContain(">启用<");
     expect(html).toContain(">修复<");
     expect(html).toContain("CodeBuddy");
@@ -239,6 +241,7 @@ describe("IntegrationPanel", () => {
           errorMessage={null}
           onRefresh={vi.fn()}
           onInstall={vi.fn()}
+          onRestore={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -247,6 +250,33 @@ describe("IntegrationPanel", () => {
     expect(html).toContain(">迁移<");
     expect(html).toContain("检测到旧版 CodePal Cursor hook 命令，建议迁移");
     expect(html).not.toContain("最近事件：无");
+  });
+
+  it("shows a one-click restore action when a prior config snapshot exists", () => {
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="zh-CN">
+        <IntegrationPanel
+          diagnostics={{
+            ...diagnostics,
+            agents: [
+              {
+                ...diagnostics.agents[0],
+                canRestore: true,
+              },
+            ],
+          }}
+          loading={false}
+          installingAgentId={null}
+          feedbackMessage={null}
+          errorMessage={null}
+          onRefresh={vi.fn()}
+          onInstall={vi.fn()}
+          onRestore={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain(">还原<");
   });
 
   it("renders Chinese fallback labels for unavailable listener", () => {
@@ -260,6 +290,7 @@ describe("IntegrationPanel", () => {
           errorMessage={null}
           onRefresh={vi.fn()}
           onInstall={vi.fn()}
+          onRestore={vi.fn()}
         />
       </I18nProvider>,
     );
@@ -287,6 +318,7 @@ describe("IntegrationPanel", () => {
           errorMessage={null}
           onRefresh={vi.fn()}
           onInstall={vi.fn()}
+          onRestore={vi.fn()}
         />
       </I18nProvider>,
     );

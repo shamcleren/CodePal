@@ -9,6 +9,8 @@ history:
   persistenceEnabled: true
   detailRetention: 30d
   analyticsRetention: forever
+pricing:
+  remoteUrl: https://shamcleren.github.io/CodePal/model-pricing.json
 providerGateway:
   enabled: true
   host: 127.0.0.1

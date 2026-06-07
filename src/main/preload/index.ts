@@ -132,6 +132,16 @@ contextBridge.exposeInMainWorld("codepal", {
       "codepal:run-provider-gateway-health-check",
     ) as Promise<ProviderGatewayStatus>;
   },
+  startProviderGateway() {
+    return ipcRenderer.invoke(
+      "codepal:start-provider-gateway",
+    ) as Promise<ProviderGatewayStatus>;
+  },
+  stopProviderGateway() {
+    return ipcRenderer.invoke(
+      "codepal:stop-provider-gateway",
+    ) as Promise<ProviderGatewayStatus>;
+  },
   configureProviderGatewayClient(target: ProviderGatewayClientSetupTarget) {
     return ipcRenderer.invoke("codepal:configure-provider-gateway-client", {
       target,
@@ -212,6 +222,11 @@ contextBridge.exposeInMainWorld("codepal", {
   },
   installIntegrationHooks(agentId: IntegrationAgentId) {
     return ipcRenderer.invoke("codepal:install-integration-hooks", {
+      agentId,
+    }) as Promise<IntegrationInstallResult>;
+  },
+  restoreIntegrationHooks(agentId: IntegrationAgentId) {
+    return ipcRenderer.invoke("codepal:restore-integration-hooks", {
       agentId,
     }) as Promise<IntegrationInstallResult>;
   },

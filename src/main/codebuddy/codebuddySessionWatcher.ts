@@ -48,6 +48,21 @@ type CodeBuddyHistoryRequestIndexEntry = {
   state?: unknown;
   startedAt?: unknown;
   messages?: unknown;
+  model?: unknown;
+  modelId?: unknown;
+  modelName?: unknown;
+  usage?: unknown;
+  tokenUsage?: unknown;
+  rawUsage?: unknown;
+  providerData?: unknown;
+};
+
+type CodeBuddyHistoryMessageDetails = {
+  role: "user" | "assistant";
+  body: string;
+  timestamp: number;
+  requestId?: string;
+  model?: string;
 };
 
 function listJsonlFiles(root: string): string[] {
@@ -151,6 +166,100 @@ function parseJsonObject(raw: string | undefined): Record<string, unknown> | nul
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function firstString(record: Record<string, unknown> | null, keys: readonly string[]): string | undefined {
+  if (!record) return undefined;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function firstNumber(record: Record<string, unknown> | null, keys: readonly string[]): number {
+  if (!record) return 0;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.max(0, Math.trunc(value));
+    }
+  }
+  return 0;
+}
+
+function extractCodeBuddyTokenUsage(entry: Record<string, unknown>): Omit<
+  TokenUsageWrite,
+  "sessionId" | "agent" | "timestamp" | "sourceKind" | "sourceKey"
+> | null {
+  const providerData = asRecord(entry.providerData);
+  const candidates = [
+    asRecord(entry.usage),
+    asRecord(entry.tokenUsage),
+    asRecord(entry.rawUsage),
+    asRecord(providerData?.rawUsage),
+    asRecord(providerData?.usage),
+  ].filter((value): value is Record<string, unknown> => Boolean(value));
+  const usage = candidates[0] ?? null;
+  if (!usage) {
+    return null;
+  }
+
+  const inputTokens = firstNumber(usage, [
+    "inputTokens",
+    "input_tokens",
+    "promptTokens",
+    "prompt_tokens",
+    "total_input_tokens",
+  ]);
+  const outputTokens = firstNumber(usage, [
+    "outputTokens",
+    "output_tokens",
+    "completionTokens",
+    "completion_tokens",
+    "total_output_tokens",
+  ]);
+  const cacheReadTokens = firstNumber(usage, [
+    "cacheReadTokens",
+    "cache_read_tokens",
+    "cachedInputTokens",
+    "cached_input_tokens",
+    "prompt_cache_hit_tokens",
+  ]);
+  const cacheCreationTokens = firstNumber(usage, [
+    "cacheCreationTokens",
+    "cache_creation_tokens",
+    "cache_creation_input_tokens",
+    "prompt_cache_write_tokens",
+  ]);
+  const reasoningTokens = firstNumber(usage, [
+    "reasoningTokens",
+    "reasoning_tokens",
+    "completion_thinking_tokens",
+  ]);
+
+  if (inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens + reasoningTokens <= 0) {
+    return null;
+  }
+
+  const model =
+    firstString(entry, ["model", "modelId", "modelName"]) ??
+    firstString(usage, ["model", "modelId", "modelName"]) ??
+    firstString(providerData, ["model", "modelId", "modelName"]);
+  return {
+    ...(model ? { model } : {}),
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
+    reasoningTokens,
+  };
+}
+
 function extractTextFromContentBlocks(
   value: unknown,
   allowedTypes: readonly string[],
@@ -185,7 +294,7 @@ function extractUserQuery(text: string | undefined): string | undefined {
 
 function readCodeBuddyHistoryMessage(
   filePath: string,
-): { role: "user" | "assistant"; body: string; timestamp: number } | null {
+): CodeBuddyHistoryMessageDetails | null {
   const raw = fs.readFileSync(filePath, "utf8");
   const parsed = JSON.parse(raw) as Record<string, unknown>;
   const role = parsed.role === "assistant" ? "assistant" : parsed.role === "user" ? "user" : null;
@@ -213,7 +322,15 @@ function readCodeBuddyHistoryMessage(
     return null;
   }
 
-  return { role, body, timestamp };
+  const requestId = firstString(parsedExtra, ["requestId", "request_id"]);
+  const model = firstString(parsedExtra, ["modelId", "model", "modelName"]);
+  return {
+    role,
+    body,
+    timestamp,
+    ...(requestId ? { requestId } : {}),
+    ...(model ? { model } : {}),
+  };
 }
 
 function stateForSession(
@@ -296,10 +413,10 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
       const trimmed = line.trim();
       if (!trimmed) continue;
 
+      const rawEntry = parseLine(trimmed);
       if (initialCutoffMs !== null) {
-        const entry = parseLine(trimmed);
         const parsedTimestamp =
-          typeof entry?.timestamp === "number" ? entry.timestamp : Number.NaN;
+          typeof rawEntry?.timestamp === "number" ? rawEntry.timestamp : Number.NaN;
         if (Number.isFinite(parsedTimestamp) && parsedTimestamp < initialCutoffMs) {
           continue;
         }
@@ -335,36 +452,20 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
           : {}),
       });
 
-      // Extract token usage from function_call entries
-      if (options.onTokenUsage) {
-        const rawEntry = parseLine(trimmed);
-        if (rawEntry?.type === "function_call") {
-          const providerData = rawEntry.providerData as Record<string, unknown> | undefined;
-          const rawUsage = providerData?.rawUsage as Record<string, unknown> | undefined;
-          if (rawUsage && typeof rawUsage === "object") {
-            const promptTokens = typeof rawUsage.prompt_tokens === "number" ? rawUsage.prompt_tokens : 0;
-            const completionTokens = typeof rawUsage.completion_tokens === "number" ? rawUsage.completion_tokens : 0;
-            const cacheReadTokens = typeof rawUsage.prompt_cache_hit_tokens === "number" ? rawUsage.prompt_cache_hit_tokens : 0;
-            const cacheCreationTokens = typeof rawUsage.cache_creation_input_tokens === "number"
-              ? rawUsage.cache_creation_input_tokens
-              : typeof rawUsage.prompt_cache_write_tokens === "number"
-                ? rawUsage.prompt_cache_write_tokens : 0;
-            const reasoningTokens = typeof rawUsage.completion_thinking_tokens === "number" ? rawUsage.completion_thinking_tokens : 0;
-
-            if (promptTokens > 0 || completionTokens > 0) {
-              options.onTokenUsage({
-                sessionId: normalized.sessionId,
-                agent: "codebuddy",
-                timestamp: normalized.timestamp,
-                inputTokens: promptTokens,
-                outputTokens: completionTokens,
-                cacheReadTokens,
-                cacheCreationTokens,
-                reasoningTokens,
-              });
-            }
-          }
-        }
+      const tokenUsage = rawEntry ? extractCodeBuddyTokenUsage(rawEntry) : null;
+      if (options.onTokenUsage && tokenUsage) {
+        const entryId = firstString(rawEntry, ["id", "requestId", "messageId"]);
+        const entryType = firstString(rawEntry, ["type"]) ?? "entry";
+        options.onTokenUsage({
+          sessionId: normalized.sessionId,
+          agent: "codebuddy",
+          timestamp: normalized.timestamp,
+          ...tokenUsage,
+          sourceKind: "codebuddy-jsonl",
+          sourceKey: entryId
+            ? `${normalized.sessionId}:${entryId}`
+            : `${normalized.sessionId}:${normalized.timestamp}:${entryType}`,
+        });
       }
     }
 
@@ -471,10 +572,7 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
         )
       : [];
 
-    const messageDetails = new Map<
-      string,
-      { role: "user" | "assistant"; body: string; timestamp: number }
-    >();
+    const messageDetails = new Map<string, CodeBuddyHistoryMessageDetails>();
     let latestUserTask: string | undefined;
 
     for (const messageEntry of messageEntries) {
@@ -482,7 +580,7 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
         typeof messageEntry.id === "string" && messageEntry.id.trim()
           ? messageEntry.id.trim()
           : null;
-      if (!messageId || cursor.messageIds.has(messageId)) {
+      if (!messageId) {
         continue;
       }
       const messagePath = path.join(messagesDir, `${messageId}.json`);
@@ -493,12 +591,15 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
       if (!message) {
         continue;
       }
+      messageDetails.set(messageId, message);
+      if (cursor.messageIds.has(messageId)) {
+        continue;
+      }
       if (initialCutoffMs !== null && message.timestamp < initialCutoffMs) {
         cursor.messageIds.add(messageId);
         continue;
       }
 
-      messageDetails.set(messageId, message);
       cursor.messageIds.add(messageId);
 
       if (message.role === "user") {
@@ -585,6 +686,18 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
         cursor.completedRequestIds.add(requestId);
         continue;
       }
+      const directRequestModel = firstString(requestEntry as Record<string, unknown>, [
+        "model",
+        "modelId",
+        "modelName",
+      ]);
+      const matchingMessageModel = relatedMessageIds
+        .map((messageId) => messageDetails.get(messageId))
+        .find((message) => message?.requestId === requestId && message.model)?.model;
+      const anyRelatedMessageModel = relatedMessageIds
+        .map((messageId) => messageDetails.get(messageId))
+        .find((message) => message?.model)?.model;
+      const relatedModel = directRequestModel ?? matchingMessageModel ?? anyRelatedMessageModel;
 
       cursor.completedRequestIds.add(requestId);
       options.onEvent({
@@ -599,6 +712,18 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
           request_id: requestId,
         },
       });
+      const tokenUsage = extractCodeBuddyTokenUsage(requestEntry as Record<string, unknown>);
+      if (options.onTokenUsage && tokenUsage) {
+        options.onTokenUsage({
+          sessionId,
+          agent: "codebuddy",
+          timestamp,
+          ...tokenUsage,
+          ...(relatedModel ? { model: tokenUsage.model ?? relatedModel } : {}),
+          sourceKind: "codebuddy-history",
+          sourceKey: `${sessionId}:${requestId}`,
+        });
+      }
     }
 
     historyCursors.set(filePath, cursor);

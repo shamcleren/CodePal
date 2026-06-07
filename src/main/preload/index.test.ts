@@ -86,6 +86,8 @@ describe("preload history bridge", () => {
     expect(typeof api.getProviderGatewayStatus).toBe("function");
     expect(typeof api.updateProviderGatewayToken).toBe("function");
     expect(typeof api.runProviderGatewayHealthCheck).toBe("function");
+    expect(typeof api.startProviderGateway).toBe("function");
+    expect(typeof api.stopProviderGateway).toBe("function");
     expect(typeof api.configureProviderGatewayClient).toBe("function");
 
     (api.getProviderGatewayStatus as () => Promise<unknown>)();
@@ -94,6 +96,8 @@ describe("preload history bridge", () => {
       "secret",
     );
     (api.runProviderGatewayHealthCheck as () => Promise<unknown>)();
+    (api.startProviderGateway as () => Promise<unknown>)();
+    (api.stopProviderGateway as () => Promise<unknown>)();
     (api.configureProviderGatewayClient as (target: string) => Promise<unknown>)("codex-desktop");
 
     expect(invoke).toHaveBeenNthCalledWith(1, "codepal:get-provider-gateway-status");
@@ -102,7 +106,9 @@ describe("preload history bridge", () => {
       token: "secret",
     });
     expect(invoke).toHaveBeenNthCalledWith(3, "codepal:run-provider-gateway-health-check");
-    expect(invoke).toHaveBeenNthCalledWith(4, "codepal:configure-provider-gateway-client", {
+    expect(invoke).toHaveBeenNthCalledWith(4, "codepal:start-provider-gateway");
+    expect(invoke).toHaveBeenNthCalledWith(5, "codepal:stop-provider-gateway");
+    expect(invoke).toHaveBeenNthCalledWith(6, "codepal:configure-provider-gateway-client", {
       target: "codex-desktop",
     });
   });

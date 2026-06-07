@@ -14,6 +14,7 @@ type IntegrationPanelProps = {
   errorMessage: string | null;
   onRefresh: () => void;
   onInstall: (agentId: IntegrationAgentId) => void;
+  onRestore: (agentId: IntegrationAgentId) => void;
   showHeader?: boolean;
 };
 
@@ -90,6 +91,7 @@ export function IntegrationPanel({
   errorMessage,
   onRefresh,
   onInstall,
+  onRestore,
   showHeader = true,
 }: IntegrationPanelProps) {
   const i18n = useI18n();
@@ -199,15 +201,37 @@ export function IntegrationPanel({
                     <div className="integration-card__meta">{lastEventLabel(agent, i18n)}</div>
                   ) : null}
                   {shouldShowAction(agent) ? (
+                    <div className="integration-card__actions">
+                      <button
+                        type="button"
+                        className="integration-card__action"
+                        disabled={isInstalling}
+                        onClick={() => onInstall(agent.id)}
+                      >
+                        {isInstalling
+                          ? i18n.t("integration.action.applying")
+                          : i18n.translateMessage(agent.actionLabel, agent.actionLabelKey)}
+                      </button>
+                      {agent.canRestore ? (
+                        <button
+                          type="button"
+                          className="integration-card__action integration-card__action--secondary"
+                          disabled={isInstalling}
+                          onClick={() => onRestore(agent.id)}
+                        >
+                          {isInstalling ? i18n.t("integration.action.applying") : i18n.t("integration.action.restore")}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {!shouldShowAction(agent) && agent.canRestore ? (
                     <button
                       type="button"
-                      className="integration-card__action"
+                      className="integration-card__action integration-card__action--secondary"
                       disabled={isInstalling}
-                      onClick={() => onInstall(agent.id)}
+                      onClick={() => onRestore(agent.id)}
                     >
-                      {isInstalling
-                        ? i18n.t("integration.action.applying")
-                        : i18n.translateMessage(agent.actionLabel, agent.actionLabelKey)}
+                      {isInstalling ? i18n.t("integration.action.applying") : i18n.t("integration.action.restore")}
                     </button>
                   ) : null}
                 </article>
@@ -236,16 +260,28 @@ export function IntegrationPanel({
                       {compactPathLabel(agent.configPath)}
                     </div>
                     {shouldShowAction(agent) ? (
-                      <button
-                        type="button"
-                        className="integration-card__action"
-                        disabled={isInstalling}
-                        onClick={() => onInstall(agent.id)}
-                      >
-                        {isInstalling
-                          ? i18n.t("integration.action.applying")
-                          : i18n.translateMessage(agent.actionLabel, agent.actionLabelKey)}
-                      </button>
+                      <div className="integration-card__actions">
+                        <button
+                          type="button"
+                          className="integration-card__action"
+                          disabled={isInstalling}
+                          onClick={() => onInstall(agent.id)}
+                        >
+                          {isInstalling
+                            ? i18n.t("integration.action.applying")
+                            : i18n.translateMessage(agent.actionLabel, agent.actionLabelKey)}
+                        </button>
+                        {agent.canRestore ? (
+                          <button
+                            type="button"
+                            className="integration-card__action integration-card__action--secondary"
+                            disabled={isInstalling}
+                            onClick={() => onRestore(agent.id)}
+                          >
+                            {isInstalling ? i18n.t("integration.action.applying") : i18n.t("integration.action.restore")}
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </article>
                 );

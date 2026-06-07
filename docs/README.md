@@ -8,6 +8,10 @@ Use this directory by purpose rather than trying to read everything in one pass.
   Current shipped behavior, validation status, known gaps, and next handoff.
 - `docs/architecture/design-overview.md`
   Product framing, architecture layers, shipped capability boundaries, and next-stage design direction.
+- `docs/model-pricing.json`
+  Remote model pricing manifest served by GitHub Pages at `https://shamcleren.github.io/CodePal/model-pricing.json`. Keep this URL aligned with `DEFAULT_MODEL_PRICING_REMOTE_URL` and `config/settings.template.yaml`.
+- `docs/model-pricing-maintenance.md`
+  Checklist for keeping `model-pricing.json` complete, deduplicated, and aligned with supported agent and Provider Gateway models.
 
 ## Planning
 

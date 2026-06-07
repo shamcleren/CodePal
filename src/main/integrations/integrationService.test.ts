@@ -147,6 +147,44 @@ describe("createIntegrationService", () => {
     }
   });
 
+  it("restores cursor hooks to the pre-install config snapshot", () => {
+    const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const configPath = join(homeDir, ".cursor", "hooks.json");
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          version: 1,
+          hooks: {
+            sessionStart: [{ command: "echo original" }],
+          },
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    const original = readFileSync(configPath, "utf8");
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: false,
+      execPath,
+      appPath,
+      now: () => 101,
+    });
+
+    const installed = service.installHooks("cursor");
+    const diagnosticsAfterInstall = service.getDiagnostics().agents.find((agent) => agent.id === "cursor");
+    const restored = service.restoreHooks("cursor");
+
+    expect(installed.changed).toBe(true);
+    expect(diagnosticsAfterInstall?.canRestore).toBe(true);
+    expect(restored.changed).toBe(true);
+    expect(readFileSync(configPath, "utf8")).toBe(original);
+    expect(restored.diagnostics.canRestore).toBe(false);
+  });
+
   it("installs codebuddy hooks without clobbering existing settings", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
     const configPath = join(homeDir, ".codebuddy", "settings.json");
@@ -263,14 +301,49 @@ describe("createIntegrationService", () => {
       type: "command",
       command: `"${wrapperStatusLinePath}"`,
     });
-    expect(parsed.env).toMatchObject({
+    expect(parsed.env).toBeUndefined();
+  });
+
+  it("installs claude hooks without overriding existing provider switch env", () => {
+    const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
+    const configPath = join(homeDir, ".claude", "settings.json");
+    mkdirSync(dirname(configPath), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          env: {
+            CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+            ANTHROPIC_BASE_URL: "https://ccswitch.example.test",
+            ANTHROPIC_AUTH_TOKEN: "ccswitch-token",
+            ANTHROPIC_MODEL: "ccswitch-model",
+            ANTHROPIC_DEFAULT_SONNET_MODEL: "ccswitch-sonnet",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const service = createIntegrationService({
+      homeDir,
+      hookScriptsRoot,
+      packaged: false,
+      execPath,
+      appPath,
+      now: () => 67,
+    });
+
+    const result = service.installHooks("claude");
+    const parsed = JSON.parse(readFileSync(configPath, "utf8"));
+
+    expect(result.changed).toBe(true);
+    expect(parsed.env).toEqual({
       CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
-      ANTHROPIC_BASE_URL: "http://127.0.0.1:15721",
-      ANTHROPIC_AUTH_TOKEN: "local-proxy",
-      ANTHROPIC_MODEL: "claude-sonnet-4-6",
-      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-7",
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5",
+      ANTHROPIC_BASE_URL: "https://ccswitch.example.test",
+      ANTHROPIC_AUTH_TOKEN: "ccswitch-token",
+      ANTHROPIC_MODEL: "ccswitch-model",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "ccswitch-sonnet",
     });
   });
 
@@ -452,12 +525,14 @@ describe("createIntegrationService", () => {
       checks: [
         expect.objectContaining({ id: "hooks", ok: true }),
         expect.objectContaining({ id: "statusLine", ok: true }),
-        expect.objectContaining({ id: "gatewayModelDiscovery", ok: true }),
       ],
     });
+    expect(claude?.checks).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "gatewayModelDiscovery" })]),
+    );
   });
 
-  it("reports Claude configs missing gateway model discovery env as repair needed", () => {
+  it("reports Claude hooks active without requiring provider gateway env", () => {
     const { homeDir, hookScriptsRoot, execPath, appPath } = createFixtureLayout();
     const wrapperHookPath = join(homeDir, ".codepal", "bin", "claude-hook");
     const wrapperStatusLinePath = join(homeDir, ".codepal", "bin", "claude-statusline");
@@ -519,27 +594,24 @@ describe("createIntegrationService", () => {
 
     const before = service.getDiagnostics().agents.find((agent) => agent.id === "claude");
     expect(before).toMatchObject({
-      health: "repair_needed",
-      statusMessageKey: "integration.message.claude.missingGatewayEnv",
-      checks: expect.arrayContaining([
-        expect.objectContaining({ id: "gatewayModelDiscovery", ok: false }),
-      ]),
+      health: "active",
+      hookInstalled: true,
+      statusMessageKey: "integration.message.claude.active",
+      checks: [
+        expect.objectContaining({ id: "hooks", ok: true }),
+        expect.objectContaining({ id: "statusLine", ok: true }),
+      ],
     });
+    expect(before?.checks).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "gatewayModelDiscovery" })]),
+    );
 
-    const result = service.installHooks("claude");
+    service.installHooks("claude");
     const after = service.getDiagnostics().agents.find((agent) => agent.id === "claude");
     const parsed = JSON.parse(readFileSync(configPath, "utf8"));
 
-    expect(result.changed).toBe(true);
-    expect(parsed.env).toMatchObject({
+    expect(parsed.env).toEqual({
       EXISTING_VALUE: "preserved",
-      CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
-      ANTHROPIC_BASE_URL: "http://127.0.0.1:15721",
-      ANTHROPIC_AUTH_TOKEN: "local-proxy",
-      ANTHROPIC_MODEL: "claude-sonnet-4-6",
-      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-7",
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5",
     });
     expect(after).toMatchObject({
       health: "active",
@@ -1219,7 +1291,6 @@ describe("createIntegrationService", () => {
       packaged: false,
       execPath,
       appPath,
-      getProviderGatewayBaseUrl: () => null,
       now: () => 987,
     });
 

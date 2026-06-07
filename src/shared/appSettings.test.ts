@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   APP_THEME_IDS,
+  DEFAULT_MODEL_PRICING_REMOTE_URL,
   mergeAppSettings,
   normalizeAppSettings,
   normalizeCodeBuddyEndpointSettings,
@@ -367,6 +368,42 @@ describe("appSettings", () => {
       llmEnabled: true,
       llmDefaultModel: "claude-sonnet-4-6",
     });
+  });
+
+  it("uses the GitHub Pages model pricing URL by default", () => {
+    expect(DEFAULT_MODEL_PRICING_REMOTE_URL).toBe(
+      "https://shamcleren.github.io/CodePal/model-pricing.json",
+    );
+    expect(normalizeAppSettings({}).pricing).toEqual({
+      remoteUrl: "https://shamcleren.github.io/CodePal/model-pricing.json",
+    });
+  });
+
+  it("normalizes custom model pricing URL settings", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      pricing: {
+        remoteUrl: "http://127.0.0.1:4173/model-pricing.json?cache=bust#dev",
+      },
+    });
+
+    expect(settings.pricing.remoteUrl).toBe("http://127.0.0.1:4173/model-pricing.json");
+  });
+
+  it("merges pricing settings without dropping existing values", () => {
+    const merged = mergeAppSettings(
+      normalizeAppSettings({
+        version: 1,
+        pricing: {
+          remoteUrl: "https://example.com/model-pricing.json",
+        },
+      }),
+      { pricing: { remoteUrl: "https://shamcleren.github.io/CodePal/model-pricing.json" } },
+    );
+
+    expect(merged.pricing.remoteUrl).toBe(
+      "https://shamcleren.github.io/CodePal/model-pricing.json",
+    );
   });
 
   it("migrates the stale MiMo Haiku route while preserving custom mappings", () => {

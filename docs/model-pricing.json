@@ -1,0 +1,351 @@
+{
+  "currency": "USD",
+  "unit": "per_1m_tokens",
+  "updatedAt": "2026-06-07",
+  "pricing": [
+    {
+      "modelId": "claude-opus-4-8",
+      "displayName": "Claude Opus 4.8",
+      "inputPerMillion": "5",
+      "outputPerMillion": "25",
+      "cacheReadPerMillion": "0.50",
+      "cacheCreationPerMillion": "6.25"
+    },
+    {
+      "modelId": "claude-opus-4-8-fast",
+      "displayName": "Claude Opus 4.8 Fast",
+      "inputPerMillion": "10",
+      "outputPerMillion": "50",
+      "cacheReadPerMillion": "1",
+      "cacheCreationPerMillion": "12.5"
+    },
+    {
+      "modelId": "claude-opus-4-7",
+      "displayName": "Claude Opus 4.7",
+      "inputPerMillion": "5",
+      "outputPerMillion": "25",
+      "cacheReadPerMillion": "0.50",
+      "cacheCreationPerMillion": "6.25"
+    },
+    {
+      "modelId": "claude-opus-4-6-20260206",
+      "displayName": "Claude Opus 4.6",
+      "inputPerMillion": "5",
+      "outputPerMillion": "25",
+      "cacheReadPerMillion": "0.50",
+      "cacheCreationPerMillion": "6.25"
+    },
+    {
+      "modelId": "claude-opus-4-5-20251101",
+      "displayName": "Claude Opus 4.5",
+      "inputPerMillion": "5",
+      "outputPerMillion": "25",
+      "cacheReadPerMillion": "0.50",
+      "cacheCreationPerMillion": "6.25"
+    },
+    {
+      "modelId": "claude-opus-4-20250514",
+      "displayName": "Claude Opus 4",
+      "inputPerMillion": "15",
+      "outputPerMillion": "75",
+      "cacheReadPerMillion": "1.50",
+      "cacheCreationPerMillion": "18.75"
+    },
+    {
+      "modelId": "claude-sonnet-4-6",
+      "displayName": "Claude Sonnet 4.6",
+      "inputPerMillion": "3",
+      "outputPerMillion": "15",
+      "cacheReadPerMillion": "0.30",
+      "cacheCreationPerMillion": "3.75"
+    },
+    {
+      "modelId": "claude-sonnet-4-6-20260217",
+      "displayName": "Claude Sonnet 4.6",
+      "inputPerMillion": "3",
+      "outputPerMillion": "15",
+      "cacheReadPerMillion": "0.30",
+      "cacheCreationPerMillion": "3.75"
+    },
+    {
+      "modelId": "claude-sonnet-4-5-20250929",
+      "displayName": "Claude Sonnet 4.5",
+      "inputPerMillion": "3",
+      "outputPerMillion": "15",
+      "cacheReadPerMillion": "0.30",
+      "cacheCreationPerMillion": "3.75"
+    },
+    {
+      "modelId": "claude-sonnet-4-20250514",
+      "displayName": "Claude Sonnet 4",
+      "inputPerMillion": "3",
+      "outputPerMillion": "15",
+      "cacheReadPerMillion": "0.30",
+      "cacheCreationPerMillion": "3.75"
+    },
+    {
+      "modelId": "claude-haiku-4-5",
+      "displayName": "Claude Haiku 4.5",
+      "inputPerMillion": "1",
+      "outputPerMillion": "5",
+      "cacheReadPerMillion": "0.10",
+      "cacheCreationPerMillion": "1.25"
+    },
+    {
+      "modelId": "claude-haiku-4-5-20251001",
+      "displayName": "Claude Haiku 4.5",
+      "inputPerMillion": "1",
+      "outputPerMillion": "5",
+      "cacheReadPerMillion": "0.10",
+      "cacheCreationPerMillion": "1.25"
+    },
+    {
+      "modelId": "claude-3-5-sonnet-20241022",
+      "displayName": "Claude 3.5 Sonnet",
+      "inputPerMillion": "3",
+      "outputPerMillion": "15",
+      "cacheReadPerMillion": "0.30",
+      "cacheCreationPerMillion": "3.75"
+    },
+    {
+      "modelId": "claude-3-5-haiku-20241022",
+      "displayName": "Claude 3.5 Haiku",
+      "inputPerMillion": "0.80",
+      "outputPerMillion": "4",
+      "cacheReadPerMillion": "0.08",
+      "cacheCreationPerMillion": "1"
+    },
+    {
+      "modelId": "codex-default",
+      "displayName": "Codex (default)",
+      "inputPerMillion": "1.50",
+      "outputPerMillion": "6",
+      "cacheReadPerMillion": "0.375",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "codex-mini-latest",
+      "displayName": "Codex Mini",
+      "inputPerMillion": "1.50",
+      "outputPerMillion": "6",
+      "cacheReadPerMillion": "0.375",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-5.3-codex",
+      "displayName": "GPT-5.3 Codex",
+      "inputPerMillion": "1.75",
+      "outputPerMillion": "14",
+      "cacheReadPerMillion": "0.175",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-5-codex",
+      "displayName": "GPT-5 Codex",
+      "inputPerMillion": "1.25",
+      "outputPerMillion": "10",
+      "cacheReadPerMillion": "0.125",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-5.5",
+      "displayName": "GPT-5.5",
+      "inputPerMillion": "12.50",
+      "outputPerMillion": "75",
+      "cacheReadPerMillion": "1.25",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-5.4",
+      "displayName": "GPT-5.4",
+      "inputPerMillion": "5",
+      "outputPerMillion": "30",
+      "cacheReadPerMillion": "0.50",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-5",
+      "displayName": "GPT-5",
+      "inputPerMillion": "1.25",
+      "outputPerMillion": "10",
+      "cacheReadPerMillion": "0.125",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-4.1",
+      "displayName": "GPT-4.1",
+      "inputPerMillion": "2",
+      "outputPerMillion": "8",
+      "cacheReadPerMillion": "0.50",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "hy3-preview-agent-ioa",
+      "displayName": "Hy3 preview (CodeBuddy)",
+      "inputPerMillion": "0",
+      "outputPerMillion": "0",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "mimo-v2.5-pro",
+      "displayName": "MiMo V2.5 Pro",
+      "inputPerMillion": "0.435",
+      "outputPerMillion": "0.87",
+      "cacheReadPerMillion": "0.0036",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "mimo-v2.5",
+      "displayName": "MiMo V2.5",
+      "inputPerMillion": "0.14",
+      "outputPerMillion": "0.28",
+      "cacheReadPerMillion": "0.0028",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "mimo-v2-pro",
+      "displayName": "MiMo V2 Pro",
+      "inputPerMillion": "0.435",
+      "outputPerMillion": "0.87",
+      "cacheReadPerMillion": "0.0036",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "mimo-v2-omni",
+      "displayName": "MiMo V2 Omni",
+      "inputPerMillion": "0.14",
+      "outputPerMillion": "0.28",
+      "cacheReadPerMillion": "0.0028",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "deepseek-v4-flash",
+      "displayName": "DeepSeek V4 Flash",
+      "inputPerMillion": "0.14",
+      "outputPerMillion": "0.28",
+      "cacheReadPerMillion": "0.0028",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "deepseek-v4-pro",
+      "displayName": "DeepSeek V4 Pro",
+      "inputPerMillion": "0.435",
+      "outputPerMillion": "0.87",
+      "cacheReadPerMillion": "0.003625",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "MiniMax-M3",
+      "displayName": "MiniMax M3",
+      "inputPerMillion": "0.30",
+      "outputPerMillion": "1.20",
+      "cacheReadPerMillion": "0.06",
+      "cacheCreationPerMillion": "0.37"
+    },
+    {
+      "modelId": "MiniMax-M2.7-highspeed",
+      "displayName": "MiniMax M2.7 Highspeed",
+      "inputPerMillion": "0.59",
+      "outputPerMillion": "2.37",
+      "cacheReadPerMillion": "0.06",
+      "cacheCreationPerMillion": "0.37"
+    },
+    {
+      "modelId": "qwen3.7-plus",
+      "displayName": "Qwen3.7 Plus",
+      "inputPerMillion": "0.32",
+      "outputPerMillion": "1.28",
+      "cacheReadPerMillion": "0.032",
+      "cacheCreationPerMillion": "0.40"
+    },
+    {
+      "modelId": "qwen-plus",
+      "displayName": "Qwen Plus",
+      "inputPerMillion": "0.40",
+      "outputPerMillion": "1.20",
+      "cacheReadPerMillion": "0.04",
+      "cacheCreationPerMillion": "0.50"
+    },
+    {
+      "modelId": "kimi-k2.6",
+      "displayName": "Kimi K2.6",
+      "inputPerMillion": "0.95",
+      "outputPerMillion": "4",
+      "cacheReadPerMillion": "0.16",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "moonshot-v1-32k",
+      "displayName": "Moonshot V1 32K",
+      "inputPerMillion": "1",
+      "outputPerMillion": "3",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "glm-5.1",
+      "displayName": "GLM 5.1",
+      "inputPerMillion": "0.84",
+      "outputPerMillion": "3.38",
+      "cacheReadPerMillion": "0.18",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "glm-4-flash",
+      "displayName": "GLM 4 Flash",
+      "inputPerMillion": "0",
+      "outputPerMillion": "0",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+      "displayName": "SiliconFlow Qwen3 Coder 480B A35B",
+      "inputPerMillion": "0.25",
+      "outputPerMillion": "1",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "deepseek-ai/DeepSeek-V3.2-Exp",
+      "displayName": "SiliconFlow DeepSeek V3.2 Exp",
+      "inputPerMillion": "0.27",
+      "outputPerMillion": "0.41",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "Qwen/Qwen3-30B-A3B-Instruct",
+      "displayName": "SiliconFlow Qwen3 30B A3B Instruct",
+      "inputPerMillion": "0.10",
+      "outputPerMillion": "0.40",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "deepseek/deepseek-v4-flash",
+      "displayName": "OpenRouter DeepSeek V4 Flash",
+      "inputPerMillion": "0.0983",
+      "outputPerMillion": "0.1966",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "deepseek/deepseek-v4-pro",
+      "displayName": "OpenRouter DeepSeek V4 Pro",
+      "inputPerMillion": "0.435",
+      "outputPerMillion": "0.87",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "qwen/qwen-plus",
+      "displayName": "OpenRouter Qwen Plus",
+      "inputPerMillion": "0.26",
+      "outputPerMillion": "0.78",
+      "cacheReadPerMillion": "0",
+      "cacheCreationPerMillion": "0"
+    }
+  ]
+}

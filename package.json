@@ -27,6 +27,7 @@
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test -c playwright.e2e.config.ts",
     "promo:capture": "node scripts/capture-promo-assets.mjs",
+    "pricing:check": "vitest run src/main/pricing/modelPricingCatalog.test.ts",
     "test:watch": "vitest",
     "lint": "eslint . --ext .ts,.tsx"
   },

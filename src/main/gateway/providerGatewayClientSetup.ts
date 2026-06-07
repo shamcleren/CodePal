@@ -240,30 +240,110 @@ function restoreClaudeDesktop(
   const configPath = findClaudeConfigPath(homeDir, status);
   const metaPath = claudeMetaPath(homeDir);
   const current = readClaudeMeta(homeDir);
+  const cliEnvChanged = removeLegacyClaudeCliGatewayEnv(status, homeDir, now);
   const hasPrevious = Object.prototype.hasOwnProperty.call(current, "codePalPreviousAppliedId");
+  if (!hasPrevious) {
+    return {
+      ok: true,
+      target: "claude-desktop-restore",
+      changed: cliEnvChanged,
+      configPath,
+      message: cliEnvChanged
+        ? "Legacy Claude CLI CodePal Gateway env removed. Claude Desktop has no saved previous provider selection to restore."
+        : "Claude Desktop has no saved previous provider selection to restore.",
+    };
+  }
   const next: ClaudeConfigMeta = { ...current };
-  if (hasPrevious) {
-    const previousProvider = current.codePalPreviousAppliedId
-      ? claudeConfigProviderForId(homeDir, current.codePalPreviousAppliedId)
-      : null;
-    if (current.codePalPreviousAppliedId && previousProvider && previousProvider !== "gateway") {
-      next.appliedId = current.codePalPreviousAppliedId;
-    } else {
-      delete next.appliedId;
-    }
-    delete next.codePalPreviousAppliedId;
+  const codePalConfigId = claudeConfigId(configPath);
+  const previousProvider = current.codePalPreviousAppliedId
+    ? claudeConfigProviderForId(homeDir, current.codePalPreviousAppliedId)
+    : null;
+  if (current.codePalPreviousAppliedId && previousProvider && previousProvider !== "gateway") {
+    next.appliedId = current.codePalPreviousAppliedId;
+  } else {
+    delete next.appliedId;
+  }
+  delete next.codePalPreviousAppliedId;
+  next.entries = (next.entries ?? []).filter((entry) => entry.id !== codePalConfigId);
+  if (next.entries.length === 0) {
+    delete next.entries;
   }
   const previousText = fs.existsSync(metaPath) ? fs.readFileSync(metaPath, "utf8") : "";
+  const removedConfig = fs.existsSync(configPath);
   writeJsonIfChanged(metaPath, next, now);
+  if (removedConfig) {
+    fs.rmSync(configPath);
+  }
   return {
     ok: true,
     target: "claude-desktop-restore",
-    changed: hasPrevious && previousText !== `${JSON.stringify(next, null, 2)}\n`,
+    changed: previousText !== `${JSON.stringify(next, null, 2)}\n` || removedConfig || cliEnvChanged,
     configPath,
-    message: hasPrevious
-      ? "Claude Desktop restored to the previous provider selection. Restart Claude Desktop to reload it."
-      : "Claude Desktop has no saved previous provider selection to restore.",
+    message: "Claude Desktop restored to the previous provider selection. Restart Claude Desktop to reload it.",
   };
+}
+
+function claudeCliSettingsPath(homeDir: string): string {
+  return path.join(homeDir, ".claude", "settings.json");
+}
+
+function removeLegacyClaudeCliGatewayEnv(
+  status: ProviderGatewayStatus,
+  homeDir: string,
+  now: () => number,
+): boolean {
+  const configPath = claudeCliSettingsPath(homeDir);
+  if (!fs.existsSync(configPath)) {
+    return false;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as unknown;
+  } catch {
+    return false;
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return false;
+  }
+  const settings = parsed as Record<string, unknown>;
+  if (!settings.env || typeof settings.env !== "object" || Array.isArray(settings.env)) {
+    return false;
+  }
+  const env = { ...(settings.env as Record<string, unknown>) };
+  const codePalModelSet = new Set(status.claudeDesktop.inferenceModels);
+  const codePalEnvValues: Record<string, string | Set<string>> = {
+    ANTHROPIC_BASE_URL: status.claudeDesktop.baseUrl,
+    ANTHROPIC_AUTH_TOKEN: status.claudeDesktop.apiKey,
+    ANTHROPIC_MODEL: codePalModelSet,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: codePalModelSet,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: codePalModelSet,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: codePalModelSet,
+  };
+  let changed = false;
+  for (const [key, ownedValue] of Object.entries(codePalEnvValues)) {
+    const value = env[key];
+    const owned = ownedValue instanceof Set
+      ? typeof value === "string" && ownedValue.has(value)
+      : value === ownedValue;
+    if (owned) {
+      delete env[key];
+      changed = true;
+    }
+  }
+  if (changed && env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY === "1") {
+    delete env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY;
+  }
+  if (!changed) {
+    return false;
+  }
+  const next = { ...settings };
+  if (Object.keys(env).length > 0) {
+    next.env = env;
+  } else {
+    delete next.env;
+  }
+  writeJsonIfChanged(configPath, next, now);
+  return true;
 }
 
 function codexConfigPath(homeDir: string): string {
@@ -464,24 +544,31 @@ function restoreCodexDesktop(
   const configPath = codexConfigPath(homeDir);
   const previous = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
   const state = readCodexGatewayRestoreState(homeDir);
-  let next = codexConfigContents(stripCodexGatewayRootDefaults(previous), status);
-  if (state) {
-    next = setCodexRootValue(next, "model", state.previousModel ?? null);
-    next = setCodexRootValue(next, "model_provider", state.previousModelProvider ?? null);
+  if (!state) {
+    return {
+      ok: true,
+      target: "codex-desktop-restore",
+      changed: false,
+      configPath,
+      message: "Codex Desktop has no saved previous provider to restore.",
+    };
+  }
+  let next = removeManagedCodexBlock(stripCodexGatewayRootDefaults(previous)).trimEnd();
+  next = setCodexRootValue(next, "model", state.previousModel ?? null);
+  next = setCodexRootValue(next, "model_provider", state.previousModelProvider ?? null);
+  next = next.trimEnd();
+  if (next) {
+    next = `${next}\n`;
   }
   const writeResult = writeTextIfChanged(configPath, next, now);
-  if (state) {
-    deleteCodexGatewayRestoreState(homeDir);
-  }
+  deleteCodexGatewayRestoreState(homeDir);
   return {
     ok: true,
     target: "codex-desktop-restore",
     changed: writeResult.changed,
     configPath,
     backupPath: writeResult.backupPath,
-    message: state
-      ? "Codex Desktop restored to the previous default provider. Restart Codex Desktop to reload config."
-      : "Codex Desktop has no saved previous provider to restore.",
+    message: "Codex Desktop restored to the previous default provider. Restart Codex Desktop to reload config.",
   };
 }
 

@@ -103,6 +103,8 @@ function renderPanel(nextStatus: ProviderGatewayStatus | null = status) {
         onDeleteProvider={vi.fn()}
         onSaveToken={vi.fn()}
         onRunHealthCheck={vi.fn()}
+        onStartGateway={vi.fn()}
+        onStopGateway={vi.fn()}
         onConfigureClient={vi.fn()}
         onCopy={vi.fn()}
       />
@@ -136,6 +138,7 @@ describe("ProviderGatewayPanel", () => {
   it("keeps advanced gateway configuration collapsed by default", () => {
     const html = renderPanel();
 
+    expect(html).toContain("Stop Gateway");
     expect(html).toContain("View model mappings");
     expect(html).toContain("View connection details");
     expect(html).toContain("1 mappings · 1 OK · 0 errors");
@@ -152,10 +155,34 @@ describe("ProviderGatewayPanel", () => {
     expect(html).toContain("Token missing");
   });
 
-  it("disables gateway mutation actions when the gateway is offline", () => {
+  it("keeps the start action available after the gateway is stopped", () => {
     const html = renderPanel({
       ...status,
       enabled: false,
+      listener: {
+        state: "unavailable",
+        localUrl: "http://127.0.0.1:15721",
+        host: "127.0.0.1",
+        port: 15721,
+        message: "Provider gateway not started",
+      },
+    });
+
+    expect(html).toContain("Provider gateway not started");
+    expect(html).toContain("Start Gateway");
+    expect(html).not.toContain("Current provider");
+    expect(html).not.toContain("Provider token");
+    expect(html).not.toContain("Provider profile");
+    expect(html).not.toContain("Save token");
+    expect(html).not.toContain("MiMo Gateway · Local token");
+    expect(html).not.toContain("Configure Claude");
+    expect(html).not.toContain("Configure Codex");
+    expect(html).not.toContain("Stop Gateway");
+  });
+
+  it("requires starting the gateway before client setup actions can write agent config", () => {
+    const html = renderPanel({
+      ...status,
       listener: {
         state: "disabled",
         localUrl: "http://127.0.0.1:15721",
@@ -164,10 +191,17 @@ describe("ProviderGatewayPanel", () => {
       },
     });
 
-    expect(html).toContain("temporarily disabled");
-    expect(html).toContain("Configure Claude");
-    expect(html).toContain("Configure Codex");
-    expect(html).toContain("disabled=\"\"");
+    expect(html).toContain("Start Gateway");
+    expect(html).toContain("Gateway not running");
+    expect(html).toContain("While stopped, CodePal will not write or change Claude / Codex config.");
+    expect(html).not.toContain("Current provider");
+    expect(html).not.toContain("Provider token");
+    expect(html).not.toContain("Provider profile");
+    expect(html).not.toContain("Configure Claude");
+    expect(html).not.toContain("Configure Codex");
+    expect(html).not.toContain("Providers");
+    expect(html).not.toContain("Model mappings");
+    expect(html).not.toContain("Codex Desktop setup");
   });
 
   it("disables client setup actions after matching config is detected", () => {

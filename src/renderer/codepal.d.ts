@@ -73,6 +73,8 @@ export type CodePalApi = {
     providerId: string,
   ) => Promise<ProviderGatewayProviderUpdateResult>;
   runProviderGatewayHealthCheck: () => Promise<ProviderGatewayStatus>;
+  startProviderGateway: () => Promise<ProviderGatewayStatus>;
+  stopProviderGateway: () => Promise<ProviderGatewayStatus>;
   configureProviderGatewayClient: (
     target: ProviderGatewayClientSetupTarget,
   ) => Promise<ProviderGatewayClientSetupResult>;
@@ -93,6 +95,9 @@ export type CodePalApi = {
   getSessionTokenUsage: (sessionId: string) => Promise<SessionTokenUsageResult>;
   clearHistoryStore: () => Promise<HistoryDiagnostics>;
   installIntegrationHooks: (
+    agentId: IntegrationAgentId,
+  ) => Promise<IntegrationInstallResult>;
+  restoreIntegrationHooks: (
     agentId: IntegrationAgentId,
   ) => Promise<IntegrationInstallResult>;
   onOpenSettings: (handler: () => void) => () => void;

@@ -62,6 +62,7 @@ import { runUsageBackfillAsync } from "./history/usageBackfill";
 import { installMainProcessFileLogger } from "./logging/appLogger";
 import { createNotificationService } from "./notification/notificationService";
 import type { NotificationService } from "./notification/notificationService";
+import { syncModelPricingFromRemote } from "./pricing/modelPricingSync";
 import { createSessionJumpService } from "./jump/sessionJumpService";
 import { createTerminalTextSender } from "./terminal/terminalTextSender";
 import { createActionBroker } from "./session/actionBroker";
@@ -113,9 +114,15 @@ let providerGatewayListener: ProviderGatewayListenerInput = {
   message: "Provider gateway not started",
 };
 let providerGatewayHealthCheck: ProviderGatewayHealthCheckSummary | null = null;
+let providerGatewayRuntime: {
+  settingsService: ReturnType<typeof createSettingsService>;
+  gatewaySecretStore: GatewaySecretStore;
+  homeDir: string;
+} | null = null;
+let quittingAfterProviderGatewayStop = false;
 const PROVIDER_GATEWAY_DISABLED_MESSAGE =
-  "Provider Gateway is temporarily disabled in this hotfix build.";
-const PROVIDER_GATEWAY_FEATURE_ENABLED = false;
+  "Provider Gateway is disabled in settings.";
+const PROVIDER_GATEWAY_FEATURE_ENABLED = true;
 const debugCodex = process.env.CODEPAL_DEBUG_CODEX === "1";
 const silentE2E = process.env.CODEPAL_E2E_SILENT === "1";
 const useAccessoryActivationPolicy = shouldUseAccessoryActivationPolicy({
@@ -574,6 +581,23 @@ function wireActionResponseIpc(
     };
     return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
   });
+  ipcMain.handle("codepal:start-provider-gateway", async () => {
+    if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
+      throw new Error(PROVIDER_GATEWAY_DISABLED_MESSAGE);
+    }
+    if (providerGatewayServer && providerGatewayListener.state === "listening") {
+      return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+    }
+    setProviderGatewayEnabled(settingsService, true);
+    await startClaudeDesktopProviderGateway(settingsService, gatewaySecretStore);
+    return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+  });
+  ipcMain.handle("codepal:stop-provider-gateway", async () => {
+    if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
+      throw new Error(PROVIDER_GATEWAY_DISABLED_MESSAGE);
+    }
+    return stopProviderGateway(settingsService, gatewaySecretStore, homeDir);
+  });
   ipcMain.handle("codepal:configure-provider-gateway-client", (_event, payload: unknown) => {
     if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
       throw new Error(PROVIDER_GATEWAY_DISABLED_MESSAGE);
@@ -591,6 +615,9 @@ function wireActionResponseIpc(
     }
     const setupTarget = target as ProviderGatewayClientSetupTarget;
     const status = providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+    if (!setupTarget.endsWith("-restore") && status.listener.state !== "listening") {
+      throw new Error("Start Provider Gateway before configuring Claude or Codex.");
+    }
     return configureProviderGatewayClient({
       target: setupTarget,
       status,
@@ -618,10 +645,38 @@ function wireActionResponseIpc(
       typeof (payload as Record<string, unknown>).agentId === "string"
         ? (payload as Record<string, unknown>).agentId
         : "";
-    if (agentId !== "claude" && agentId !== "cursor" && agentId !== "codebuddy" && agentId !== "codex") {
+    if (
+      agentId !== "claude" &&
+      agentId !== "cursor" &&
+      agentId !== "codebuddy" &&
+      agentId !== "codex" &&
+      agentId !== "qoder" &&
+      agentId !== "qwen" &&
+      agentId !== "factory"
+    ) {
       throw new Error("unsupported integration agent");
     }
     return integrationService.installHooks(agentId);
+  });
+  ipcMain.handle("codepal:restore-integration-hooks", (_event, payload: unknown) => {
+    const agentId =
+      payload &&
+      typeof payload === "object" &&
+      typeof (payload as Record<string, unknown>).agentId === "string"
+        ? (payload as Record<string, unknown>).agentId
+        : "";
+    if (
+      agentId !== "claude" &&
+      agentId !== "cursor" &&
+      agentId !== "codebuddy" &&
+      agentId !== "codex" &&
+      agentId !== "qoder" &&
+      agentId !== "qwen" &&
+      agentId !== "factory"
+    ) {
+      throw new Error("unsupported integration agent");
+    }
+    return integrationService.restoreHooks(agentId);
   });
   ipcMain.handle("codepal:open-external-target", async (_event, payload: unknown) => {
     const targetToOpen =
@@ -848,6 +903,25 @@ function scheduleUsageBackfillAfterStartup(options: {
   }, resolveUsageBackfillDelayMs());
 }
 
+function scheduleModelPricingSync(options: {
+  currentHistoryStore: ReturnType<typeof createAppHistoryStore>;
+  settingsService: ReturnType<typeof createSettingsService>;
+}) {
+  const remoteUrl = options.settingsService.getSettings().pricing.remoteUrl;
+  void syncModelPricingFromRemote({
+    remoteUrl,
+    historyStore: options.currentHistoryStore,
+  }).then((result) => {
+    if (result.ok) {
+      if (result.imported > 0) {
+        console.log(`[CodePal Pricing] Synced ${result.imported} model pricing row(s)`);
+      }
+      return;
+    }
+    console.error("[CodePal Pricing] remote pricing sync skipped:", result.error);
+  });
+}
+
 async function wireIpcHub(
   integrationService: ReturnType<typeof createIntegrationService>,
   settingsService: ReturnType<typeof createSettingsService>,
@@ -1032,6 +1106,91 @@ async function startClaudeDesktopProviderGateway(
   console.error("[CodePal Gateway] server error:", result.error.message);
 }
 
+function restoreProviderGatewayClients(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+  homeDir: string,
+) {
+  const status = providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+  return [
+    configureProviderGatewayClient({
+      target: "claude-desktop-restore",
+      status,
+      homeDir,
+    }),
+    configureProviderGatewayClient({
+      target: "codex-desktop-restore",
+      status,
+      homeDir,
+    }),
+  ];
+}
+
+function setProviderGatewayEnabled(
+  settingsService: ReturnType<typeof createSettingsService>,
+  enabled: boolean,
+) {
+  const settings = settingsService.getSettings();
+  if (settings.providerGateway.enabled === enabled) {
+    return;
+  }
+  settingsService.replaceSettings({
+    ...settings,
+    providerGateway: {
+      ...settings.providerGateway,
+      enabled,
+    },
+  });
+}
+
+function closeProviderGatewayServer(): Promise<void> {
+  const server = providerGatewayServer;
+  providerGatewayServer = null;
+  if (!server) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+async function stopProviderGateway(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+  homeDir: string,
+  options: { throwOnRestoreError?: boolean } = {},
+) {
+  try {
+    restoreProviderGatewayClients(settingsService, gatewaySecretStore, homeDir);
+  } catch (error) {
+    if (options.throwOnRestoreError ?? true) {
+      throw error;
+    }
+    console.error("[CodePal Gateway] failed to restore client configs before stop:", error);
+  }
+  await closeProviderGatewayServer();
+  providerGatewayHealthCheck = null;
+  setProviderGatewayEnabled(settingsService, false);
+  markProviderGatewayNotStarted(settingsService);
+  return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+}
+
+function markProviderGatewayNotStarted(settingsService: ReturnType<typeof createSettingsService>) {
+  const settings = settingsService.getSettings().providerGateway;
+  providerGatewayListener = {
+    state: "unavailable",
+    host: settings.host,
+    port: settings.port,
+    message: "Provider gateway not started",
+  };
+}
+
 applyAccessoryActivationPolicy(app, useAccessoryActivationPolicy);
 
 void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, process.env)
@@ -1064,7 +1223,20 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       mainWindow.focus();
     });
 
-    app.on("before-quit", () => {
+    app.on("before-quit", (event) => {
+      if (!quittingAfterProviderGatewayStop && providerGatewayRuntime && providerGatewayServer) {
+        event.preventDefault();
+        quittingAfterProviderGatewayStop = true;
+        void stopProviderGateway(
+          providerGatewayRuntime.settingsService,
+          providerGatewayRuntime.gatewaySecretStore,
+          providerGatewayRuntime.homeDir,
+          { throwOnRestoreError: false },
+        ).finally(() => {
+          app.quit();
+        });
+        return;
+      }
       usageBackfillAbortController?.abort();
       usageBackfillAbortController = null;
       if (usageBackfillTimer !== null) {
@@ -1082,8 +1254,7 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       historyWriter = null;
       historyStore?.close();
       historyStore = null;
-      providerGatewayServer?.close();
-      providerGatewayServer = null;
+      void closeProviderGatewayServer();
       if (tray && !tray.isDestroyed()) {
         tray.destroy();
       }
@@ -1119,8 +1290,9 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         filePath: path.join(app.getPath("userData"), "provider-gateway-secrets.json"),
         env: process.env,
       });
+      providerGatewayRuntime = { settingsService, gatewaySecretStore, homeDir };
       installMainProcessFileLogger(path.join(app.getPath("userData"), "logs"));
-      await startClaudeDesktopProviderGateway(settingsService, gatewaySecretStore);
+      markProviderGatewayNotStarted(settingsService);
       try {
         historyStore = createAppHistoryStore({
           userDataPath: app.getPath("userData"),
@@ -1132,6 +1304,10 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
           },
         });
         applyHistorySettingsAtRuntime(historyStore, appSettings);
+        scheduleModelPricingSync({
+          currentHistoryStore: historyStore,
+          settingsService,
+        });
         if (appSettings.history.persistenceEnabled) {
           const RESTORE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
           const MAX_RESTORE_COUNT = 150;
@@ -1181,13 +1357,6 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         packaged: app.isPackaged,
         execPath: process.execPath,
         appPath: resolvedAppPath,
-        getProviderGatewayBaseUrl: () => {
-          if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
-            return null;
-          }
-          const gateway = settingsService.getSettings().providerGateway;
-          return `http://${gateway.host}:${gateway.port}`;
-        },
       });
       ensureAgentWrapperFiles(homeDir, {
         packaged: app.isPackaged,
@@ -1212,10 +1381,10 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       notificationServiceRef = notificationService;
 
       wireActionResponseIpc(
-      settingsService,
-      gatewaySecretStore,
-      homeDir,
-      integrationService,
+        settingsService,
+        gatewaySecretStore,
+        homeDir,
+        integrationService,
         updateService,
         historyStore,
       );

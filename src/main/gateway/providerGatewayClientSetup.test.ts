@@ -151,7 +151,9 @@ describe("provider gateway client setup", () => {
     const restoredMeta = JSON.parse(fs.readFileSync(path.join(configDir, "_meta.json"), "utf8"));
     expect(restore.changed).toBe(true);
     expect(restoredMeta.appliedId).toBe("existing");
+    expect(restoredMeta.entries).toEqual([{ id: "existing", name: "Original Claude" }]);
     expect(restoredMeta.codePalPreviousAppliedId).toBeUndefined();
+    expect(fs.existsSync(result.configPath)).toBe(false);
   });
 
   it("restores Claude Desktop to first-party mode when the previous profile was another gateway", () => {
@@ -185,7 +187,134 @@ describe("provider gateway client setup", () => {
     const restoredMeta = JSON.parse(fs.readFileSync(path.join(configDir, "_meta.json"), "utf8"));
     expect(restore.changed).toBe(true);
     expect(restoredMeta.appliedId).toBeUndefined();
-    expect(restoredMeta.entries).toHaveLength(2);
+    expect(restoredMeta.entries).toEqual([{ id: "previous-gateway", name: "MiMo Gateway" }]);
+    expect(fs.existsSync(codepalPath)).toBe(false);
+  });
+
+  it("does not create Claude Desktop metadata when there is no saved gateway state to restore", () => {
+    const homeDir = mkHome();
+    const metaPath = path.join(
+      homeDir,
+      "Library",
+      "Application Support",
+      "Claude-3p",
+      "configLibrary",
+      "_meta.json",
+    );
+
+    const restore = configureProviderGatewayClient({
+      target: "claude-desktop-restore",
+      status: status(),
+      homeDir,
+      now: () => 222,
+    });
+
+    expect(restore.changed).toBe(false);
+    expect(fs.existsSync(metaPath)).toBe(false);
+  });
+
+  it("removes legacy Claude CLI gateway env when restoring Claude Desktop", () => {
+    const homeDir = mkHome();
+    const configDir = path.join(homeDir, "Library", "Application Support", "Claude-3p", "configLibrary");
+    fs.mkdirSync(configDir, { recursive: true });
+    const codepalPath = path.join(configDir, "codepal.json");
+    fs.writeFileSync(codepalPath, JSON.stringify({ inferenceProvider: "gateway" }), "utf8");
+    fs.writeFileSync(
+      path.join(configDir, "_meta.json"),
+      JSON.stringify({
+        appliedId: "codepal",
+        codePalPreviousAppliedId: null,
+        entries: [{ id: "codepal", name: "CodePal Gateway" }],
+      }),
+      "utf8",
+    );
+    const claudeCliPath = path.join(homeDir, ".claude", "settings.json");
+    fs.mkdirSync(path.dirname(claudeCliPath), { recursive: true });
+    fs.writeFileSync(
+      claudeCliPath,
+      JSON.stringify(
+        {
+          env: {
+            CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+            ANTHROPIC_BASE_URL: "http://127.0.0.1:15721",
+            ANTHROPIC_AUTH_TOKEN: "local-proxy",
+            ANTHROPIC_MODEL: "claude-sonnet-4-6",
+            ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
+            ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-7",
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5",
+            USER_VALUE: "preserved",
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const restore = configureProviderGatewayClient({
+      target: "claude-desktop-restore",
+      status: status(),
+      homeDir,
+      now: () => 333,
+    });
+
+    const parsed = JSON.parse(fs.readFileSync(claudeCliPath, "utf8"));
+    expect(restore.changed).toBe(true);
+    expect(parsed.env).toEqual({
+      USER_VALUE: "preserved",
+    });
+  });
+
+  it("keeps provider-switch Claude CLI env that does not point at CodePal", () => {
+    const homeDir = mkHome();
+    const configDir = path.join(homeDir, "Library", "Application Support", "Claude-3p", "configLibrary");
+    fs.mkdirSync(configDir, { recursive: true });
+    const codepalPath = path.join(configDir, "codepal.json");
+    fs.writeFileSync(codepalPath, JSON.stringify({ inferenceProvider: "gateway" }), "utf8");
+    fs.writeFileSync(
+      path.join(configDir, "_meta.json"),
+      JSON.stringify({
+        appliedId: "codepal",
+        codePalPreviousAppliedId: null,
+        entries: [{ id: "codepal", name: "CodePal Gateway" }],
+      }),
+      "utf8",
+    );
+    const claudeCliPath = path.join(homeDir, ".claude", "settings.json");
+    fs.mkdirSync(path.dirname(claudeCliPath), { recursive: true });
+    fs.writeFileSync(
+      claudeCliPath,
+      JSON.stringify(
+        {
+          env: {
+            CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+            ANTHROPIC_BASE_URL: "https://ccswitch.example.test",
+            ANTHROPIC_AUTH_TOKEN: "ccswitch-token",
+            ANTHROPIC_MODEL: "ccswitch-model",
+            ANTHROPIC_DEFAULT_SONNET_MODEL: "ccswitch-sonnet",
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    configureProviderGatewayClient({
+      target: "claude-desktop-restore",
+      status: status(),
+      homeDir,
+      now: () => 334,
+    });
+
+    const parsed = JSON.parse(fs.readFileSync(claudeCliPath, "utf8"));
+    expect(parsed.env).toEqual({
+      CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+      ANTHROPIC_BASE_URL: "https://ccswitch.example.test",
+      ANTHROPIC_AUTH_TOKEN: "ccswitch-token",
+      ANTHROPIC_MODEL: "ccswitch-model",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "ccswitch-sonnet",
+    });
   });
 
   it("switches Codex globally to CodePal and can restore the previous default settings", () => {
@@ -252,8 +381,24 @@ describe("provider gateway client setup", () => {
     expect(restoredRoot).toContain('model = "gpt-5.5"');
     expect(restoredRoot).toContain('model_provider = "openai"');
     expect(restoredRoot).not.toContain('model_provider = "codepal"');
-    expect(restored).toContain("[profiles.codepal-gateway]");
+    expect(restored).not.toContain("[profiles.codepal-gateway]");
+    expect(restored).not.toContain("[model_providers.codepal]");
     expect(fs.existsSync(path.join(configDir, "codepal-provider-gateway-state.json"))).toBe(false);
+  });
+
+  it("does not create Codex config when there is no saved gateway state to restore", () => {
+    const homeDir = mkHome();
+    const configPath = path.join(homeDir, ".codex", "config.toml");
+
+    const restore = configureProviderGatewayClient({
+      target: "codex-desktop-restore",
+      status: status(),
+      homeDir,
+      now: () => 333,
+    });
+
+    expect(restore.changed).toBe(false);
+    expect(fs.existsSync(configPath)).toBe(false);
   });
 
   it("removes legacy global CodePal defaults from older Codex auto setup", () => {

@@ -41,6 +41,7 @@ npm run build
 - Keep Phase 1 focused on unified monitoring first.
 - Do not add `text_input` unless requirements explicitly move to Phase 2.
 - Prefer simple adapters and shared types over one-off renderer-only logic.
+- Keep model pricing remotely manageable through `https://shamcleren.github.io/CodePal/model-pricing.json`; if pricing changes, follow `docs/model-pricing-maintenance.md`, update `docs/model-pricing.json`, run `npm run pricing:check`, and keep `DEFAULT_MODEL_PRICING_REMOTE_URL` plus `config/settings.template.yaml` aligned.
 - When changing event flow, keep `src/shared/`, `src/main/ingress/`, and `src/main/session/` aligned.
 - Do not vendor the superpowers skill library into this repo; keep only project-local guidance here.
 

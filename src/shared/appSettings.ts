@@ -54,6 +54,10 @@ export type ReportSettings = {
   llmDefaultModel: string;
 };
 
+export type PricingSettings = {
+  remoteUrl: string;
+};
+
 export type ProviderGatewayAuthScheme = "bearer";
 
 export type ProviderGatewayType = "anthropic-compatible" | "openai-chat-compatible";
@@ -84,6 +88,7 @@ export type AppSettings = {
   history: HistorySettings;
   notifications: NotificationSettings;
   reports: ReportSettings;
+  pricing: PricingSettings;
   providerGateway: ProviderGatewaySettings;
   codebuddy: {
     code: CodeBuddyEndpointSettings;
@@ -98,6 +103,7 @@ export type AppSettingsPatch = {
   history?: Partial<HistorySettings>;
   notifications?: Partial<NotificationSettings>;
   reports?: Partial<ReportSettings>;
+  pricing?: Partial<PricingSettings>;
   providerGateway?: Partial<ProviderGatewaySettings>;
   codebuddy?: {
     code?: Partial<CodeBuddyEndpointSettings>;
@@ -108,6 +114,8 @@ export type AppSettingsPatch = {
 const CLAUDE_HAIKU_ROUTE_ID = "claude-haiku-4-5";
 const MIMO_DEFAULT_UPSTREAM_MODEL = "mimo-v2.5";
 const MIMO_LEGACY_HAIKU_UPSTREAM_MODEL = "mimo-v2";
+export const DEFAULT_MODEL_PRICING_REMOTE_URL =
+  "https://shamcleren.github.io/CodePal/model-pricing.json";
 
 export const DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES = [
   "RIO_TOKEN",
@@ -146,6 +154,10 @@ export const defaultNotificationSettings: NotificationSettings = {
 export const defaultReportSettings: ReportSettings = {
   llmEnabled: false,
   llmDefaultModel: "",
+};
+
+export const defaultPricingSettings: PricingSettings = {
+  remoteUrl: DEFAULT_MODEL_PRICING_REMOTE_URL,
 };
 
 export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
@@ -314,6 +326,7 @@ export const defaultAppSettings: AppSettings = {
   history: defaultHistorySettings,
   notifications: { ...defaultNotificationSettings },
   reports: { ...defaultReportSettings },
+  pricing: { ...defaultPricingSettings },
   providerGateway: defaultProviderGatewaySettings,
   codebuddy: {
     code: {
@@ -349,6 +362,9 @@ export function cloneAppSettings(settings: AppSettings): AppSettings {
     },
     reports: {
       ...settings.reports,
+    },
+    pricing: {
+      ...settings.pricing,
     },
     providerGateway: {
       ...settings.providerGateway,
@@ -559,6 +575,16 @@ function normalizeReportSettings(value: unknown): ReportSettings {
   };
 }
 
+function normalizePricingSettings(value: unknown): PricingSettings {
+  const candidate = asRecord(value);
+  if (!candidate) {
+    return { ...defaultPricingSettings };
+  }
+  return {
+    remoteUrl: normalizeHttpUrl(candidate.remoteUrl, defaultPricingSettings.remoteUrl),
+  };
+}
+
 function normalizeGatewayHost(value: unknown): string {
   return value === "127.0.0.1" || value === "localhost" ? value : defaultProviderGatewaySettings.host;
 }
@@ -756,6 +782,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
   const history = normalizeHistorySettings(candidate.history);
   const notifications = normalizeNotificationSettings(candidate.notifications);
   const reports = normalizeReportSettings(candidate.reports);
+  const pricing = normalizePricingSettings(candidate.pricing);
   const providerGateway = normalizeProviderGatewaySettings(candidate.providerGateway);
   const codebuddy = asRecord(candidate.codebuddy);
 
@@ -766,6 +793,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     history,
     notifications,
     reports,
+    pricing,
     providerGateway,
     codebuddy: {
       code: normalizeCodeBuddyEndpointSettings(codebuddy?.code, defaultAppSettings.codebuddy.code),
@@ -799,6 +827,10 @@ export function mergeAppSettings(
     reports: {
       ...current.reports,
       ...(incoming.reports ?? {}),
+    },
+    pricing: {
+      ...current.pricing,
+      ...(incoming.pricing ?? {}),
     },
     providerGateway: {
       ...current.providerGateway,

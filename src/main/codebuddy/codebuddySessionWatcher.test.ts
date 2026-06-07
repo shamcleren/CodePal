@@ -423,4 +423,97 @@ describe("createCodeBuddySessionWatcher", () => {
       }),
     );
   });
+
+  it("extracts token usage from CodeBuddy IDE history request usage", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-codebuddy-ide-usage-"));
+    const historyRoot = path.join(tmpDir, "CodeBuddyExtension", "Data");
+    const conversationDir = path.join(
+      historyRoot,
+      "user-1",
+      "CodeBuddyIDE",
+      "user-1",
+      "history",
+      "workspace-1",
+      "usage-session",
+    );
+    const messagesDir = path.join(conversationDir, "messages");
+    fs.mkdirSync(messagesDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(conversationDir, "index.json"),
+      JSON.stringify(
+        {
+          messages: [
+            {
+              id: "message-1",
+              type: "text",
+              role: "user",
+              isComplete: true,
+            },
+          ],
+          requests: [
+            {
+              id: "request-1",
+              messages: ["message-1"],
+              state: "complete",
+              startedAt: 1775569531215,
+              usage: {
+                inputTokens: 1200,
+                outputTokens: 320,
+                prompt_cache_hit_tokens: 40,
+                cache_creation_input_tokens: 12,
+                completion_thinking_tokens: 9,
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+    const messagePath = path.join(messagesDir, "message-1.json");
+    fs.writeFileSync(
+      messagePath,
+      JSON.stringify({
+        role: "user",
+        message: JSON.stringify({
+          role: "user",
+          content: [{ type: "text", text: "<user_query>\n你好\n</user_query>" }],
+        }),
+        extra: JSON.stringify({
+          requestId: "request-1",
+          modelId: "claude-sonnet-4-6",
+          modelName: "Claude Sonnet 4.6",
+          sourceContentBlocks: [{ type: "text", text: "你好" }],
+        }),
+      }),
+    );
+    fs.utimesSync(messagePath, new Date(1775569531000), new Date(1775569531000));
+
+    const onEvent = vi.fn();
+    const onTokenUsage = vi.fn();
+    const watcher = createCodeBuddySessionWatcher({
+      projectsRoot: path.join(tmpDir, "projects"),
+      appHistoryRoot: historyRoot,
+      onEvent,
+      onTokenUsage,
+      initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
+    });
+
+    await watcher.pollOnce();
+
+    expect(onTokenUsage).toHaveBeenCalledTimes(1);
+    expect(onTokenUsage).toHaveBeenCalledWith({
+      sessionId: "usage-session",
+      agent: "codebuddy",
+      model: "claude-sonnet-4-6",
+      timestamp: 1775569531215,
+      inputTokens: 1200,
+      outputTokens: 320,
+      cacheReadTokens: 40,
+      cacheCreationTokens: 12,
+      reasoningTokens: 9,
+      sourceKind: "codebuddy-history",
+      sourceKey: "usage-session:request-1",
+    });
+  });
 });

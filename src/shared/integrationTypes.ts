@@ -58,6 +58,7 @@ export interface IntegrationAgentDiagnostics {
   statusMessageKey?: string;
   statusMessageParams?: MessageParams;
   checks?: IntegrationAgentCheck[];
+  canRestore?: boolean;
   lastEventAt?: number;
   lastEventStatus?: SessionStatus;
 }
