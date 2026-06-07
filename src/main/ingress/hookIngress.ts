@@ -182,12 +182,14 @@ function usageSnapshotFromRecord(payload: Record<string, unknown>): UsageSnapsho
 
   const tokenSource = usage ?? meta;
   const total = firstNumber(payload, ["total_tokens"]) ?? firstNumber(tokenSource ?? {}, ["total", "total_tokens"]);
-  const input = firstNumber(payload, ["input_tokens"]) ?? firstNumber(tokenSource ?? {}, ["input", "input_tokens"]);
+  const input =
+    firstNumber(payload, ["prompt_cache_miss_tokens", "input_tokens"]) ??
+    firstNumber(tokenSource ?? {}, ["input", "prompt_cache_miss_tokens", "input_tokens"]);
   const output =
     firstNumber(payload, ["output_tokens"]) ?? firstNumber(tokenSource ?? {}, ["output", "output_tokens"]);
   const cachedInput =
-    firstNumber(payload, ["cached_input_tokens"]) ??
-    firstNumber(tokenSource ?? {}, ["cachedInput", "cached_input_tokens"]);
+    firstNumber(payload, ["cached_input_tokens", "prompt_cache_hit_tokens"]) ??
+    firstNumber(tokenSource ?? {}, ["cachedInput", "cached_input_tokens", "prompt_cache_hit_tokens"]);
   const reasoningOutput =
     firstNumber(payload, ["reasoning_output_tokens"]) ??
     firstNumber(tokenSource ?? {}, ["reasoningOutput", "reasoning_output_tokens"]);

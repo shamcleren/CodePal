@@ -226,6 +226,72 @@ describe("createClaudeSessionWatcher", () => {
     );
   });
 
+  it("reads DeepSeek prompt cache usage fields from Claude assistant payloads", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-claude-"));
+    const projectDir = path.join(tmpDir, "-Users-demo-codepal");
+    fs.mkdirSync(projectDir, { recursive: true });
+    const filePath = path.join(
+      projectDir,
+      "cc438eb3-af18-4eab-b69f-76925a94655b.jsonl",
+    );
+
+    fs.writeFileSync(
+      filePath,
+      `${JSON.stringify({
+        type: "assistant",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        timestamp: "2026-04-03T13:08:12.504Z",
+        message: {
+          id: "msg_deepseek_cache",
+          role: "assistant",
+          model: "deepseek-v4-flash",
+          content: [{ type: "text", text: "ok" }],
+          usage: {
+            input_tokens: 120,
+            prompt_cache_hit_tokens: 96,
+            prompt_cache_miss_tokens: 24,
+            output_tokens: 8,
+          },
+        },
+      })}\n`,
+    );
+
+    const onEvent = vi.fn();
+    const onUsageSnapshot = vi.fn();
+    const onTokenUsage = vi.fn();
+    const watcher = createClaudeSessionWatcher({
+      projectsRoot: tmpDir,
+      onEvent,
+      onUsageSnapshot,
+      onTokenUsage,
+      initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
+    });
+
+    await watcher.pollOnce();
+
+    expect(onUsageSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: "claude",
+        sessionId: "cc438eb3-af18-4eab-b69f-76925a94655b",
+        title: "deepseek-v4-flash",
+        tokens: expect.objectContaining({
+          input: 24,
+          output: 8,
+          total: 128,
+          cachedInput: 96,
+        }),
+      }),
+    );
+    expect(onTokenUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputTokens: 24,
+        outputTokens: 8,
+        cacheReadTokens: 96,
+        sourceKey: "claude:msg_deepseek_cache",
+      }),
+    );
+  });
+
   it("marks a Claude session completed when transcript hook progress emits Stop", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-claude-"));
     const projectDir = path.join(tmpDir, "-Users-demo-codepal");

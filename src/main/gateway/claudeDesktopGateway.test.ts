@@ -265,6 +265,99 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     });
   });
 
+  it("normalizes DeepSeek prompt cache usage fields for Anthropic clients", async () => {
+    const fetchImpl = vi.fn(async () => Response.json({
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      model: "deepseek-v4-flash",
+      content: [{ type: "text", text: "pong" }],
+      usage: {
+        input_tokens: 120,
+        output_tokens: 8,
+        prompt_cache_hit_tokens: 96,
+        prompt_cache_miss_tokens: 24,
+      },
+    })) as typeof fetch;
+    const server = createTestGateway({
+      token: "deepseek-token",
+      fetchImpl,
+      settingsPatch: {
+        providerGateway: {
+          activeProvider: "deepseek",
+        },
+      },
+    });
+    const response = await requestGateway(server, "/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8,
+        messages: [{ role: "user", content: "ping" }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      model: "claude-sonnet-4-6",
+      usage: {
+        input_tokens: 24,
+        output_tokens: 8,
+        cache_read_input_tokens: 96,
+        prompt_cache_hit_tokens: 96,
+        prompt_cache_miss_tokens: 24,
+      },
+    });
+  });
+
+  it("normalizes DeepSeek prompt cache usage fields in Anthropic SSE", async () => {
+    const encoder = new TextEncoder();
+    const fetchImpl = vi.fn(async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode("event: message_start\n"));
+          controller.enqueue(encoder.encode("data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"deepseek-v4-flash\",\"usage\":{\"input_tokens\":120,\"output_tokens\":0,\"prompt_cache_hit_tokens\":96,\"prompt_cache_miss_tokens\":24}}}\n\n"));
+          controller.enqueue(encoder.encode("event: message_delta\n"));
+          controller.enqueue(encoder.encode("data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":8}}\n\n"));
+          controller.enqueue(encoder.encode("event: message_stop\n"));
+          controller.enqueue(encoder.encode("data: {\"type\":\"message_stop\"}\n\n"));
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    }) as typeof fetch;
+    const server = createTestGateway({
+      token: "deepseek-token",
+      fetchImpl,
+      settingsPatch: {
+        providerGateway: {
+          activeProvider: "deepseek",
+        },
+      },
+    });
+    const response = await requestGateway(server, "/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8,
+        stream: true,
+        messages: [{ role: "user", content: "ping" }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).toContain("\"model\":\"claude-sonnet-4-6\"");
+    expect(text).toContain("\"input_tokens\":24");
+    expect(text).toContain("\"cache_read_input_tokens\":96");
+    expect(text).toContain("\"prompt_cache_hit_tokens\":96");
+  });
+
   it("translates Claude messages to OpenAI-compatible chat completions for OpenAI-style providers", async () => {
     const calls: FetchCall[] = [];
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
@@ -328,6 +421,57 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     });
   });
 
+  it("normalizes OpenAI-compatible cached and reasoning usage for Anthropic clients", async () => {
+    const fetchImpl = vi.fn(async () => Response.json({
+      id: "chatcmpl_1",
+      object: "chat.completion",
+      model: "qwen3.7-plus",
+      choices: [
+        {
+          index: 0,
+          message: { role: "assistant", content: "hello from qwen" },
+          finish_reason: "stop",
+        },
+      ],
+      usage: {
+        prompt_tokens: 120,
+        completion_tokens: 40,
+        total_tokens: 160,
+        prompt_tokens_details: { cached_tokens: 96 },
+        completion_tokens_details: { reasoning_tokens: 12 },
+      },
+    })) as typeof fetch;
+    const server = createTestGateway({
+      token: "dashscope-token",
+      fetchImpl,
+      settingsPatch: {
+        providerGateway: {
+          activeProvider: "qwen",
+        },
+      },
+    });
+
+    const response = await requestGateway(server, "/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 64,
+        messages: [{ role: "user", content: "Hi" }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      usage: {
+        input_tokens: 24,
+        output_tokens: 40,
+        cache_read_input_tokens: 96,
+        reasoning_output_tokens: 12,
+      },
+    });
+  });
+
   it("translates Codex responses to OpenAI-compatible chat completions for OpenAI-style providers", async () => {
     const calls: FetchCall[] = [];
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
@@ -383,6 +527,58 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
       model: "claude-opus-4-7",
       output_text: "hello from kimi",
       usage: { input_tokens: 5, output_tokens: 6, total_tokens: 11 },
+    });
+  });
+
+  it("keeps OpenAI-compatible cached and reasoning usage in Codex response shape", async () => {
+    const fetchImpl = vi.fn(async () => Response.json({
+      id: "chatcmpl_2",
+      object: "chat.completion",
+      model: "kimi-k2.6",
+      choices: [
+        {
+          index: 0,
+          message: { role: "assistant", content: "hello from kimi" },
+          finish_reason: "stop",
+        },
+      ],
+      usage: {
+        prompt_tokens: 120,
+        completion_tokens: 40,
+        total_tokens: 160,
+        prompt_tokens_details: { cached_tokens: 96 },
+        completion_tokens_details: { reasoning_tokens: 12 },
+      },
+    })) as typeof fetch;
+    const server = createTestGateway({
+      token: "moonshot-token",
+      fetchImpl,
+      settingsPatch: {
+        providerGateway: {
+          activeProvider: "kimi",
+        },
+      },
+    });
+
+    const response = await requestGateway(server, "/v1/responses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-opus-4-7",
+        max_output_tokens: 128,
+        input: "Hi",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      usage: {
+        input_tokens: 120,
+        output_tokens: 40,
+        total_tokens: 160,
+        input_tokens_details: { cached_tokens: 96 },
+        output_tokens_details: { reasoning_tokens: 12 },
+      },
     });
   });
 

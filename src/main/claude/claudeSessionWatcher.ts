@@ -114,9 +114,10 @@ function extractUsageSnapshot(
     return null;
   }
 
-  const input = numberValue(usage.input_tokens);
+  const input = numberValue(usage.prompt_cache_miss_tokens) ?? numberValue(usage.input_tokens);
   const output = numberValue(usage.output_tokens);
-  const cachedInput = numberValue(usage.cache_read_input_tokens);
+  const cachedInput =
+    numberValue(usage.cache_read_input_tokens) ?? numberValue(usage.prompt_cache_hit_tokens);
   const cacheCreation = numberValue(usage.cache_creation_input_tokens);
   const total =
     input !== undefined || output !== undefined || cachedInput !== undefined

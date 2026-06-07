@@ -37,6 +37,7 @@ import { createSessionStore } from "./session/sessionStore";
 import { startSessionWatchers } from "./sessionWatchersBootstrap";
 import { createTray } from "./tray/createTray";
 import { createFloatingWindow } from "./window/createFloatingWindow";
+import { shouldApplyHistorySettingsAtRuntime } from "./settings/settingsChange";
 import type { SessionRecord } from "../shared/sessionTypes";
 import { isSessionJumpTarget } from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
@@ -500,8 +501,12 @@ function wireActionResponseIpc(
   });
   ipcMain.handle("codepal:get-app-settings-path", () => settingsService.filePath);
   ipcMain.handle("codepal:update-app-settings", (_event, payload: unknown) => {
+    const previousSettings = settingsService.getSettings();
     const settings = settingsService.updateSettings((payload ?? {}) as AppSettingsPatch);
-    if (currentHistoryStore) {
+    if (
+      currentHistoryStore &&
+      shouldApplyHistorySettingsAtRuntime(previousSettings, settings)
+    ) {
       applyHistorySettingsAtRuntime(currentHistoryStore, settings);
     }
     return settings;

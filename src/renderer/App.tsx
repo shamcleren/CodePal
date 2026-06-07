@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultAppSettings,
+  mergeAppSettings,
   type AppSettings,
   type AppSettingsPatch,
   type ProviderGatewayConfig,
@@ -161,6 +162,7 @@ export function App() {
   const [jumpToSessionId, setJumpToSessionId] = useState<string | undefined>(undefined);
   const workItemList = useMemo(() => deriveWorkItems(rows), [rows]);
   const workReviewTokenRefreshKey = workReviewUsageRefreshKey(usageOverview);
+  const appSettingsSaveSequence = useRef(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const resolvedLocale = resolveLocale(
@@ -694,13 +696,25 @@ export function App() {
   }, []);
 
   function updateAppSettings(nextValue: AppSettingsPatch) {
-    const previousHistoryEnabled = appSettings.history.persistenceEnabled;
+    const requestId = appSettingsSaveSequence.current + 1;
+    appSettingsSaveSequence.current = requestId;
+    const previousSettings = appSettings;
+    const previousHistoryEnabled = previousSettings.history.persistenceEnabled;
+    const optimisticSettings = mergeAppSettings(previousSettings, nextValue);
+    setAppSettings(optimisticSettings);
     return window.codepal.updateAppSettings(nextValue).then((settings) => {
-      setAppSettings(settings);
+      if (appSettingsSaveSequence.current === requestId) {
+        setAppSettings(settings);
+      }
       if (settings.history.persistenceEnabled === previousHistoryEnabled) {
         return settings;
       }
       return loadHistoryDiagnostics(settings.history.persistenceEnabled).then(() => settings);
+    }).catch((error: unknown) => {
+      if (appSettingsSaveSequence.current === requestId) {
+        setAppSettings(previousSettings);
+      }
+      throw error;
     });
   }
 
@@ -744,7 +758,6 @@ export function App() {
 
     void updateAppSettings({
       display: {
-        ...appSettings.display,
         hiddenAgents,
       },
     });
@@ -1011,7 +1024,6 @@ export function App() {
                     onToggleStrip={(nextValue) =>
                       void updateAppSettings({
                         display: {
-                          ...appSettings.display,
                           showInStatusBar: nextValue,
                         },
                       })
@@ -1020,7 +1032,6 @@ export function App() {
                     onDensityChange={(nextValue) =>
                       void updateAppSettings({
                         display: {
-                          ...appSettings.display,
                           density: nextValue,
                         },
                       })
@@ -1028,7 +1039,6 @@ export function App() {
                     onThemeChange={(nextValue) =>
                       void updateAppSettings({
                         display: {
-                          ...appSettings.display,
                           theme: nextValue,
                         },
                       })
@@ -1045,10 +1055,7 @@ export function App() {
                     settings={appSettings.notifications}
                     onUpdate={(patch) =>
                       void updateAppSettings({
-                        notifications: {
-                          ...appSettings.notifications,
-                          ...patch,
-                        },
+                        notifications: patch,
                       })
                     }
                   />

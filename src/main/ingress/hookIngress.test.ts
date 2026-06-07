@@ -702,6 +702,34 @@ describe("lineToUsageSnapshot", () => {
     },
   );
 
+  it("extracts DeepSeek prompt cache fields from generic usage payloads", () => {
+    const snapshot = lineToUsageSnapshot(
+      JSON.stringify({
+        tool: "claude",
+        session_id: "claude-deepseek",
+        timestamp: 1,
+        usage: {
+          input_tokens: 120,
+          prompt_cache_hit_tokens: 96,
+          prompt_cache_miss_tokens: 24,
+          output_tokens: 8,
+        },
+      }),
+    );
+
+    expect(snapshot).toMatchObject({
+      agent: "claude",
+      sessionId: "claude-deepseek",
+      tokens: {
+        input: 24,
+        output: 8,
+        total: undefined,
+        cachedInput: 96,
+        reasoningOutput: undefined,
+      },
+    });
+  });
+
   it("returns null when the payload carries no usage information", () => {
     const snapshot = lineToUsageSnapshot(
       JSON.stringify({

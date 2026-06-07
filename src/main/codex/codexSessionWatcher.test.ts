@@ -377,6 +377,76 @@ describe("createCodexSessionWatcher", () => {
     );
   });
 
+  it("reads OpenAI-compatible token detail fields from codex token_count events", async () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-codex-"));
+    const sessionDir = path.join(tmpDir, "2026", "04", "03");
+    fs.mkdirSync(sessionDir, { recursive: true });
+    const filePath = path.join(
+      sessionDir,
+      "rollout-2026-04-03T15-58-28-019d5259-c667-7f20-8671-cfef325536d3.jsonl",
+    );
+
+    fs.writeFileSync(
+      filePath,
+      `${JSON.stringify({
+        timestamp: "2026-04-03T09:58:30.686Z",
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: {
+              input_tokens: 1200,
+              output_tokens: 120,
+              prompt_tokens_details: { cached_tokens: 800 },
+              completion_tokens_details: { reasoning_tokens: 20 },
+              total_tokens: 1320,
+            },
+            last_token_usage: {
+              input_tokens: 300,
+              output_tokens: 40,
+              input_tokens_details: { cached_tokens: 120 },
+              output_tokens_details: { reasoning_tokens: 8 },
+              total_tokens: 340,
+            },
+          },
+        },
+      })}\n`,
+    );
+
+    const onEvent = vi.fn();
+    const onUsageSnapshot = vi.fn();
+    const onTokenUsage = vi.fn();
+    const watcher = createCodexSessionWatcher({
+      sessionsRoot: tmpDir,
+      onEvent,
+      onUsageSnapshot,
+      onTokenUsage,
+      initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
+    });
+
+    await watcher.pollOnce();
+
+    expect(onUsageSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokens: expect.objectContaining({
+          input: 300,
+          output: 40,
+          cachedInput: 120,
+          reasoningOutput: 8,
+        }),
+      }),
+    );
+    expect(onTokenUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputTokens: 180,
+        outputTokens: 40,
+        cacheReadTokens: 120,
+        reasoningTokens: 8,
+        sourceKey: "codex:019d5259-c667-7f20-8671-cfef325536d3:total:1200:120:800:20:last:300:40:120:8",
+      }),
+    );
+  });
+
   it("does not emit duplicate token usage writes for repeated Codex snapshots", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-codex-"));
     const sessionDir = path.join(tmpDir, "2026", "04", "03");

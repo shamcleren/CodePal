@@ -49,6 +49,44 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function nestedNumberValue(record: Record<string, unknown>, key: string, nestedKey: string): number | undefined {
+  const nested = record[key];
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) {
+    return undefined;
+  }
+  return numberValue((nested as Record<string, unknown>)[nestedKey]);
+}
+
+function cachedInputValue(usage: Record<string, unknown>): number | undefined {
+  return (
+    numberValue(usage.cached_input_tokens) ??
+    nestedNumberValue(usage, "prompt_tokens_details", "cached_tokens") ??
+    nestedNumberValue(usage, "input_tokens_details", "cached_tokens") ??
+    numberValue(usage.prompt_cache_hit_tokens)
+  );
+}
+
+function reasoningOutputValue(usage: Record<string, unknown>): number | undefined {
+  return (
+    numberValue(usage.reasoning_output_tokens) ??
+    nestedNumberValue(usage, "completion_tokens_details", "reasoning_tokens") ??
+    nestedNumberValue(usage, "output_tokens_details", "reasoning_tokens")
+  );
+}
+
+function inputTokensValue(usage: Record<string, unknown>): number | undefined {
+  const direct = numberValue(usage.input_tokens);
+  if (direct !== undefined) {
+    return direct;
+  }
+  const cacheMiss = numberValue(usage.prompt_cache_miss_tokens);
+  const cacheHit = numberValue(usage.prompt_cache_hit_tokens);
+  if (cacheMiss !== undefined || cacheHit !== undefined) {
+    return (cacheMiss ?? 0) + (cacheHit ?? 0);
+  }
+  return undefined;
+}
+
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -301,9 +339,10 @@ function claudeUsageFromLine(
     agent: "claude",
     model: typeof message?.model === "string" ? message.model : undefined,
     timestamp,
-    inputTokens: numberValue(usage.input_tokens),
+    inputTokens: numberValue(usage.prompt_cache_miss_tokens) ?? numberValue(usage.input_tokens),
     outputTokens: numberValue(usage.output_tokens),
-    cacheReadTokens: numberValue(usage.cache_read_input_tokens),
+    cacheReadTokens:
+      numberValue(usage.cache_read_input_tokens) ?? numberValue(usage.prompt_cache_hit_tokens),
     cacheCreationTokens: numberValue(usage.cache_creation_input_tokens),
     sourceKind: "claude-jsonl",
     sourceKey: messageId
@@ -367,14 +406,14 @@ function codexUsageFromLine(
   }
   const sessionId = sessionIdFromCodexPath(filePath);
   const timestamp = timestampValue(entry.timestamp, fallbackNow);
-  const inputTokens = numberValue(usage.input_tokens);
+  const inputTokens = inputTokensValue(usage);
   const outputTokens = numberValue(usage.output_tokens);
-  const cacheReadTokens = numberValue(usage.cached_input_tokens);
-  const reasoningTokens = numberValue(usage.reasoning_output_tokens);
-  const totalInputTokens = numberValue(totalUsage.input_tokens);
+  const cacheReadTokens = cachedInputValue(usage);
+  const reasoningTokens = reasoningOutputValue(usage);
+  const totalInputTokens = inputTokensValue(totalUsage);
   const totalOutputTokens = numberValue(totalUsage.output_tokens);
-  const totalCacheReadTokens = numberValue(totalUsage.cached_input_tokens);
-  const totalReasoningTokens = numberValue(totalUsage.reasoning_output_tokens);
+  const totalCacheReadTokens = cachedInputValue(totalUsage);
+  const totalReasoningTokens = reasoningOutputValue(totalUsage);
 
   return {
     sessionId,

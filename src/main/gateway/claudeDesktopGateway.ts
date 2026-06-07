@@ -330,6 +330,64 @@ function positiveInteger(value: unknown, fallback: number): number {
   return parsed;
 }
 
+function nonNegativeInteger(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function nestedNonNegativeInteger(
+  record: Record<string, unknown>,
+  objectKey: string,
+  valueKey: string,
+): number | null {
+  const object = asObject(record[objectKey]);
+  return object ? nonNegativeInteger(object[valueKey]) : null;
+}
+
+function normalizeAnthropicUsage(usage: Record<string, unknown>): Record<string, unknown> {
+  const next = { ...usage };
+  const promptCacheHitTokens = nonNegativeInteger(usage.prompt_cache_hit_tokens);
+  const promptCacheMissTokens = nonNegativeInteger(usage.prompt_cache_miss_tokens);
+  if (promptCacheHitTokens !== null && usage.cache_read_input_tokens === undefined) {
+    next.cache_read_input_tokens = promptCacheHitTokens;
+  }
+  if (promptCacheMissTokens !== null) {
+    next.input_tokens = promptCacheMissTokens;
+  } else if (promptCacheHitTokens !== null) {
+    const inputTokens = nonNegativeInteger(usage.input_tokens);
+    if (inputTokens !== null) {
+      next.input_tokens = Math.max(0, inputTokens - promptCacheHitTokens);
+    }
+  }
+  return next;
+}
+
+function normalizeAnthropicPayloadUsage(
+  payload: Record<string, unknown>,
+  claudeModel: string,
+) {
+  if (typeof payload.model === "string") {
+    payload.model = claudeModel;
+  }
+  const usage = asObject(payload.usage);
+  if (usage) {
+    payload.usage = normalizeAnthropicUsage(usage);
+  }
+  const message = asObject(payload.message);
+  if (message) {
+    if (typeof message.model === "string") {
+      message.model = claudeModel;
+    }
+    const messageUsage = asObject(message.usage);
+    if (messageUsage) {
+      message.usage = normalizeAnthropicUsage(messageUsage);
+    }
+  }
+}
+
 function buildForwardHeaders(
   request: IncomingMessage,
   provider: ProviderGatewayConfig,
@@ -377,6 +435,65 @@ async function streamUpstreamResponse(upstream: Response, response: ServerRespon
   }
 }
 
+function transformAnthropicSseFrame(frame: string, claudeModel: string): string {
+  const lines = frame.split(/\n/);
+  const data = lines
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (!data || data === "[DONE]") {
+    return `${frame}\n\n`;
+  }
+  try {
+    const parsed = JSON.parse(data) as unknown;
+    const payload = asObject(parsed);
+    if (!payload) {
+      return `${frame}\n\n`;
+    }
+    normalizeAnthropicPayloadUsage(payload, claudeModel);
+    const eventLines = lines.filter((line) => line.startsWith("event:"));
+    return `${[...eventLines, `data: ${JSON.stringify(payload)}`].join("\n")}\n\n`;
+  } catch {
+    return `${frame}\n\n`;
+  }
+}
+
+async function streamAnthropicCompatibleResponse(
+  upstream: Response,
+  response: ServerResponse,
+  claudeModel: string,
+) {
+  response.statusCode = upstream.status;
+  copyHeaders(upstream, response);
+  if (!upstream.ok || !upstream.body) {
+    await streamUpstreamResponse(upstream, response);
+    return;
+  }
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split(/\n\n/);
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        response.write(transformAnthropicSseFrame(frame, claudeModel));
+      }
+    }
+    if (buffer) {
+      response.write(transformAnthropicSseFrame(buffer, claudeModel));
+    }
+    response.end();
+  } catch (error) {
+    response.destroy(error instanceof Error ? error : new Error(String(error)));
+  }
+}
+
 async function proxyTextResponse(
   upstream: Response,
   response: ServerResponse,
@@ -391,7 +508,7 @@ async function proxyTextResponse(
       const parsed = JSON.parse(text) as unknown;
       const payload = asObject(parsed);
       if (payload && typeof payload.model === "string") {
-        payload.model = claudeModel;
+        normalizeAnthropicPayloadUsage(payload, claudeModel);
         const body = JSON.stringify(payload);
         response.setHeader("content-type", "application/json");
         response.setHeader("content-length", Buffer.byteLength(body));
@@ -497,6 +614,9 @@ function codexResponseFromAnthropic(payload: Record<string, unknown>, claudeMode
   const usage = asObject(payload.usage);
   const inputTokens = positiveInteger(usage?.input_tokens, 0);
   const outputTokens = positiveInteger(usage?.output_tokens, 0);
+  const cacheReadTokens = positiveInteger(usage?.cache_read_input_tokens, 0);
+  const cacheCreationTokens = positiveInteger(usage?.cache_creation_input_tokens, 0);
+  const totalInputTokens = inputTokens + cacheReadTokens + cacheCreationTokens;
   const createdAt = Math.floor(Date.now() / 1000);
   const messageId = typeof payload.id === "string" ? payload.id : responseId("msg");
   return {
@@ -526,9 +646,17 @@ function codexResponseFromAnthropic(payload: Record<string, unknown>, claudeMode
     ],
     output_text: outputText,
     usage: {
-      input_tokens: inputTokens,
+      input_tokens: totalInputTokens,
       output_tokens: outputTokens,
-      total_tokens: inputTokens + outputTokens,
+      total_tokens: totalInputTokens + outputTokens,
+      ...(cacheReadTokens > 0 || cacheCreationTokens > 0
+        ? {
+            input_tokens_details: {
+              cached_tokens: cacheReadTokens,
+              cache_creation_tokens: cacheCreationTokens,
+            },
+          }
+        : {}),
     },
   };
 }
@@ -556,11 +684,27 @@ function openAiMessageText(message: Record<string, unknown> | undefined): string
 function openAiUsage(payload: Record<string, unknown>): {
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  reasoningTokens: number;
 } {
   const usage = asObject(payload.usage);
+  const promptTokens = positiveInteger(usage?.prompt_tokens, 0);
+  const promptCacheHitTokens = nonNegativeInteger(usage?.prompt_cache_hit_tokens);
+  const promptCacheMissTokens = nonNegativeInteger(usage?.prompt_cache_miss_tokens);
+  const cachedTokens =
+    promptCacheHitTokens ??
+    nestedNonNegativeInteger(usage ?? {}, "prompt_tokens_details", "cached_tokens") ??
+    nestedNonNegativeInteger(usage ?? {}, "input_tokens_details", "cached_tokens") ??
+    0;
+  const reasoningTokens =
+    nestedNonNegativeInteger(usage ?? {}, "completion_tokens_details", "reasoning_tokens") ??
+    nestedNonNegativeInteger(usage ?? {}, "output_tokens_details", "reasoning_tokens") ??
+    0;
   return {
-    inputTokens: positiveInteger(usage?.prompt_tokens, 0),
+    inputTokens: promptCacheMissTokens ?? Math.max(0, promptTokens - cachedTokens),
     outputTokens: positiveInteger(usage?.completion_tokens, 0),
+    cacheReadTokens: cachedTokens,
+    reasoningTokens,
   };
 }
 
@@ -569,7 +713,7 @@ function anthropicResponseFromOpenAi(payload: Record<string, unknown>, claudeMod
   const firstChoice = asObject(choices[0]);
   const message = asObject(firstChoice?.message);
   const outputText = openAiMessageText(message ?? undefined);
-  const { inputTokens, outputTokens } = openAiUsage(payload);
+  const { inputTokens, outputTokens, cacheReadTokens, reasoningTokens } = openAiUsage(payload);
   return {
     id: typeof payload.id === "string" ? payload.id : responseId("msg"),
     type: "message",
@@ -581,6 +725,8 @@ function anthropicResponseFromOpenAi(payload: Record<string, unknown>, claudeMod
     usage: {
       input_tokens: inputTokens,
       output_tokens: outputTokens,
+      ...(cacheReadTokens > 0 ? { cache_read_input_tokens: cacheReadTokens } : {}),
+      ...(reasoningTokens > 0 ? { reasoning_output_tokens: reasoningTokens } : {}),
     },
   };
 }
@@ -590,7 +736,8 @@ function codexResponseFromOpenAi(payload: Record<string, unknown>, claudeModel: 
   const firstChoice = asObject(choices[0]);
   const message = asObject(firstChoice?.message);
   const outputText = openAiMessageText(message ?? undefined);
-  const { inputTokens, outputTokens } = openAiUsage(payload);
+  const { inputTokens, outputTokens, cacheReadTokens, reasoningTokens } = openAiUsage(payload);
+  const totalTokens = inputTokens + outputTokens + cacheReadTokens;
   const createdAt = positiveInteger(payload.created, Math.floor(Date.now() / 1000));
   const messageId = typeof payload.id === "string" ? payload.id : responseId("msg");
   return {
@@ -620,9 +767,15 @@ function codexResponseFromOpenAi(payload: Record<string, unknown>, claudeModel: 
     ],
     output_text: outputText,
     usage: {
-      input_tokens: inputTokens,
+      input_tokens: inputTokens + cacheReadTokens,
       output_tokens: outputTokens,
-      total_tokens: inputTokens + outputTokens,
+      total_tokens: totalTokens,
+      ...(cacheReadTokens > 0
+        ? { input_tokens_details: { cached_tokens: cacheReadTokens } }
+        : {}),
+      ...(reasoningTokens > 0
+        ? { output_tokens_details: { reasoning_tokens: reasoningTokens } }
+        : {}),
     },
   };
 }
@@ -1245,7 +1398,7 @@ async function handleMessages(
       if (provider.type === "openai-chat-compatible") {
         await streamAnthropicResponseFromOpenAi(upstream, response, claudeModel);
       } else {
-        await streamUpstreamResponse(upstream, response);
+        await streamAnthropicCompatibleResponse(upstream, response, claudeModel);
       }
       return;
     }

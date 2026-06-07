@@ -143,4 +143,16 @@ describe("App", () => {
     expect(source.slice(diagnosticsIndex, source.indexOf("const settingsSections", diagnosticsIndex)))
       .toContain("buildSupportDiagnosticsReport({");
   });
+
+  it("applies app setting changes optimistically before waiting for IPC persistence", () => {
+    const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
+    const updateStart = source.indexOf("function updateAppSettings(nextValue: AppSettingsPatch)");
+    const updateSource = source.slice(updateStart, source.indexOf("function clearPersistedHistory(", updateStart));
+
+    expect(updateSource).toContain("const optimisticSettings = mergeAppSettings(previousSettings, nextValue)");
+    expect(updateSource.indexOf("setAppSettings(optimisticSettings)")).toBeLessThan(
+      updateSource.indexOf("window.codepal.updateAppSettings(nextValue)"),
+    );
+    expect(updateSource).toContain("appSettingsSaveSequence.current === requestId");
+  });
 });
