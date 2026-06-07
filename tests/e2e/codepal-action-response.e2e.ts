@@ -1,7 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { stringifyActionResponsePayload } from "../../src/shared/actionResponsePayload";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
 import { launchCodePal } from "./helpers/launchCodePal";
 import { canListen } from "./helpers/probeNetwork";
@@ -85,10 +84,8 @@ test("cursor phase1: installs cursor hooks and surfaces degraded unsupported act
       },
       [phase1Session, phase1Action, OPTION_APPROVE] as const,
     );
-    await expect(collector.waitForLine()).resolves.toBe(
-      stringifyActionResponsePayload(phase1Session, phase1Action, OPTION_APPROVE),
-    );
-    await expect(pendingBadge(row, 1)).toBeHidden();
+    await collector.expectNoFurtherConnections(3_000);
+    await expect(pendingBadge(row, 1)).toBeVisible();
 
     await sendStatusChange(
       {
@@ -117,7 +114,7 @@ test("cursor phase1: installs cursor hooks and surfaces degraded unsupported act
   }
 });
 
-test("round-trips a single_choice pending action", async () => {
+test("keeps single_choice pending actions read-only when native replies are disabled", async () => {
   const collector = await startActionResponseCollector();
 
   const codepal = await launchCodePal({
@@ -161,13 +158,8 @@ test("round-trips a single_choice pending action", async () => {
       [SESSION_ID, ACTION_ID, OPTION_APPROVE] as const,
     );
 
-    const expectedLine = stringifyActionResponsePayload(
-      SESSION_ID,
-      ACTION_ID,
-      OPTION_APPROVE,
-    );
-    await expect(collector.waitForLine()).resolves.toBe(expectedLine);
-    await expect(pendingBadge(row, 1)).toBeHidden();
+    await collector.expectNoFurtherConnections(3_000);
+    await expect(pendingBadge(row, 1)).toBeVisible();
   } finally {
     await codepal.close().catch(() => undefined);
     await collector.close().catch(() => undefined);
@@ -180,7 +172,7 @@ const ACTION_B = "e2e-concurrent-action-b";
 const TITLE_A = "E2E concurrent card A";
 const TITLE_B = "E2E concurrent card B";
 
-test("same session: two pending actions with different actionIds route action_response correctly", async () => {
+test("same session: two pending actions stay read-only and do not route action_response", async () => {
   const collector = await startActionResponseCollector();
   const collectorA = await startActionResponseCollector();
   const collectorB = await startActionResponseCollector();
@@ -235,25 +227,7 @@ test("same session: two pending actions with different actionIds route action_re
     );
 
     const row = firstCurrentSessionRow(page);
-    await page.waitForTimeout(2000);
-    const debugState = await page.evaluate(async (sid: string) => {
-      const sessions = await window.codepal.getSessions();
-      const s = sessions.find((x: { id: string }) => x.id === sid);
-      const articles = Array.from(document.querySelectorAll("article")).map((a) => ({
-        label: a.querySelector("[aria-label]")?.getAttribute("aria-label"),
-        pendingText: a.querySelector(".session-row__pending")?.textContent,
-        full: a.textContent?.slice(0, 200),
-      }));
-      return { session: s ? { id: s.id, status: s.status, pendingActions: s.pendingActions } : null, articles };
-    }, CONCURRENT_SESSION);
-    console.log("DEBUG STATE:", JSON.stringify(debugState, null, 2));
     await expect(pendingBadge(row, 2)).toBeVisible({ timeout: 15_000 });
-
-    const lineA = collectorA.waitForLine();
-    const lineB = collectorB.waitForLine();
-
-    const expectedB = stringifyActionResponsePayload(CONCURRENT_SESSION, ACTION_B, "Bravo");
-    const expectedA = stringifyActionResponsePayload(CONCURRENT_SESSION, ACTION_A, "Alpha");
 
     await page.evaluate(
       ([sessionId, actionId, option]) => {
@@ -261,9 +235,8 @@ test("same session: two pending actions with different actionIds route action_re
       },
       [CONCURRENT_SESSION, ACTION_B, "Bravo"] as const,
     );
-    await expect(lineB).resolves.toBe(expectedB);
-    expect(JSON.parse(await lineB).actionId).toBe(ACTION_B);
-    await expect(pendingBadge(row, 1)).toBeVisible({ timeout: 15_000 });
+    await collectorB.expectNoFurtherConnections(3_000);
+    await expect(pendingBadge(row, 2)).toBeVisible({ timeout: 15_000 });
 
     await page.evaluate(
       ([sessionId, actionId, option]) => {
@@ -271,10 +244,8 @@ test("same session: two pending actions with different actionIds route action_re
       },
       [CONCURRENT_SESSION, ACTION_A, "Alpha"] as const,
     );
-    await expect(lineA).resolves.toBe(expectedA);
-    expect(JSON.parse(await lineA).actionId).toBe(ACTION_A);
-
-    await expect(pendingBadge(row, 1)).toBeHidden();
+    await collectorA.expectNoFurtherConnections(3_000);
+    await expect(pendingBadge(row, 2)).toBeVisible({ timeout: 15_000 });
   } finally {
     await codepal.close().catch(() => undefined);
     await collector.close().catch(() => undefined);
@@ -499,7 +470,7 @@ const FIRST_WIN_SESSION = "e2e-first-win-session";
 const FIRST_WIN_ACTION = "e2e-first-win-action";
 const FIRST_WIN_TITLE = "E2E first-win prompt";
 
-test("after a successful response the card hides and a second action_response is a no-op", async () => {
+test("response attempts do not hide read-only pending cards or write action_response", async () => {
   const collector = await startActionResponseCollector();
   const codepal = await launchCodePal({
     actionResponseTarget: collector.responseTarget,
@@ -534,21 +505,14 @@ test("after a successful response the card hides and a second action_response is
     const row = firstCurrentSessionRow(page);
     await expect(pendingBadge(row, 1)).toBeVisible({ timeout: 15_000 });
 
-    const linePromise = collector.waitForLine();
     await page.evaluate(
       ([sessionId, actionId, option]) => {
         window.codepal.respondToPendingAction(sessionId, actionId, option);
       },
       [FIRST_WIN_SESSION, FIRST_WIN_ACTION, "Once"] as const,
     );
-
-    const expectedLine = stringifyActionResponsePayload(
-      FIRST_WIN_SESSION,
-      FIRST_WIN_ACTION,
-      "Once",
-    );
-    await expect(linePromise).resolves.toBe(expectedLine);
-    await expect(pendingBadge(row, 1)).toBeHidden();
+    await collector.expectNoFurtherConnections(3_000);
+    await expect(pendingBadge(row, 1)).toBeVisible();
 
     await page.evaluate(
       ([sessionId, actionId]) => {

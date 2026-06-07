@@ -33,6 +33,8 @@
 
 - [ ] GitHub Actions `CI` workflow 最近一次为绿色
 - [ ] GitHub Actions `E2E` workflow 最近一次为绿色，或你明确接受本次跳过的理由
+- [ ] 推送 release tag 后，持续关注 GitHub Actions，直到 tag 对应的 `Release` workflow、分支 `CI`、分支 `E2E` 全部进入最终状态
+- [ ] 任意 GitHub Actions 失败时，先查看失败日志并修复 / 重新推送；不要只因为 tag 已推送就把本次发版视为完成
 
 ## B. 发布资产
 

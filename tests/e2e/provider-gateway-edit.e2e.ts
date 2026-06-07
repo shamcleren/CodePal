@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { startActionResponseCollector } from "./helpers/actionResponseServer";
+import { getFreePort } from "./helpers/getFreePort";
 import { launchCodePal } from "./helpers/launchCodePal";
 import { canListen } from "./helpers/probeNetwork";
 
@@ -12,6 +13,7 @@ test.beforeEach(async () => {
 
 test("keeps the renderer alive while editing Provider Gateway providers", async () => {
   const collector = await startActionResponseCollector();
+  const gatewayPort = await getFreePort();
   const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "codepal-provider-gateway-edit-home-"));
   const codepal = await launchCodePal({
     actionResponseTarget: collector.responseTarget,
@@ -34,6 +36,14 @@ test("keeps the renderer alive while editing Provider Gateway providers", async 
     await expect(page.getByRole("heading", { name: "CodePal" })).toBeVisible({
       timeout: 15_000,
     });
+    await page.evaluate((port) => {
+      return window.codepal.updateAppSettings({
+        providerGateway: {
+          enabled: true,
+          port,
+        },
+      });
+    }, gatewayPort);
 
     await page.locator(".app-settings-trigger").click();
     await page.locator(".settings-nav").getByRole("button", { name: /Provider Gateway/ }).click();
