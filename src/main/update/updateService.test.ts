@@ -119,6 +119,24 @@ describe("createUpdateService", () => {
     );
   });
 
+  it("normalizes releaseDate when updater metadata parses it as a Date", () => {
+    const service = createUpdateService({
+      isPackaged: true,
+      currentVersion: "1.0.0",
+      stateFilePath,
+    });
+
+    emit("update-available", {
+      version: "1.0.1",
+      releaseDate: new Date("2026-06-07T11:51:02.663Z"),
+    });
+
+    expect(service.getState()).toMatchObject({
+      phase: "available",
+      releaseDate: "2026-06-07T11:51:02.663Z",
+    });
+  });
+
   it("persists skipped version and restores available state when cleared", () => {
     const service = createUpdateService({
       isPackaged: true,

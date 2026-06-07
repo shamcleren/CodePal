@@ -15,7 +15,7 @@ type UpdateServiceOptions = {
 type UpdateInfoLike = {
   version?: string | null;
   releaseName?: string | null;
-  releaseDate?: string | null;
+  releaseDate?: unknown;
   releaseNotes?: unknown;
 };
 
@@ -80,6 +80,16 @@ function normalizeReleaseNotes(value: unknown): string | null {
   return null;
 }
 
+function normalizeReleaseDate(value: unknown): string | null {
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString();
+  }
+  return null;
+}
+
 function createBaseState(
   currentVersion: string,
   skippedVersion: string | null,
@@ -106,7 +116,7 @@ function mergeUpdateInfo(state: AppUpdateState, info?: UpdateInfoLike): AppUpdat
     availableVersion: info?.version?.trim() || null,
     releaseName: info?.releaseName?.trim() || null,
     releaseNotes: normalizeReleaseNotes(info?.releaseNotes),
-    releaseDate: info?.releaseDate?.trim() || null,
+    releaseDate: normalizeReleaseDate(info?.releaseDate),
   };
 }
 
