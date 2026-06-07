@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { WheelEvent } from "react";
 import type { ActivityItem } from "../../shared/sessionTypes";
 import type { PendingAction } from "../../shared/sessionTypes";
-import { canReply } from "../../shared/sessionTypes";
+import { canUseSessionReply } from "../../shared/sessionTypes";
 import type { ModelPricing, SessionTokenUsageResult, UsageContext } from "../../shared/usageTypes";
 import { useI18n } from "../i18n";
 import { estimateTokenCost, formatUsageCost, formatUsageTokens, selectUsageCost } from "../usageFormat";
@@ -672,15 +672,7 @@ export function SessionHistoryTimeline({
   session,
   historyVersion = 0,
   expanded,
-  onRespond,
 }: SessionHistoryTimelineProps) {
-  type ActionCardState = "pending" | "sending" | "success" | "error";
-
-  const [cardStates, setCardStates] = useState<Record<string, ActionCardState>>({});
-  const [cardErrors, setCardErrors] = useState<Record<string, string>>({});
-  // 追踪每个 actionId 最后一次选择的 option，供重试使用
-  const [cardLastOptions, setCardLastOptions] = useState<Record<string, string>>({});
-
   const i18n = useI18n();
   const detailsRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -827,42 +819,6 @@ export function SessionHistoryTimeline({
       setHistoryLoading(false);
     };
   }, [expanded, historyError, initialLoadAttempt, session.id]);
-
-  useEffect(() => {
-    return window.codepal.onActionResponseResult((result) => {
-      if (result.sessionId !== session.id) return;
-      const { actionId } = result;
-      if (result.result === "success") {
-        setCardStates((prev) => ({ ...prev, [actionId]: "success" }));
-        setCardErrors((prev) => {
-          const next = { ...prev };
-          delete next[actionId];
-          return next;
-        });
-        setTimeout(() => {
-          setCardStates((prev) => {
-            const next = { ...prev };
-            delete next[actionId];
-            return next;
-          });
-        }, 1000);
-      } else {
-        setCardStates((prev) => ({ ...prev, [actionId]: "error" }));
-        setCardErrors((prev) => ({ ...prev, [actionId]: result.error ?? "发送失败" }));
-      }
-    });
-  }, [session.id]);
-
-  function handleRespond(sessionId: string, actionId: string, option: string) {
-    setCardStates((prev) => ({ ...prev, [actionId]: "sending" }));
-    setCardErrors((prev) => {
-      const next = { ...prev };
-      delete next[actionId];
-      return next;
-    });
-    setCardLastOptions((prev) => ({ ...prev, [actionId]: option }));
-    onRespond(sessionId, actionId, option);
-  }
 
   function handleSendMessage(sessionId: string, text: string) {
     const localItem: ActivityItem = {
@@ -1200,72 +1156,21 @@ export function SessionHistoryTimeline({
       {(session.pendingActions?.length ?? 0) > 0 ? (
         <div className="session-row__interaction">
           {(session.pendingActions ?? []).map((action) => {
-            const cardState = cardStates[action.id] ?? "pending";
-            const cardError = cardErrors[action.id];
-            const isSending = cardState === "sending";
-            const isSuccess = cardState === "success";
-            const isError = cardState === "error";
-            const selectedOption = cardLastOptions[action.id];
-
             return (
               <div
                 key={action.id}
-                className={`pending-action pending-action--${cardState}`}
+                className="pending-action pending-action--pending pending-action--readonly"
                 aria-label={action.title}
               >
-                {isSuccess ? (
-                  <div className="pending-action__success">
-                    ✓ {i18n.t("pendingAction.sent")}
-                  </div>
-                ) : isError ? (
-                  <>
-                    <div className="pending-action__error-msg">⚠ {cardError}</div>
-                    <div className="pending-action__actions">
-                      <button
-                        type="button"
-                        className="pending-action__btn pending-action__btn--retry"
-                        onClick={() => handleRespond(session.id, action.id, cardLastOptions[action.id] ?? actionDisplayChoices(action)[0].value)}
-                      >
-                        {i18n.t("pendingAction.retry")}
-                      </button>
-                      <button
-                        type="button"
-                        className="pending-action__btn pending-action__btn--abandon"
-                        onClick={() => {
-                          setCardStates((prev) => {
-                            const next = { ...prev };
-                            delete next[action.id];
-                            return next;
-                          });
-                        }}
-                      >
-                        {i18n.t("pendingAction.abandon")}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="pending-action__eyebrow">
-                      <span className="pending-action__kicker">
-                        {pendingEyebrow(action.type, i18n.t)}
-                      </span>
-                    </div>
-                    <div className="pending-action__title">{action.title}</div>
-                    <div className="pending-action__actions">
-                      {actionDisplayChoices(action).map((option) => (
-                        <button
-                          key={`${action.id}:${option.value}`}
-                          type="button"
-                          className="pending-action__btn"
-                          disabled={isSending}
-                          onClick={() => handleRespond(session.id, action.id, option.value)}
-                        >
-                          {pendingActionButtonLabel(option.label, cardState, selectedOption === option.value, i18n.t)}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                <div className="pending-action__eyebrow">
+                  <span className="pending-action__kicker">
+                    {pendingEyebrow(action.type, i18n.t)}
+                  </span>
+                </div>
+                <div className="pending-action__title">{action.title}</div>
+                <div className="pending-action__readonly-hint">
+                  {i18n.t("session.externalApproval.readonlyHint")}
+                </div>
               </div>
             );
           })}
@@ -1299,7 +1204,7 @@ export function SessionHistoryTimeline({
         </div>
       ) : null}
       </div>
-      {(session.status === "running" || session.status === "waiting") && canReply(session) ? (
+      {(session.status === "running" || session.status === "waiting") && canUseSessionReply(session) ? (
         <SessionMessageInput
           sessionId={session.id}
           status={session.status}

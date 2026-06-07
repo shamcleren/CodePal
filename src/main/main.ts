@@ -39,7 +39,10 @@ import { createTray } from "./tray/createTray";
 import { createFloatingWindow } from "./window/createFloatingWindow";
 import { shouldApplyHistorySettingsAtRuntime } from "./settings/settingsChange";
 import type { SessionRecord } from "../shared/sessionTypes";
-import { isSessionJumpTarget } from "../shared/sessionTypes";
+import {
+  SESSION_PENDING_ACTION_RESPONSE_ENABLED,
+  isSessionJumpTarget,
+} from "../shared/sessionTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview } from "../shared/usageTypes";
 import type { TokenTrendGranularity } from "../shared/analyticsTypes";
@@ -782,6 +785,17 @@ function wireActionResponseIpc(
         win.webContents.send("codepal:action-response-result", result);
       }
     };
+
+    if (!SESSION_PENDING_ACTION_RESPONSE_ENABLED) {
+      emitResult({
+        sessionId,
+        actionId,
+        option,
+        result: "error",
+        error: "Action response is disabled in CodePal.",
+      });
+      return;
+    }
 
     void dispatchActionResponse(
       sessionStore,

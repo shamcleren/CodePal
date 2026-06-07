@@ -651,6 +651,14 @@ function statusPriority(status: SessionStatus): number {
   }
 }
 
+function isOutcomeStatus(status: SessionStatus): boolean {
+  return status === "completed" || status === "error";
+}
+
+function isPassiveStatus(status: SessionStatus): boolean {
+  return status === "idle" || status === "offline";
+}
+
 function shouldPreservePreviousStatus(
   prev: InternalSessionRecord | undefined,
   event: SessionEvent,
@@ -669,6 +677,10 @@ function shouldPreservePreviousStatus(
     statusPriority(prev.status) >= statusPriority("idle") &&
     statusPriority(event.status) < statusPriority(prev.status)
   ) {
+    return true;
+  }
+
+  if (isOutcomeStatus(prev.status) && isPassiveStatus(event.status)) {
     return true;
   }
 

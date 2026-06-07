@@ -89,7 +89,7 @@ CodePal is local-first and monitoring-first:
 - it reads local agent session/transcript logs only for supported integrations
 - it does not upload prompts, transcripts, or repository contents to a CodePal cloud backend
 - it does not become an approval interceptor or autonomous scheduler
-- outbound actions are bounded, capability-gated, and explicitly user-triggered
+- outbound actions are bounded, capability-gated, explicitly user-triggered, and limited to CodePal-owned sessions
 
 See [Privacy and Data Boundaries](docs/support/privacy-and-data.md) for details.
 
@@ -104,8 +104,8 @@ Release builds are signed and notarized by Apple. No security prompt on open.
 
 ## What's Next
 
-- **Deeper Session Operations**: richer capability manifests, preflighted local action logs, export, resume, and list-level management.
-- **Work item and CLI operation flow**: turn observed sessions into actionable handoff, dry-run, execution, and follow-up records.
+- **ACP Sessions**: use Agent Client Protocol as the future operation entry for sessions CodePal creates or explicitly owns, instead of injecting text or decisions into native agent sessions.
+- **Work item flow**: turn observed sessions into actionable handoff, follow-up, failure, and completion records without taking over the original agent UI.
 - **Manual LLM reports when useful**: daily, weekly, and monthly reports from deterministic local facts, with redaction controls before anything leaves the app.
 - **Free local control tower first**: make the individual workflow strong enough for daily use before revisiting shared ops visibility, billing, or cloud sync.
 

@@ -167,6 +167,30 @@ describe("normalizeCodeBuddyEvent", () => {
     ).toBeNull();
   });
 
+  it("maps Stop into a completed lifecycle event", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-31T12:00:00.000Z"));
+
+    const event = normalizeCodeBuddyEvent({
+      hook_event_name: "Stop",
+      session_id: "cb-finished",
+      cwd: "/workspace/demo",
+    });
+
+    expect(event).toMatchObject({
+      sessionId: "cb-finished",
+      status: "completed",
+      activityItems: [
+        expect.objectContaining({
+          title: "Stop",
+          body: "CodeBuddy completed",
+          tone: "completed",
+        }),
+      ],
+      timestamp: Date.parse("2026-03-31T12:00:00.000Z"),
+    });
+  });
+
   it("maps permission_prompt into external approval metadata", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-31T12:00:00.000Z"));

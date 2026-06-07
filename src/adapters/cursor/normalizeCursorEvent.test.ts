@@ -226,6 +226,21 @@ it("reads pendingClosed from raw cursor payloads", () => {
   });
 });
 
+it("maps Stop into a completed lifecycle event", () => {
+  const event = normalizeCursorEvent({
+    hook_event_name: "Stop",
+    session_id: "cursor-finished",
+    message: "Cursor finished",
+  });
+
+  expect(event).toMatchObject({
+    sessionId: "cursor-finished",
+    tool: "cursor",
+    status: "completed",
+    task: "Cursor finished",
+  });
+});
+
 it("falls back to conversation_id when session_id is absent", () => {
   expect(
     normalizeCursorEvent({

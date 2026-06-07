@@ -1267,6 +1267,56 @@ describe("createSessionStore", () => {
     });
   });
 
+  it("does not let later Claude idle notifications downgrade a completed session", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      sessionId: "claude-finished",
+      tool: "claude",
+      status: "completed",
+      timestamp: 200,
+      task: "completed",
+      activityItems: [
+        {
+          id: "stop",
+          kind: "system",
+          source: "system",
+          title: "Session ended",
+          body: "Claude request finished",
+          timestamp: 200,
+          tone: "completed",
+        },
+      ],
+    });
+    store.applyEvent({
+      sessionId: "claude-finished",
+      tool: "claude",
+      status: "idle",
+      timestamp: 250,
+      task: "session ended",
+      meta: { hook_event_name: "Notification", notification_type: "idle_prompt" },
+      activityItems: [
+        {
+          id: "idle",
+          kind: "system",
+          source: "system",
+          title: "Session ended",
+          body: "Claude session ended",
+          timestamp: 250,
+          tone: "idle",
+        },
+      ],
+    });
+
+    const session = store.getSession("claude-finished");
+    expect(session?.status).toBe("completed");
+    expect(session?.activityItems?.map((item) => item.id)).toEqual([
+      expect.stringContaining(":outcome:"),
+      "idle",
+      "stop",
+    ]);
+  });
+
   it("uses event meta to produce richer activity descriptions", () => {
     const store = createSessionStore();
 

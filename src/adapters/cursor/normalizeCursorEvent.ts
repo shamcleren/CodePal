@@ -120,6 +120,7 @@ function statusFromHook(payload: Record<string, unknown>): string {
     case "Notification":
       return "waiting";
     case "Stop":
+      return "completed";
     case "SessionEnd":
       return "offline";
     case "StatusChange":

@@ -13,10 +13,30 @@ function mockExec(
   return { exec, calls };
 }
 
+function createEnabledSender(exec: ExecFileLike) {
+  return createTerminalTextSender({
+    execFileImpl: exec,
+    replyChannelEnabled: true,
+  });
+}
+
 describe("terminalTextSender", () => {
-  it("returns no_reply_capability when no terminalContext", async () => {
+  it("keeps reply disabled by default even when terminal delivery is technically possible", async () => {
     const { exec, calls } = mockExec(() => "ok");
     const sender = createTerminalTextSender({ execFileImpl: exec });
+
+    const result = await sender.send(
+      { terminalContext: { app: "tmux", tmuxPane: "%42" } },
+      "continue please",
+    );
+
+    expect(result).toEqual({ ok: false, error: "no_reply_capability" });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("returns no_reply_capability when no terminalContext", async () => {
+    const { exec, calls } = mockExec(() => "ok");
+    const sender = createEnabledSender(exec);
     const result = await sender.send({}, "hello");
     expect(result).toEqual({ ok: false, error: "no_reply_capability" });
     expect(calls).toHaveLength(0);
@@ -24,7 +44,7 @@ describe("terminalTextSender", () => {
 
   it("returns no_reply_capability when context has neither tmux pane nor ghostty session id", async () => {
     const { exec, calls } = mockExec(() => "ok");
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
     const result = await sender.send({ terminalContext: { app: "Terminal" } }, "hello");
     expect(result).toEqual({ ok: false, error: "no_reply_capability" });
     expect(calls).toHaveLength(0);
@@ -32,7 +52,7 @@ describe("terminalTextSender", () => {
 
   it("sends via tmux send-keys -l + Enter when tmuxPane is present", async () => {
     const { exec, calls } = mockExec((file) => (file === "tmux" ? "ok" : "fail"));
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "tmux", tmuxPane: "%42" } },
@@ -48,7 +68,7 @@ describe("terminalTextSender", () => {
 
   it("passes tmuxSocket via -S", async () => {
     const { exec, calls } = mockExec((file) => (file === "tmux" ? "ok" : "fail"));
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     await sender.send(
       {
@@ -71,7 +91,7 @@ describe("terminalTextSender", () => {
 
   it("returns an error when tmux literal send fails (Enter not attempted)", async () => {
     const { exec, calls } = mockExec(() => "fail");
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "tmux", tmuxPane: "%42" } },
@@ -85,7 +105,7 @@ describe("terminalTextSender", () => {
 
   it("uses ghostty osascript when app is ghostty and terminalSessionId is set", async () => {
     const { exec, calls } = mockExec((file) => (file === "osascript" ? "ok" : "fail"));
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       {
@@ -105,7 +125,7 @@ describe("terminalTextSender", () => {
 
   it("returns an error when ghostty osascript fails", async () => {
     const { exec } = mockExec(() => "fail");
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "ghostty", terminalSessionId: "abc" } },
@@ -118,7 +138,7 @@ describe("terminalTextSender", () => {
 
   it("sends via wezterm cli send-text + carriage return when weztermPane is present", async () => {
     const { exec, calls } = mockExec((file) => (file === "wezterm" ? "ok" : "fail"));
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "wezterm", weztermPane: "12" } },
@@ -134,7 +154,7 @@ describe("terminalTextSender", () => {
 
   it("returns an error when wezterm send-text fails (Enter not attempted)", async () => {
     const { exec, calls } = mockExec(() => "fail");
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "wezterm", weztermPane: "12" } },
@@ -148,7 +168,7 @@ describe("terminalTextSender", () => {
 
   it("prefers tmux over wezterm when both pane ids are present (tmux can run inside wezterm)", async () => {
     const { exec, calls } = mockExec((file) => (file === "tmux" ? "ok" : "fail"));
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     await sender.send(
       { terminalContext: { app: "wezterm", tmuxPane: "%1", weztermPane: "12" } },
@@ -160,7 +180,7 @@ describe("terminalTextSender", () => {
 
   it("sends via kitten @ send-text + carriage return when kittyWindow is present", async () => {
     const { exec, calls } = mockExec((file) => (file === "kitten" ? "ok" : "fail"));
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "kitty", kittyWindow: "9" } },
@@ -176,7 +196,7 @@ describe("terminalTextSender", () => {
 
   it("returns an error when kitten send-text fails (Enter not attempted)", async () => {
     const { exec, calls } = mockExec(() => "fail");
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "kitty", kittyWindow: "9" } },
@@ -190,7 +210,7 @@ describe("terminalTextSender", () => {
 
   it("uses iTerm2 per-session AppleScript when app is iTerm.app and terminalSessionId is set", async () => {
     const { exec, calls } = mockExec((file) => (file === "osascript" ? "ok" : "fail"));
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "iTerm.app", terminalSessionId: "w0t0p0:DEADBEEF" } },
@@ -205,7 +225,7 @@ describe("terminalTextSender", () => {
 
   it("returns an error when iTerm2 osascript fails", async () => {
     const { exec } = mockExec(() => "fail");
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     const result = await sender.send(
       { terminalContext: { app: "iTerm.app", terminalSessionId: "abc" } },
@@ -218,7 +238,7 @@ describe("terminalTextSender", () => {
 
   it("prefers tmux over ghostty when both fields are present (tmux lives inside ghostty)", async () => {
     const { exec, calls } = mockExec((file) => (file === "tmux" ? "ok" : "fail"));
-    const sender = createTerminalTextSender({ execFileImpl: exec });
+    const sender = createEnabledSender(exec);
 
     await sender.send(
       {

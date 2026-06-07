@@ -81,7 +81,7 @@ function statusFromHook(payload: Record<string, unknown>): string {
       return "running";
     case "Stop":
     case "SubagentStop":
-      return "idle";
+      return "completed";
     case "SessionEnd":
       return "offline";
     default:
@@ -257,15 +257,16 @@ function buildActivityItems(
   }
 
   if (hookEventName === "SessionStart" || hookEventName === "SessionEnd" || hookEventName === "Stop") {
+    const completed = status === "completed";
     return [
       {
         id: `codebuddy:${timestamp}:${hookEventName?.toLowerCase() ?? "session"}`,
         kind: "system",
         source: "system",
         title: hookEventName ?? "Session",
-        body: task ?? hookEventName ?? status,
+        body: task ?? (completed ? "CodeBuddy completed" : (hookEventName ?? status)),
         timestamp,
-        tone: status === "offline" ? "system" : undefined,
+        tone: completed ? "completed" : status === "offline" ? "system" : undefined,
       },
     ];
   }

@@ -1,4 +1,4 @@
-import { canReply, type SessionRecord } from "./sessionTypes";
+import { SESSION_REPLY_CHANNEL_ENABLED, canUseSessionReply, type SessionRecord } from "./sessionTypes";
 import type {
   ActionCapability,
   SessionCapabilityManifest,
@@ -15,6 +15,9 @@ function bestEffort(reason?: string): ActionCapability {
 function unsupported(reason?: string): ActionCapability {
   return { support: "unsupported", confidence: "high", reason };
 }
+
+const REPLY_DISABLED_REASON =
+  "Reply channel disabled until CodePal can avoid affecting the original agent flow";
 
 function hasJumpTarget(session: SessionRecord): boolean {
   if (session.externalApproval?.jumpTarget) return true;
@@ -33,11 +36,9 @@ export function resolveSessionCapabilities(
       ? supported()
       : unsupported("No terminal context available"),
 
-    sendMessage: canReply(session)
+    sendMessage: SESSION_REPLY_CHANNEL_ENABLED && canUseSessionReply(session)
       ? supported()
-      : session.terminalContext
-        ? bestEffort("Terminal context present but no reliable text delivery path")
-        : unsupported("No terminal context"),
+      : unsupported(REPLY_DISABLED_REASON),
 
     openRepo: session.externalApproval?.jumpTarget?.workspacePath
       ? supported()

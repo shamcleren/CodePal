@@ -56,20 +56,22 @@ describe("resolveSessionCapabilities", () => {
   });
 
   describe("sendMessage", () => {
-    it("is supported when canReply returns true", () => {
+    it("is unsupported even when terminal delivery would be technically possible", () => {
       const session = baseSession({
         terminalContext: { tmuxPane: "%1" },
       });
       const caps = resolveSessionCapabilities(session);
-      expect(caps.sendMessage.support).toBe("supported");
+      expect(caps.sendMessage.support).toBe("unsupported");
+      expect(caps.sendMessage.reason).toContain("disabled");
     });
 
-    it("is best_effort when terminalContext exists but canReply is false", () => {
+    it("is unsupported when terminalContext exists but reply is disabled", () => {
       const session = baseSession({
         terminalContext: { app: "Terminal" },
       });
       const caps = resolveSessionCapabilities(session);
-      expect(caps.sendMessage.support).toBe("best_effort");
+      expect(caps.sendMessage.support).toBe("unsupported");
+      expect(caps.sendMessage.reason).toContain("disabled");
     });
 
     it("is unsupported when no terminal context", () => {

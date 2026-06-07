@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { SessionRecord, TerminalContext } from "../../shared/sessionTypes";
-import { canReply } from "../../shared/sessionTypes";
+import { SESSION_REPLY_CHANNEL_ENABLED, canReply } from "../../shared/sessionTypes";
 
 const execFileAsyncDefault = promisify(execFile);
 
@@ -21,6 +21,7 @@ export type TerminalTextSender = {
 
 type SenderDeps = {
   execFileImpl?: ExecFileLike;
+  replyChannelEnabled?: boolean;
 };
 
 export async function sendViaWezTerm(
@@ -154,10 +155,12 @@ export async function sendViaGhostty(
 
 export function createTerminalTextSender(deps: SenderDeps = {}): TerminalTextSender {
   const exec = deps.execFileImpl ?? execFileAsyncDefault;
+  const replyChannelEnabled =
+    deps.replyChannelEnabled ?? SESSION_REPLY_CHANNEL_ENABLED;
 
   return {
     async send(session, text) {
-      if (!canReply(session)) {
+      if (!replyChannelEnabled || !canReply(session)) {
         return { ok: false, error: "no_reply_capability" };
       }
       const ctx = session.terminalContext as TerminalContext;

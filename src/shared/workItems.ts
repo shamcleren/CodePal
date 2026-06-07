@@ -119,7 +119,7 @@ function deriveNextAction(session: SessionRecord, state: WorkItemState): string 
   switch (state) {
     case "waiting":
       if (session.pendingActions?.length) {
-        return `Respond to: ${session.pendingActions[0].title}`;
+        return `Handle in original tool: ${session.pendingActions[0].title}`;
       }
       if (session.externalApproval) {
         return "Approve in original tool";

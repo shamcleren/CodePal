@@ -61,7 +61,7 @@
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
 - v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
-- v1.0.3 through v1.3.4 are all shipped. Current shipped baseline is **v1.3.4**.
+- v1.0.3 through v1.3.8 are all shipped. Current shipped baseline is **v1.3.8**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -80,12 +80,20 @@
 - v1.3.2 shipped: clean patch release from the CI-stable follow-up commit after v1.3.1 tag checks exposed timezone-sensitive Work Review / Analytics test expectations
 - v1.3.3 shipped: compact assistant-attached tool markers, latest Codex model metadata, project/token-type Analytics trend grouping, and rounded Analytics summary cards
 - v1.3.4 shipped: Provider Gateway vendor configuration polish, provider edit responsiveness fix, Analytics summary/trend refresh wiring, and Codex diagnostics legacy-hook suppression
-- v1.3.5 patch candidate covers the Analytics chart-domain refresh regression and report-format alignment follow-up found after v1.3.4:
+- v1.3.5 shipped: Analytics chart-domain refresh fix and report-format alignment follow-up
+- v1.3.6 shipped: Provider Gateway client mutation paths disabled while the safety model is tightened
+- v1.3.7 shipped: safer opt-in Provider Gateway setup, startup safety hardening, Work Review light-theme polish, Follow system theme, and pricing sync refresh
+- v1.3.8 shipped: cross-agent session lifecycle alignment, legacy reply / pending-action response UI disabled, and ACP Sessions documented as the next major operation-entry direction
+- v1.3.5 validation covered the Analytics chart-domain refresh regression and report-format alignment follow-up found after v1.3.4:
   - `npm test -- src/renderer/components/AnalyticsPage.test.ts src/renderer/components/AnalyticsLineChart.test.tsx src/renderer/App.test.tsx`
   - `npm test -- src/main/report/generateHtmlReport.test.ts`
   - `npm run lint`
   - `npm run build`
   - `git diff --check`
+- v1.3.8 local validation on 2026-06-07 covers lifecycle alignment, disabled native-session reply paths, ACP Sessions documentation, and release version bump:
+  - `npm test`
+  - `npm run lint`
+  - `npm run build`
 - v1.3.0 local lint / test / build verification is green on 2026-05-26:
   - `npm run lint`
   - `npm test` — 976 tests across 107 files, all passing
@@ -142,7 +150,7 @@
 - Existing pending-action/control code remains in-repo, but is no longer the primary user-facing path
 - Cursor remains available in-repo and continues to calibrate usage plus dashboard connection flow
 - GoLand and PyCharm now feed the shared monitoring/dashboard path through the shared CodeBuddy JetBrains plugin watcher/framework, including usage visibility; other JetBrains IDEs may reuse the same framework later, but they are outside the current V1 calibrated / accepted scope
-- Next-stage planning now treats CodePal as a free local AI coding control tower and operations memory for heavy AI-coding users, with Session Operations, work item flow, CLI operation flow, LLM reports, workflow health, factual source / coverage transparency, Attention Queue, community ecosystem, and optional shared ops visibility as additive roadmap tracks.
+- Next-stage planning now treats CodePal as a free local AI coding control tower and operations memory for heavy AI-coding users, with observe-only native sessions, CodePal-owned ACP Sessions, work item flow, LLM reports, workflow health, factual source / coverage transparency, Attention Queue, community ecosystem, and optional shared ops visibility as additive roadmap tracks.
 - The near-term action layer should be user-triggered, capability-gated, preflighted, locally logged, and explicitly not an autonomous agent scheduler.
 
 ### Current Adapters
@@ -237,19 +245,19 @@
   - `npm test` — 905 tests across 100 files, all passing
   - `npm run build` — successful
 
-### Pending Action Loop
+### Pending Action Boundary
 
 - `approval`
 - `single_choice`
 - `multi_choice`
 
-`approval` actions still round-trip through the hook path with explicit `allow / deny` semantics. They are no longer treated as generic option payloads internally, while `single_choice` and `multi_choice` continue to use option-value responses.
+These structured action types remain in shared types and lower-level transport tests, but CodePal no longer exposes them as a native-session operation surface. Pending cards are read-only in the UI, and `action_response` IPC is guarded off by default.
 
-End-to-end path for tool hooks:
+Legacy transport path retained for test coverage and future ACP-owned use:
 
 `renderer -> preload -> main -> action_response line` → connect to the `responseTarget.socketPath` stored on that pending action (or env fallback socket when no target is set).
 
-Same `sessionId` may have multiple pending actions at once; each keeps its own optional `responseTarget`, so concurrent blocking hooks receive only their matching `actionId` line.
+Same `sessionId` may have multiple pending actions at once; each keeps its own optional `responseTarget`, so concurrent blocking hooks can be modeled without conflating `actionId` lines. This is no longer a user-facing Allow/Deny surface for observed native sessions.
 
 **Pending lifecycle cleanup (Phase 1, bounded):**
 
@@ -269,9 +277,9 @@ Same `sessionId` may have multiple pending actions at once; each keeps its own o
 - “Do everything in the current window” is not a Phase 1 hard promise
 - Next-stage product work should prioritize personal AI work memory and workflow-health diagnostics over team analytics or new control loops
 - CodePal should not frame workflow-health data as individual developer productivity scoring
-- The roadmap should be additive, not a replacement of existing valuable tracks: Work Item Flow, CLI Operation Flow, LLM Reports, Workflow Health, Source / Coverage Transparency, Ambient Presence, and Team Later remain in scope with updated boundaries.
+- The roadmap should be additive, not a replacement of existing valuable tracks: Work Item Flow, ACP Sessions, LLM Reports, Workflow Health, Source / Coverage Transparency, Ambient Presence, and Team Later remain in scope with updated boundaries.
 - CodePal's next positioning is "free local AI coding control tower and operations memory" rather than a paid dashboard, team admin surface, bossware product, or execution platform replacement.
-- Session Operations should cover user-triggered actions such as jump, structured message, resume, repair, export report, and list-level delete. `open_repo` should wait for reliable workspace paths, and session outcome should be derived from work item flow only if it becomes useful.
+- Session Operations should cover navigation and management for observed native sessions, while operation entry belongs to CodePal-owned ACP Sessions. `open_repo` should wait for reliable workspace paths, and session outcome should be derived from work item flow only if it becomes useful.
 - Capability Manifest and local Action Broker are the preferred primitives for adding operations without renderer-side guessing or agent-scheduler framing.
 - Attention Queue should route user attention to waiting, idle, errored, expensive, quota-pressured, or repair-needed work; it should not automatically assign, execute, approve, merge, or switch agents.
 - The current product strategy is free user gathering and daily habit formation first; billing, cloud sync, and Pro / Team / Enterprise packaging should not drive near-term roadmap decisions.
@@ -320,8 +328,9 @@ npm run dist:mac
 - MiMo provider quota should stay dashboard/manual until MiMo publishes an official account usage or remaining-quota API. The official sources checked on 2026-05-19 were `https://www.mimo-v2.com/docs/faq`, `https://www.mimo-v2.com/docs/pricing`, and `https://www.mimo-v2.com/docs`
 - CodeBuddy still needs broader real-payload and transcript-shape calibration beyond the current normalized subset
 - CodePal-owned app, docs, packaged macOS, and tray icon assets now use the refreshed centered monitoring-panel mark; third-party agent icon normalization remains future polish
-- CodePal → codeagent structured message delivery is **capability-gated terminal delivery**. The composer renders only when the session has a concrete delivery channel: tmux, WezTerm, kitty, iTerm2, or Ghostty. Terminal.app and Warp still lack a reliable supported text-injection surface.
+- CodePal → codeagent structured message delivery through the legacy native-session path is disabled. Even where terminal delivery is technically possible, CodePal must not inject text into an agent session it does not own.
 - CodePal no longer presents Claude PreToolUse as a dashboard approval loop. Agent-native approval remains the source of truth; Codex remains blocked by upstream (`notify` hook is completion-only), and CodeBuddy still only supports heuristic external-approval display because upstream `permission_prompt` payloads do not yet include a structured `pendingAction` or a decision write-back channel.
+- CodePal-owned ACP Sessions are the planned future operation entry. In that model, CodePal can operate only on sessions it creates or explicitly loads through ACP; already-running native Claude / Codex / Cursor / CodeBuddy sessions remain observe-only by default.
 - GitHub Project creation is blocked until `gh auth refresh -s project,read:project` is completed
 
 ## Delivery Baseline
@@ -333,7 +342,7 @@ npm run dist:mac
 - Shared session model plus `ActivityItem[]` timeline model are already the renderer-facing baseline
 - Cursor and Codex both feed the shared monitoring surface; Cursor does so through hook ingress, Codex currently does so through session-log watching
 - GoLand and PyCharm session presence and usage visibility now also feed the shared monitoring surface through the shared CodeBuddy JetBrains plugin watcher/framework
-- Supported in-app structured actions remain in the codebase, but are no longer the primary UI path:
+- Supported in-app structured actions remain in the codebase for lower-level transport coverage, but are disabled from the primary UI / IPC path until CodePal owns the session through ACP:
   - `approval`
   - `single_choice`
   - `multi_choice`
@@ -354,15 +363,15 @@ npm run dist:mac
 
 ### Explicitly Deferred
 
-- ACP / `acpx` common capability extraction
+- ACP Sessions implementation and registry-backed agent discovery
 - freeform `text_input`
 - moving control-loop UX back onto the main dashboard path
 - team sharing, cloud sync, billing, and broader control surfaces until the individual local workflow has proven sustained value
 - any productivity-scoring or team-ranking surface
 
-### v1.1.0–v1.3.3 Release Track
+### v1.1.0–v1.3.8 Release Track
 
-v1.1.0 through v1.3.3 are shipped. See individual release notes for details:
+v1.1.0 through v1.3.8 are shipped. See individual release notes for details:
 
 - `docs/release/notes/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release/notes/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -381,6 +390,11 @@ v1.1.0 through v1.3.3 are shipped. See individual release notes for details:
 - `docs/release/notes/release-notes-v1.3.1.md` — session noise filtering, unified usage formatting, 30-day Work Review coverage, Analytics / Work Review daily usage alignment
 - `docs/release/notes/release-notes-v1.3.2.md` — clean CI-stable patch release for the v1.3.1 usage-alignment work, with timezone-stable Work Review / Analytics test coverage
 - `docs/release/notes/release-notes-v1.3.3.md` — compact session tool markers, latest model metadata, Analytics project trend grouping, and rounded summary cards
+- `docs/release/notes/release-notes-v1.3.4.md` — Provider Gateway setup polish, provider edit responsiveness, Analytics refresh wiring, and Codex diagnostics cleanup
+- `docs/release/notes/release-notes-v1.3.5.md` — Analytics refresh regression fix and Provider Gateway client mutation safety tightening
+- `docs/release/notes/release-notes-v1.3.6.md` — release-facing safety patch for disabled client mutation paths
+- `docs/release/notes/release-notes-v1.3.7.md` — safer opt-in Provider Gateway setup, startup safety, Work Review light-theme polish, Follow system theme, and pricing refresh
+- `docs/release/notes/release-notes-v1.3.8.md` — session lifecycle alignment, disabled legacy reply / pending-action response entry points, and ACP Sessions roadmap handoff
 
 ## Next Product Direction Handoff
 
@@ -398,7 +412,7 @@ Recommended next implementation sequence (updated 2026-05-29):
 1. ~~Keep per-session deterministic metrics at the footer level~~ — done (v1.2.0)
 2. ~~Evolve the Work Review surface~~ — done (v1.3.0): Daily Work Review with project grouping and session evidence
 3. ~~Define the Report Facts schema~~ — done (v1.2.0)
-4. ~~Work item flow and CLI operation flow~~ — done (v1.2.0); managed CLI task infrastructure on a separate branch needs rework before merging
+4. ~~Work item flow and local operation logging~~ — done (v1.2.0); managed CLI task infrastructure is superseded by the ACP Sessions direction and should not be merged as the primary control model
 5. ~~Manual LLM-generated reports~~ — done (v1.2.0)
 6. Treat data-source transparency as factual provenance — next up: data layer exists in ReportFacts, UI indicators pending
 7. Add broader workflow-health signals and Attention Queue
@@ -419,5 +433,5 @@ For release-facing and forward-looking work, use:
 
 - `docs/context/handoffs/2026-05-07-provider-gateway-handoff.md` for the Provider Gateway / MiMo / Claude Desktop / Codex Desktop handoff
 - `docs/release/notes/release-notes-v1.1.11.md` for the v1.1.11 release
-- `docs/planning/roadmap-next.md` for work item flow, CLI operation flow, LLM reports, workflow health, source / coverage transparency, individual Pro sequencing, and team/cloud deferral
+- `docs/planning/roadmap-next.md` for work item flow, ACP Sessions, LLM reports, workflow health, source / coverage transparency, individual Pro sequencing, and team/cloud deferral
 - `docs/release/release-checklist.zh-CN.md` for the final operator-facing release checklist

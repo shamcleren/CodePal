@@ -388,6 +388,9 @@ export interface SessionRecord {
   actionLog?: ActionLogEntry[];
 }
 
+export const SESSION_REPLY_CHANNEL_ENABLED = false;
+export const SESSION_PENDING_ACTION_RESPONSE_ENABLED = false;
+
 /**
  * Capability predicate for send-message. True when the session's terminal
  * context gives us a concrete channel to deliver text into the agent's stdin:
@@ -416,4 +419,10 @@ export function canReply(session: Pick<SessionRecord, "terminalContext">): boole
     return true;
   }
   return false;
+}
+
+export function canUseSessionReply(
+  session: Pick<SessionRecord, "terminalContext">,
+): boolean {
+  return SESSION_REPLY_CHANNEL_ENABLED && canReply(session);
 }

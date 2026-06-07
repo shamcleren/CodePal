@@ -28,7 +28,7 @@ The next roadmap should build on that local data foundation instead of adding sp
 
 ## Next Version Scope
 
-The next version should pivot from passive review UI to actionable workflow infrastructure.
+The next major product track should pivot from passive review UI to ACP-backed session ownership and workflow memory.
 
 Ship in the next version:
 
@@ -38,11 +38,12 @@ Ship in the next version:
   - do not treat restored `idle` rows as actionable by default; many historical `idle` rows are terminal or dirty local data
   - group items by project / repository when the source path is reliable
   - keep item titles and next actions concise enough to scan in the main workflow
-- CLI Operation Flow MVP:
-  - expose a bounded operation surface for target terminal / agent sessions
-  - run preflight before execution
-  - support dry-run where the operation type allows it
-  - record execute result, error, timestamp, target, and source session into a local operation log
+- ACP Sessions foundation:
+  - introduce CodePal-owned ACP sessions as the only default operation entry point
+  - start, load, and display ACP sessions through explicit Agent Client Protocol ownership rather than terminal text injection or hook write-back
+  - treat `session/prompt`, permission requests, tool updates, plans, and terminal output as structured ACP events
+  - keep existing native-agent sessions observe-only unless the user explicitly creates or transfers an ACP session under CodePal ownership
+  - record prompt dispatch, permission decisions, tool updates, errors, timestamps, target agent, and source project into a local session operation log
   - keep operations explicitly user-triggered; do not add autonomous scheduling or automatic execution queues
 - Report Facts layer:
   - build a deterministic daily / weekly / monthly facts object from work items, operation logs, session status, and usage stats
@@ -51,7 +52,7 @@ Ship in the next version:
 - Manual LLM report generation:
   - allow manual generation of daily / weekly / monthly reports after the Report Facts layer exists
   - gate all LLM report generation behind an explicit settings switch because it spends the user's model quota
-  - prefer generating reports through a visible agent / CLI session: build redacted Report Facts locally, send them through the capability-gated `sendMessage` / report-session path, and let the resulting session appear in the normal session list and usage analytics
+  - prefer generating reports through a CodePal-owned ACP report session: build redacted Report Facts locally, send them through `session/prompt`, and let the resulting session appear in the normal session list and usage analytics
   - provide a model selector and default to the cheapest configured model that is capable of summarization
   - expose the manual LLM report action in the Analytics toolbar when enabled; do not hide it below redaction controls
   - keep direct Provider Gateway generation only as an explicit quick-generate / fallback path; if used, validate gateway readiness and show actionable gateway/token/listener errors instead of raw network errors such as `fetch failed`
@@ -77,7 +78,7 @@ Do not ship in the next version:
 - static Digest tab that only restates session logs
 - subjective data-confidence badges
 - LLM summaries over unbounded raw transcripts
-- autonomous CLI execution, auto-approval, auto-merge, or auto task assignment
+- autonomous ACP / CLI execution, auto-approval, auto-merge, or auto task assignment
 
 ## Product Positioning
 
@@ -126,7 +127,7 @@ Current product decisions should optimize for:
 
 - daily open rate among heavy AI-coding users
 - long-term local trust
-- habit formation around work item flow, CLI operation flow, and useful LLM reports
+- habit formation around work item flow, ACP Sessions, and useful LLM reports
 - active recommendation to other developers
 - community contribution of adapters, templates, schemas, and troubleshooting knowledge
 
@@ -136,7 +137,7 @@ Free should mean complete for the core personal workflow:
 
 - free session history
 - free work item flow
-- free CLI operation flow
+- free ACP Sessions for CodePal-owned agent work
 - free daily / weekly / monthly reports when LLM generation is useful
 - free agent usage overview
 - free local reports
@@ -154,12 +155,16 @@ This is the nearest action-oriented addition to the existing monitoring foundati
 
 Goal: move from observe-only into user-triggered operations without changing the trust boundary.
 
+Important boundary: CodePal may operate only on sessions it owns through ACP. Sessions started in Claude Code, Codex, Cursor, CodeBuddy, or another native tool remain observe-only by default. CodePal should not send prompts, approval decisions, terminal text, or hook responses into those existing native sessions unless the user explicitly transfers control through a future, clearly labeled ACP handoff.
+
 Near-term capabilities:
 
 - session card action bar (detail view): jump to terminal / IDE
 - open repo (deferred: workspacePath rarely available from session data; reintroduce when path extraction is reliable)
-- send structured follow-up message when a reliable terminal channel exists (inline input, not in action bar)
-- resume session when the adapter exposes a reliable path
+- start a CodePal-owned ACP session when the selected agent supports ACP
+- load / resume a CodePal-owned ACP session when the adapter exposes `session/load`
+- send structured follow-up messages only inside CodePal-owned ACP sessions
+- observe native sessions without sending follow-up messages into their original UI or hook path
 - repair integration
 - export report (deferred until Report Facts and redaction controls exist)
 - delete session (list-level action, not in action bar)
@@ -187,6 +192,7 @@ Design rules:
 - failures explain what happened in user-readable language
 - best-effort actions are labeled as best-effort before execution
 - no action is sent to a cloud service by default
+- no action is sent into a native agent session that CodePal does not own
 
 Preferred product names:
 
@@ -206,7 +212,10 @@ Example capabilities:
 - `observeSession`
 - `observeUsage`
 - `jumpToSession`
-- `sendStructuredMessage`
+- `startAcpSession`
+- `loadAcpSession`
+- `sendAcpPrompt`
+- `respondToAcpPermission`
 - `resumeSession`
 - `startSession`
 - `stopSession`
@@ -219,7 +228,7 @@ Example capabilities:
 Each capability should include:
 
 - support level: `supported`, `partial`, `best_effort`, or `unsupported`
-- source: hook, log, transcript, terminal, provider, or manual
+- source: ACP, hook, log, transcript, terminal, provider, or manual
 - confidence: high, medium, or low
 - caveats
 - preflight requirements
@@ -232,8 +241,10 @@ CodePal should centralize user-triggered operations through a local action broke
 Action types:
 
 - `jump` (action bar)
-- `send_message` (inline input)
-- `resume` (action bar)
+- `start_acp_session` (action bar / creation flow)
+- `send_acp_prompt` (ACP session composer)
+- `respond_acp_permission` (ACP-owned permission UI)
+- `resume` (ACP session action when `session/load` is supported)
 - `open_repo` (deferred — workspacePath rarely available)
 - `repair_integration` (action bar)
 - `export_report` (deferred until Report Facts and redaction controls exist)
@@ -253,7 +264,7 @@ Broker lifecycle:
 8. broker reports success or a user-readable failure
 9. work items, operation logs, and future reports can include the action history
 
-## Track 1: Work Items, CLI Operation Flow, And Reports
+## Track 1: Work Items, ACP Sessions, And Reports
 
 This remains the highest-leverage product layer.
 
@@ -269,7 +280,7 @@ Next increments:
 
 - Report Facts layer: deterministic input for daily / weekly / monthly reports
 - work item flow: waiting, needs follow-up, failed, completed, and deferred items across agents
-- CLI operation flow: target terminal, preflight, dry-run, execute, result, and local action log
+- ACP Sessions: CodePal-owned agent sessions with structured prompts, updates, permission handling, tool activity, and local action history
 - LLM-generated daily / weekly / monthly reports from work items and operation logs, not from a static metric card
 - redaction controls for prompts, paths, assistant content, command output, and repo identifiers before report export
 - better item titles and grouping by project / repository when the source path is reliable
@@ -283,13 +294,13 @@ The footer-level usage summary may cover:
 - cache tokens
 - estimated cost
 
-Work item and CLI operation flow should add:
+Work item flow and ACP Sessions should add:
 
 - repo / project
 - current owner / next action
-- linked sessions and terminal targets
-- preflight status and dry-run output
-- execution result and local action history
+- linked sessions, project paths, and ACP agent targets
+- preflight status, ACP initialization/auth status, and capability negotiation results
+- prompt / permission / tool execution result and local action history
 - follow-up / failed / completed state transitions
 - report export and redaction metadata
 
@@ -297,10 +308,10 @@ LLM report rules:
 
 - reports are generated only from Report Facts plus selected operation-log excerpts, not from unbounded raw transcripts
 - LLM report generation must be controlled by a settings switch because it spends the user's quota
-- the preferred transport is a visible agent / CLI session, not a hidden app-side Provider Gateway call
-- the report operation should create a dedicated report session when a start-session capability exists; otherwise it can target an existing reply-capable session
+- the preferred transport is a visible CodePal-owned ACP session, not a hidden app-side Provider Gateway call
+- the report operation should create a dedicated ACP report session when the selected agent supports session creation; otherwise it should fall back to deterministic local HTML only, not to injecting text into an existing native session
 - the user should see the prompt, report output, token usage, errors, and downstream effects in the normal CodePal surfaces
-- the session path should use capability-gated terminal message delivery and record a local operation log entry
+- the session path should use ACP `session/prompt` and record a local operation log entry
 - users must be able to choose the report model; default to the cheapest configured summarization-capable model
 - the manual generation action should be visible near the deterministic report action when enabled
 - direct Provider Gateway generation is a fallback / quick-generate mode, not the primary UX
@@ -315,10 +326,10 @@ LLM report rollout order:
 
 1. Keep deterministic HTML report generation as the always-available baseline.
 2. Build the Report Facts prompt payload locally, including selected operation-log excerpts and redaction metadata.
-3. Add report target selection: prefer a dedicated report session when a start-session capability exists; otherwise list existing reply-capable sessions.
-4. Dispatch the prompt through the capability-gated `sendMessage` / session action path and focus the target session after dispatch.
-5. Record a local operation log entry with report type, target session, selected model hint, redaction flags, dispatch result, and error if any.
-6. Let the normal session watcher capture report output and token usage; do not create a parallel hidden report transcript.
+3. Add report target selection: prefer a dedicated ACP report session when the selected agent supports session creation / load.
+4. Dispatch the prompt through ACP `session/prompt` and focus the target ACP session after dispatch.
+5. Record a local operation log entry with report type, target ACP session, selected model hint, redaction flags, dispatch result, and error if any.
+6. Let the normal ACP session ingestion capture report output and token usage; do not create a parallel hidden report transcript.
 7. Add the explicit `quick generate in app` fallback only after the session path exists, and label it as a fallback that uses Provider Gateway directly.
 8. Add background or scheduled report generation only after manual session-first generation proves useful, and keep it opt-in.
 
@@ -383,8 +394,8 @@ Near-term work:
 
 - show which integrations are live, backfilled, estimated, degraded, or unsupported
 - expose event-delivery reliability and recent ingestion gaps in diagnostics
-- label usage rows, cost estimates, timelines, work items, CLI operations, and reports by concrete data source when it affects user decisions
-- make terminal delivery capabilities explicit: tmux, WezTerm, kitty, iTerm2, and Ghostty are supported; Terminal.app and Warp remain outside reliable message-send support
+- label usage rows, cost estimates, timelines, work items, ACP operations, and reports by concrete data source when it affects user decisions
+- make ACP ownership explicit: CodePal-owned ACP sessions can expose operation entry points; native sessions observed through logs/hooks remain read-only
 - keep unknown upstream payloads in adapter calibration work, not renderer-specific guessing
 - keep Provider Gateway quota surfaces honest: MiMo quota remains dashboard/manual until a stable official quota API exists
 
@@ -500,7 +511,7 @@ If commercial work is ever revisited, it should:
 - avoid pulling the product toward team surveillance
 - come after durable daily usage and trust are validated
 
-Do not start with billing implementation. First validate whether users keep the app open and come back to the work item flow, CLI operation flow, report generation, and attention surfaces.
+Do not start with billing implementation. First validate whether users keep the app open and come back to the work item flow, ACP Sessions, report generation, and attention surfaces.
 
 ## Explicitly Deferred
 
@@ -528,9 +539,9 @@ If planning effort is limited, use this order:
 1. ~~define capability manifest and action broker primitives~~ — done (v1.2.0)
 2. ~~ship Session Operations MVP~~ — done (v1.2.0):
    - capability manifest: done
-   - action broker: done (jump, sendMessage)
+   - action broker: done (jump; legacy sendMessage now disabled until ACP ownership is available)
    - session action bar: jump only (detail view)
-   - send message: inline input (already working)
+   - send message: removed from the native-session UI path; replace with ACP `session/prompt` in the next major track
    - delete session: list-level button (done)
    - ~~open repo~~: deferred — workspacePath rarely available
    - ~~mark outcome~~: removed — derive outcome from work item flow if it becomes useful
@@ -548,10 +559,10 @@ If planning effort is limited, use this order:
    - Work Health strip with attention, longest wait, unrecovered failures, context-near-full, and cost anomaly signals
    - clickable Work Health signals that navigate to sessions
    - minute / hour granularity deferred (no backend data yet); daily granularity is the current baseline
-6. ~~design and validate work item flow plus CLI operation flow~~ — done (v1.2.0):
+6. ~~design and validate work item flow plus local operation logging~~ — done (v1.2.0):
    - work items derived from sessions with status tracking
    - operation flow with preflight, dry-run, execute, result, and local action log
-   - managed CLI task infrastructure remains on a separate branch; not yet merged to main
+   - managed CLI task infrastructure is superseded by the ACP Sessions direction and should not be merged as the primary control model
 7. ~~add manual LLM-generated daily / weekly / monthly reports on top of Report Facts and local operation logs~~ — done (v1.2.0):
    - LLM report generation through visible session path
    - report settings panel with model selector and quota warnings

@@ -28,7 +28,7 @@ CodePal 现在已经不是单一的悬浮 session 列表。当前已发基线包
 
 ## 下个版本范围
 
-下个版本应该从被动复盘 UI 转向可行动的工作流基础设施。
+下一个大版本方向应该从被动复盘 UI 转向 ACP 承载的 session 所有权与工作流记忆。
 
 下个版本交付：
 
@@ -38,11 +38,12 @@ CodePal 现在已经不是单一的悬浮 session 列表。当前已发基线包
   - 默认不要把恢复出来的 `idle` 行当成需要处理；很多历史 `idle` 是终态或本地脏数据
   - 当 source path 可靠时，按 project / repository 分组
   - 事项标题和 next action 必须足够短，适合在主工作流里扫读
-- CLI 操作流 MVP：
-  - 面向目标 terminal / agent session 暴露有边界的操作表面
-  - 执行前必须 preflight
-  - 操作类型允许时支持 dry-run
-  - 将 execute result、error、timestamp、target、source session 记录到本地 operation log
+- ACP Sessions 基础：
+  - 引入 CodePal 自己创建 / 承载的 ACP sessions，作为默认唯一操作入口
+  - 通过明确的 Agent Client Protocol 所有权启动、恢复和展示 session，而不是 terminal 文本注入或 hook 回写
+  - 将 `session/prompt`、permission request、tool update、plan、terminal output 都作为结构化 ACP 事件处理
+  - 已经在原生 Claude Code / Codex / Cursor / CodeBuddy 里启动的 session 默认保持 observe-only，除非用户明确把一个 ACP session 交给 CodePal 承载
+  - 将 prompt dispatch、permission decision、tool update、error、timestamp、target agent、source project 记录到本地 session operation log
   - 操作必须由用户明确触发；不增加 autonomous scheduling 或自动执行队列
 - Report Facts 层：
   - 从事项、operation log、session status、usage stats 生成确定性的日报 / 周报 / 月报 facts object
@@ -51,7 +52,7 @@ CodePal 现在已经不是单一的悬浮 session 列表。当前已发基线包
 - 手动 LLM 报告生成：
   - Report Facts 层存在后，允许用户手动生成日报 / 周报 / 月报
   - 因为会消耗用户模型额度，所有 LLM 报告生成都必须受设置开关控制
-  - 优先通过可见的 agent / CLI session 生成报告：本地构建脱敏后的 Report Facts，再通过 capability-gated `sendMessage` / report-session 路径发给 agent，让生成过程出现在正常 session 列表和用量分析里
+  - 优先通过 CodePal-owned ACP report session 生成报告：本地构建脱敏后的 Report Facts，再通过 `session/prompt` 发给 agent，让生成过程出现在正常 session 列表和用量分析里
   - 提供模型选择器，默认使用已配置模型中最便宜、且足够做总结的模型
   - 开启后，手动 LLM 报告入口应出现在 Analytics toolbar 附近；不要藏在脱敏控制下面
   - 直接 Provider Gateway 生成只保留为显式 quick-generate / fallback；如果使用它，生成前校验 gateway 是否可用，并把 gateway/token/listener 问题显示成可处理错误，不要裸露 `fetch failed`
@@ -77,7 +78,7 @@ CodePal 现在已经不是单一的悬浮 session 列表。当前已发基线包
 - 只复述 session 日志的静态 Digest tab
 - 主观 data-confidence badge
 - 让 LLM 总结无限制原始 transcript
-- autonomous CLI execution、auto approval、auto merge、auto task assignment
+- autonomous ACP / CLI execution、auto approval、auto merge、auto task assignment
 
 ## 产品定位
 
@@ -126,7 +127,7 @@ CodePal 下一阶段应该成为重度 AI coding 用户的本地 AI coding opera
 
 - 重度 AI coding 用户的日常打开率
 - 长期本地信任
-- 围绕事项流转、CLI 操作流和有用 LLM 报告的使用习惯
+- 围绕事项流转、ACP Sessions 和有用 LLM 报告的使用习惯
 - 用户主动推荐给其他开发者
 - 社区贡献 adapter、template、schema 和 troubleshooting knowledge
 
@@ -136,7 +137,7 @@ CodePal 下一阶段应该成为重度 AI coding 用户的本地 AI coding opera
 
 - 免费 session history
 - 免费事项流转
-- 免费 CLI 操作流
+- 免费 ACP Sessions，用于 CodePal 自己承载的 agent 工作
 - 当 LLM 生成真正有用时，免费日报 / 周报 / 月报
 - 免费 agent usage overview
 - 免费 local reports
@@ -154,12 +155,16 @@ CodePal 下一阶段应该成为重度 AI coding 用户的本地 AI coding opera
 
 目标：从 observe-only 进入 user-triggered operations，但不改变信任边界。
 
+关键边界：CodePal 只能操作它通过 ACP 自己拥有的 session。用户在 Claude Code、Codex、Cursor、CodeBuddy 或其他原生工具里启动的 session 默认仍然是 observe-only。除非未来有明确标注的 ACP handoff 并且用户显式确认，否则 CodePal 不应该向这些原生 session 发送 prompt、approval decision、terminal text 或 hook response。
+
 近期能力：
 
 - session card action bar（详情视图内）：jump to terminal / IDE
 - open repo（暂缓：workspacePath 在 session 数据中极少可用；路径提取可靠后再加回）
-- 当存在可靠终端通道时，send structured follow-up message（内联输入框，不在 action bar）
-- 当 adapter 暴露可靠路径时，resume session
+- 当所选 agent 支持 ACP 时，启动 CodePal-owned ACP session
+- 当 adapter 暴露 `session/load` 时，加载 / 恢复 CodePal-owned ACP session
+- 只在 CodePal-owned ACP session 内发送 structured follow-up message
+- 对原生工具 session 只观察，不向它们原有 UI 或 hook 路径发送 follow-up message
 - repair integration
 - export report（暂缓，等 Report Facts 和脱敏控制存在后再做）
 - delete session（列表层操作，不在 action bar 内）
@@ -187,6 +192,7 @@ CodePal 下一阶段应该成为重度 AI coding 用户的本地 AI coding opera
 - 失败原因必须让用户看得懂
 - best-effort action 在执行前就要标注
 - 默认不把 action 发送到云端
+- 不向 CodePal 不拥有的原生 agent session 发送 action
 
 推荐命名：
 
@@ -206,7 +212,10 @@ CodePal 下一阶段应该成为重度 AI coding 用户的本地 AI coding opera
 - `observeSession`
 - `observeUsage`
 - `jumpToSession`
-- `sendStructuredMessage`
+- `startAcpSession`
+- `loadAcpSession`
+- `sendAcpPrompt`
+- `respondToAcpPermission`
 - `resumeSession`
 - `startSession`
 - `stopSession`
@@ -219,7 +228,7 @@ CodePal 下一阶段应该成为重度 AI coding 用户的本地 AI coding opera
 每个 capability 至少包含：
 
 - support level：`supported`、`partial`、`best_effort`、`unsupported`
-- source：hook、log、transcript、terminal、provider 或 manual
+- source：ACP、hook、log、transcript、terminal、provider 或 manual
 - confidence：high、medium 或 low
 - caveats
 - preflight requirements
@@ -232,8 +241,10 @@ CodePal 应该通过统一的本地 action broker 管理用户触发的操作。
 Action 类型：
 
 - `jump`（action bar）
-- `send_message`（内联输入框）
-- `resume`（action bar）
+- `start_acp_session`（action bar / 创建流程）
+- `send_acp_prompt`（ACP session composer）
+- `respond_acp_permission`（ACP-owned permission UI）
+- `resume`（当 `session/load` 支持时的 ACP session action）
 - `open_repo`（暂缓 — workspacePath 极少可用）
 - `repair_integration`（action bar）
 - `export_report`（暂缓，等 Report Facts 和脱敏控制存在后再做）
@@ -253,7 +264,7 @@ Broker 生命周期：
 8. broker 返回 success 或用户可读 failure
 9. 事项、operation log 和后续报告可以纳入 action history
 
-## Track 1：事项流转、CLI 操作流与报告
+## Track 1：事项流转、ACP Sessions 与报告
 
 这是下一阶段最高杠杆的产品层，继续保留为主线。
 
@@ -269,7 +280,7 @@ Broker 生命周期：
 
 - Report Facts 层：作为日报 / 周报 / 月报的确定性输入
 - 事项流转：跨 agent 跟踪 waiting、needs follow-up、failed、completed、deferred
-- CLI 操作流：target terminal、preflight、dry-run、execute、result、本地 action log
+- ACP Sessions：CodePal-owned agent sessions，包含结构化 prompts、updates、permission handling、tool activity 和 local action history
 - 基于事项和操作日志生成 LLM 日报 / 周报 / 月报，而不是从静态指标卡片生成
 - 在 report export 前提供 prompts、路径、assistant 内容、命令输出、repo 标识的脱敏选项
 - 当 source path 可信时，按项目 / repository 分组并提供更可读的事项标题
@@ -283,13 +294,13 @@ footer 层级的用量摘要最多覆盖：
 - cache tokens
 - 估算费用
 
-事项流转和 CLI 操作流应继续补齐：
+事项流转和 ACP Sessions 应继续补齐：
 
 - repo / project
 - 当前 owner / next action
-- 关联 session 和 terminal target
-- preflight 状态和 dry-run 输出
-- execute 结果和本地 action history
+- 关联 session、project path 和 ACP agent target
+- preflight 状态、ACP initialization/auth 状态和 capability negotiation 结果
+- prompt / permission / tool execution 结果和本地 action history
 - follow-up / failed / completed 状态流转
 - export 和 redaction metadata
 
@@ -297,10 +308,10 @@ LLM 报告规则：
 
 - 报告只能基于 Report Facts 加被选择的 operation-log 片段生成，不能默认把无限制原始 transcript 扔给 LLM
 - LLM 报告生成必须受设置开关控制，因为它会消耗用户额度
-- 首选传输路径是可见的 agent / CLI session，而不是隐藏的 app-side Provider Gateway 调用
-- 当存在 start-session capability 时，报告操作应创建专用 report session；否则可以选中一个已有、可回复的 session
+- 首选传输路径是可见的 CodePal-owned ACP session，而不是隐藏的 app-side Provider Gateway 调用
+- 当所选 agent 支持 session creation 时，报告操作应创建专用 ACP report session；否则回退到确定性本地 HTML，不向已有原生 session 注入文本
 - 用户应该能在 CodePal 正常表面里看到 prompt、报告输出、token usage、错误和后续影响
-- session 路径应走 capability-gated terminal message delivery，并记录本地 operation log
+- session 路径应走 ACP `session/prompt`，并记录本地 operation log
 - 用户必须能选择报告模型；默认使用已配置模型中最便宜、且足够做总结的模型
 - 开启后的手动生成入口应靠近确定性报告入口，避免用户找不到
 - 直接 Provider Gateway 生成是 fallback / quick-generate，不是主体验
@@ -315,10 +326,10 @@ LLM 报告落地顺序：
 
 1. 保留确定性 HTML report 作为始终可用的基线能力。
 2. 在本地构建 Report Facts prompt payload，包含被选择的 operation-log 片段和 redaction metadata。
-3. 增加报告目标选择：如果已有 start-session capability，优先创建专用 report session；否则列出已有、可回复的 session。
-4. 通过 capability-gated `sendMessage` / session action 路径发送 prompt，并在发送后聚焦目标 session。
-5. 写入本地 operation log，记录 report type、target session、selected model hint、redaction flags、dispatch result 和错误。
-6. 让正常 session watcher 捕获报告输出和 token usage；不要另建隐藏的 report transcript。
+3. 增加报告目标选择：如果所选 agent 支持 session creation / load，优先创建专用 ACP report session。
+4. 通过 ACP `session/prompt` 发送 prompt，并在发送后聚焦目标 ACP session。
+5. 写入本地 operation log，记录 report type、target ACP session、selected model hint、redaction flags、dispatch result 和错误。
+6. 让正常 ACP session ingestion 捕获报告输出和 token usage；不要另建隐藏的 report transcript。
 7. 只有在 session 路径存在后，才增加显式 `quick generate in app` fallback，并标明它会直接使用 Provider Gateway。
 8. 后台或 scheduled report generation 只能在手动 session-first 生成被验证有用后再做，并且保持 opt-in。
 
@@ -383,8 +394,8 @@ CodePal 可以进入流程质量诊断，但不要变成 bossware 或绩效打�
 
 - 标明 integration 是 live、backfilled、estimated、degraded 还是 unsupported
 - 在 diagnostics 里展示事件投递可靠性和近期 ingestion gap
-- 当信息会影响用户决策时，usage row、cost estimate、timeline、事项、CLI operation、report 都要标注具体 data source
-- 明确 terminal delivery 能力：tmux、WezTerm、kitty、iTerm2、Ghostty 支持；Terminal.app 和 Warp 仍不属于可靠消息投递范围
+- 当信息会影响用户决策时，usage row、cost estimate、timeline、事项、ACP operation、report 都要标注具体 data source
+- 明确 ACP ownership：CodePal-owned ACP sessions 可以暴露操作入口；通过 log / hook 观察到的原生 sessions 保持 read-only
 - 未知 upstream payload 继续进入 adapter calibration，不要在 renderer 里临时猜
 - Provider Gateway quota 保持诚实：MiMo 没有稳定官方 quota API 前，仍然只做 dashboard/manual 边界
 
@@ -500,7 +511,7 @@ team / cloud 工作在 release-ready 之前必须先更新 privacy 和 support �
 - 不把产品拉向团队监控
 - 放在 daily usage 和 trust 被验证之后
 
-不要先做 billing 实现。先验证用户是否会长期打开 CodePal，并是否会回到事项流转、CLI 操作流、报告生成和 attention 表面。
+不要先做 billing 实现。先验证用户是否会长期打开 CodePal，并是否会回到事项流转、ACP Sessions、报告生成和 attention 表面。
 
 ## 明确后置
 
@@ -528,9 +539,9 @@ team / cloud 工作在 release-ready 之前必须先更新 privacy 和 support �
 1. ~~定义 capability manifest 和 action broker primitives~~ — 已完成 (v1.2.0)
 2. ~~交付 Session Operations MVP~~ — 已完成 (v1.2.0)：
    - capability manifest：已完成
-   - action broker：已完成（jump、sendMessage）
+   - action broker：已完成（jump；legacy sendMessage 在 ACP ownership 可用前已禁用）
    - session action bar：仅 jump（详情视图内）
-   - send message：内联输入框（已可用）
+   - send message：已从原生 session UI 路径移除；下一个大版本用 ACP `session/prompt` 替代
    - delete session：列表层按钮（已完成）
    - ~~open repo~~：暂缓 — workspacePath 极少可用
    - ~~mark outcome~~：移除 — 如果后续有价值，从事项流转中推导 outcome
@@ -548,8 +559,8 @@ team / cloud 工作在 release-ready 之前必须先更新 privacy 和 support �
    - Work Health strip：attention、longest wait、unrecovered failures、context-near-full、cost anomaly 信号
    - 可点击 Work Health 信号，跳转到对应 session
    - 分钟 / 小时粒度暂缓（后端暂无数据）；当前以天粒度为基线
-6. 设计并验证事项流转和 CLI 操作流
-7. 基于 Report Facts 和本地操作日志增加手动 LLM 日报 / 周报 / 月报
+6. 设计并验证事项流转和本地 operation logging
+7. 基于 Report Facts、ACP Sessions 和本地操作日志增加手动 LLM 日报 / 周报 / 月报
 8. 仅在会影响用户决策时展示事实型 source / coverage 指示
 9. 加更完整的 workflow-health 信号和 Attention Queue
 10. 在 attention signals 真正有用后增加 ambient presence

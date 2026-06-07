@@ -105,7 +105,7 @@ describe("SessionRow pending action", () => {
     );
   });
 
-  it("renders option buttons when pendingActions has one item", () => {
+  it("renders pending action as read-only when pendingActions has one item", () => {
     const html = renderRow(
       baseRow({
           pendingActions: [
@@ -121,11 +121,12 @@ describe("SessionRow pending action", () => {
     );
     expect(html).toContain("Proceed?");
     expect(html).toContain("Awaiting input");
-    expect(html).toContain(">Approve<");
-    expect(html).toContain(">Reject<");
+    expect(html).toContain("CodePal cannot answer this request directly");
+    expect(html).not.toContain(">Approve<");
+    expect(html).not.toContain(">Reject<");
   });
 
-  it("renders two pending action cards with buttons when pendingActions has two items", () => {
+  it("renders two pending action cards without response buttons when pendingActions has two items", () => {
     const html = renderRow(
       baseRow({
           pendingActions: [
@@ -147,11 +148,12 @@ describe("SessionRow pending action", () => {
     );
     expect(html).toContain("First decision");
     expect(html).toContain("Second decision");
-    expect(html).toContain(">OK<");
-    expect(html).toContain(">Cancel<");
-    expect(html).toContain(">A<");
-    expect(html).toContain(">B<");
-    const cards = html.match(/class="pending-action pending-action--[a-z]+"/g);
+    expect(html).toContain("CodePal cannot answer this request directly");
+    expect(html).not.toContain(">OK<");
+    expect(html).not.toContain(">Cancel<");
+    expect(html).not.toContain(">A<");
+    expect(html).not.toContain(">B<");
+    const cards = html.match(/class="pending-action pending-action--pending pending-action--readonly"/g);
     expect(cards).toHaveLength(2);
   });
 
@@ -436,7 +438,7 @@ describe("SessionRow pending action", () => {
     expect(html).not.toContain("session-review-card");
   });
 
-  it("renders pending action UI when pending actions exist", () => {
+  it("marks pending action UI unavailable when pending actions exist", () => {
     const html = renderRow(
       baseRow({
           pendingActions: [
@@ -452,7 +454,8 @@ describe("SessionRow pending action", () => {
     );
 
     expect(html).toContain("Awaiting input");
-    expect(html).toContain(">Approve<");
+    expect(html).toContain("CodePal cannot answer this request directly");
+    expect(html).not.toContain(">Approve<");
     expect(html).toContain("session-row__interaction");
   });
 
