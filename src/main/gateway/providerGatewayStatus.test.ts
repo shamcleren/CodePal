@@ -44,6 +44,20 @@ describe("providerGatewayStatus", () => {
         restartRequired: false,
       },
     });
+    expect((status as { claudeCli?: unknown }).claudeCli).toEqual({
+      settingsPath: expect.stringContaining(".claude/settings.json"),
+      baseUrl: "http://127.0.0.1:15721",
+      apiKey: "local-proxy",
+      inferenceModels: [
+        "claude-sonnet-4-6",
+        "claude-opus-4-7",
+        "claude-haiku-4-5",
+      ],
+      setup: {
+        configured: false,
+        restartRequired: false,
+      },
+    });
     expect(status.modelMappings.map((model) => model.claudeModel)).toEqual([
       "claude-sonnet-4-6",
       "claude-opus-4-7",

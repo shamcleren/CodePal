@@ -180,8 +180,8 @@
       "cacheCreationPerMillion": "0"
     },
     {
-      "modelId": "hy3-preview-agent-ioa",
-      "displayName": "Hy3 preview (CodeBuddy)",
+      "modelId": "Hy3 preview",
+      "displayName": "Hy3 preview",
       "inputPerMillion": "0",
       "outputPerMillion": "0",
       "cacheReadPerMillion": "0",

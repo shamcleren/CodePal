@@ -6,9 +6,11 @@ import {
   normalizeCodeBuddyUiMessage,
 } from "../../adapters/codebuddy/normalizeCodeBuddyUiMessage";
 import { isSessionStatus, type ActivityItem } from "../../shared/sessionTypes";
+import type { ProjectAttribution } from "../../shared/projectAttribution";
 import type { TokenUsageWrite } from "../../shared/usageTypes";
 import { ACTIVE_SESSION_STALENESS_MS, type SessionEvent } from "../session/sessionStore";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
+import { resolveProjectAttribution } from "../history/projectAttribution";
 
 type CodeBuddySessionWatcherOptions = {
   projectsRoot: string;
@@ -63,6 +65,7 @@ type CodeBuddyHistoryMessageDetails = {
   timestamp: number;
   requestId?: string;
   model?: string;
+  workspacePath?: string;
 };
 
 function listJsonlFiles(root: string): string[] {
@@ -192,6 +195,18 @@ function firstNumber(record: Record<string, unknown> | null, keys: readonly stri
   return 0;
 }
 
+function projectFields(project: ProjectAttribution | null | undefined) {
+  return project
+    ? { projectPath: project.projectPath, projectName: project.projectName }
+    : {};
+}
+
+function extractWorkspacePathFromText(text: string | undefined): string | undefined {
+  const match = text?.match(/^\s*Workspace Folder:\s*(.+?)\s*$/m);
+  const workspacePath = match?.[1]?.trim();
+  return workspacePath || undefined;
+}
+
 function extractCodeBuddyTokenUsage(entry: Record<string, unknown>): Omit<
   TokenUsageWrite,
   "sessionId" | "agent" | "timestamp" | "sourceKind" | "sourceKey"
@@ -308,14 +323,14 @@ function readCodeBuddyHistoryMessage(
   const parsedExtra = parseJsonObject(typeof parsed.extra === "string" ? parsed.extra : undefined);
   const timestamp = fs.statSync(filePath).mtimeMs;
 
+  const messageText = extractTextFromContentBlocks(parsedMessage?.content, ["text"]);
+  const sourceText =
+    extractTextFromContentBlocks(parsedExtra?.sourceContentBlocks, ["text"]) ??
+    extractTextFromContentBlocks(parsedExtra?.inputPhrase, ["normal"]);
   let body =
     role === "user"
-      ? extractTextFromContentBlocks(parsedExtra?.sourceContentBlocks, ["text"]) ??
-        extractTextFromContentBlocks(parsedExtra?.inputPhrase, ["normal"]) ??
-        extractUserQuery(extractTextFromContentBlocks(parsedMessage?.content, ["text"])) ??
-        extractTextFromContentBlocks(parsedMessage?.content, ["text"])
-      : extractTextFromContentBlocks(parsedMessage?.content, ["text"]) ??
-        extractTextFromContentBlocks(parsedMessage?.content, ["reasoning"]);
+      ? sourceText ?? extractUserQuery(messageText) ?? messageText
+      : messageText ?? extractTextFromContentBlocks(parsedMessage?.content, ["reasoning"]);
 
   body = body?.trim();
   if (!body) {
@@ -323,13 +338,18 @@ function readCodeBuddyHistoryMessage(
   }
 
   const requestId = firstString(parsedExtra, ["requestId", "request_id"]);
-  const model = firstString(parsedExtra, ["modelId", "model", "modelName"]);
+  const model = firstString(parsedExtra, ["modelName", "model", "modelId"]);
+  const workspacePath =
+    firstString(parsedExtra, ["workspacePath", "workspace_path", "projectPath"]) ??
+    extractWorkspacePathFromText(messageText) ??
+    extractWorkspacePathFromText(sourceText);
   return {
     role,
     body,
     timestamp,
     ...(requestId ? { requestId } : {}),
     ...(model ? { model } : {}),
+    ...(workspacePath ? { workspacePath } : {}),
   };
 }
 
@@ -614,6 +634,8 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
           meta: {
             event_source: "codebuddy_ide_history",
             source_path: messagePath,
+            ...(message.model ? { model: message.model } : {}),
+            ...(message.workspacePath ? { workspacePath: message.workspacePath } : {}),
           },
           activityItems: [
             {
@@ -623,6 +645,7 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
               title: "User",
               body: message.body,
               timestamp: message.timestamp,
+              ...(message.model ? { meta: { model: message.model } } : {}),
             },
           ],
         });
@@ -637,6 +660,8 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
           meta: {
             event_source: "codebuddy_ide_history",
             source_path: messagePath,
+            ...(message.model ? { model: message.model } : {}),
+            ...(message.workspacePath ? { workspacePath: message.workspacePath } : {}),
           },
           activityItems: [
             {
@@ -647,6 +672,7 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
               body: message.body,
               timestamp: message.timestamp,
               tone: "completed",
+              ...(message.model ? { meta: { model: message.model } } : {}),
             },
           ],
         });
@@ -698,6 +724,12 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
         .map((messageId) => messageDetails.get(messageId))
         .find((message) => message?.model)?.model;
       const relatedModel = directRequestModel ?? matchingMessageModel ?? anyRelatedMessageModel;
+      const tokenUsage = extractCodeBuddyTokenUsage(requestEntry as Record<string, unknown>);
+      const eventModel = tokenUsage?.model ?? relatedModel;
+      const relatedWorkspacePath = relatedMessageIds
+        .map((messageId) => messageDetails.get(messageId))
+        .find((message) => message?.workspacePath)?.workspacePath;
+      const project = resolveProjectAttribution({ workspacePath: relatedWorkspacePath });
 
       cursor.completedRequestIds.add(requestId);
       options.onEvent({
@@ -710,9 +742,10 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
           event_source: "codebuddy_ide_history",
           source_path: filePath,
           request_id: requestId,
+          ...(eventModel ? { model: eventModel } : {}),
+          ...(relatedWorkspacePath ? { workspacePath: relatedWorkspacePath } : {}),
         },
       });
-      const tokenUsage = extractCodeBuddyTokenUsage(requestEntry as Record<string, unknown>);
       if (options.onTokenUsage && tokenUsage) {
         options.onTokenUsage({
           sessionId,
@@ -722,6 +755,7 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
           ...(relatedModel ? { model: tokenUsage.model ?? relatedModel } : {}),
           sourceKind: "codebuddy-history",
           sourceKey: `${sessionId}:${requestId}`,
+          ...projectFields(project),
         });
       }
     }

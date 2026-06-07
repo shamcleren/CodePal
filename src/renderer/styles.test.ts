@@ -322,6 +322,30 @@ describe("renderer layout styles", () => {
     expect(cssBlock(css, ".work-review__source-pill")).toContain("height: 22px;");
   });
 
+  it("keeps light-mode work review day tabs visually separated", () => {
+    const css = fs.readFileSync(stylesPath, "utf8");
+
+    expect(css).toMatch(/--work-review-day-bg:/);
+    expect(css).toMatch(/--work-review-day-border:/);
+    expect(css).toMatch(/--work-review-day-hover-bg:/);
+    expect(css).toMatch(/--work-review-day-active-bg:/);
+    expect(cssBlock(css, ".work-review__day")).toContain(
+      "border: 1px solid var(--work-review-day-border);",
+    );
+    expect(cssBlock(css, ".work-review__day")).toContain(
+      "background: var(--work-review-day-bg);",
+    );
+    expect(cssBlock(css, ".work-review__day")).toContain(
+      "box-shadow: var(--work-review-day-shadow);",
+    );
+    expect(cssBlock(css, ".work-review__day:hover")).toContain(
+      "background: var(--work-review-day-hover-bg);",
+    );
+    expect(cssBlock(css, ".work-review__day--active")).toContain(
+      "background: var(--work-review-day-active-bg);",
+    );
+  });
+
   it("keeps component styles on semantic theme tokens instead of raw colors", () => {
     const css = fs.readFileSync(stylesPath, "utf8");
     const rawColorLines = componentCss(css)

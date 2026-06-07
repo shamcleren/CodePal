@@ -1,4 +1,4 @@
-import type { AppThemeId, UsageAgentId, UsageDisplaySettings } from "../usageDisplaySettings";
+import type { AppThemeSetting, UsageAgentId, UsageDisplaySettings } from "../usageDisplaySettings";
 import type { AppLocale } from "../../shared/i18nTypes";
 import { useI18n } from "../i18n";
 
@@ -7,7 +7,7 @@ type DisplayPreferencesPanelProps = {
   onToggleStrip: (nextValue: boolean) => void;
   onToggleAgent: (agent: UsageAgentId) => void;
   onDensityChange: (nextValue: UsageDisplaySettings["density"]) => void;
-  onThemeChange: (nextValue: AppThemeId) => void;
+  onThemeChange: (nextValue: AppThemeSetting) => void;
   localeSetting: AppLocale;
   onLocaleChange: (nextValue: AppLocale) => void;
   showHeader?: boolean;
@@ -23,7 +23,18 @@ const AGENTS: Array<{ id: UsageAgentId; label: string }> = [
   { id: "factory", label: "Factory" },
 ];
 
-const THEMES: Array<{ id: AppThemeId; label: string; descriptionKey: string; recommended?: boolean }> = [
+const THEMES: Array<{
+  id: AppThemeSetting;
+  label?: string;
+  labelKey?: string;
+  descriptionKey: string;
+  recommended?: boolean;
+}> = [
+  {
+    id: "system",
+    labelKey: "display.theme.system.label",
+    descriptionKey: "display.theme.system.description",
+  },
   {
     id: "graphite-ops",
     label: "Graphite Ops",
@@ -135,7 +146,7 @@ export function DisplayPreferencesPanel({
                 </span>
                 <span className="display-panel__theme-copy">
                   <span className="display-panel__theme-name">
-                    {theme.label}
+                    {theme.labelKey ? t(theme.labelKey) : theme.label}
                     {theme.recommended ? (
                       <span className="display-panel__theme-badge">
                         {t("display.theme.recommended")}

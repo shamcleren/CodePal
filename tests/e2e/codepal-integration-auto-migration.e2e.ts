@@ -25,7 +25,7 @@ const CURSOR_HOOK_EVENT_NAMES = [
   "afterShellExecution",
 ] as const;
 
-test("startup migrates old direct Cursor hook commands to the wrapper", async () => {
+test("startup leaves old direct Cursor hook commands untouched until an explicit repair", async () => {
   const collector = await startActionResponseCollector();
   const homeDir = await fs.mkdtemp(path.join("/tmp", "codepal-home-"));
   const cursorConfigPath = path.join(homeDir, ".cursor", "hooks.json");
@@ -58,12 +58,13 @@ test("startup migrates old direct Cursor hook commands to the wrapper", async ()
     const migrated = JSON.parse(await fs.readFile(cursorConfigPath, "utf8")) as {
       hooks: Record<string, Array<{ command: string }>>;
     };
-    const wrapperCommand = `"${path.join(homeDir, ".codepal", "bin", "cursor-hook")}"`;
+    const legacyCommand =
+      '"/Applications/CodePal.app/Contents/MacOS/CodePal" "/Applications/CodePal.app/Contents/Resources/app.asar" --codepal-hook cursor';
 
     for (const eventName of CURSOR_HOOK_EVENT_NAMES) {
-      expect(migrated.hooks[eventName]?.[0]?.command).toBe(wrapperCommand);
+      expect(migrated.hooks[eventName]?.[0]?.command).toBe(legacyCommand);
     }
-    expect(await fs.readFile(cursorConfigPath, "utf8")).not.toContain("--codepal-hook cursor");
+    expect(await fs.readFile(cursorConfigPath, "utf8")).toContain("--codepal-hook cursor");
   } finally {
     await codepal.close();
     await collector.close();

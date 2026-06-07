@@ -183,6 +183,12 @@
   --work-health-card-border: var(--border);
   --work-health-card-warn-bg: var(--surface-warning-soft);
   --work-health-card-warn-border: var(--waiting);
+  --work-review-day-bg: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  --work-review-day-border: color-mix(in srgb, var(--border) 72%, transparent);
+  --work-review-day-hover-bg: var(--surface-hover);
+  --work-review-day-active-bg: var(--surface-active);
+  --work-review-day-active-border: color-mix(in srgb, var(--accent) 46%, var(--border));
+  --work-review-day-shadow: var(--inset-highlight);
 }
 
 [data-theme="paper-ops"] {
@@ -356,6 +362,16 @@
   --work-health-card-border: var(--border);
   --work-health-card-warn-bg: var(--surface-warning-soft);
   --work-health-card-warn-border: var(--waiting);
+  --work-review-day-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(235, 243, 238, 0.78));
+  --work-review-day-border: color-mix(in srgb, var(--border) 84%, var(--text-faint) 8%);
+  --work-review-day-hover-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(228, 238, 232, 0.92));
+  --work-review-day-active-bg:
+    linear-gradient(180deg, rgba(49, 95, 209, 0.14), rgba(49, 95, 209, 0.052)),
+    rgba(255, 255, 255, 0.92);
+  --work-review-day-active-border: color-mix(in srgb, var(--accent) 54%, var(--border));
+  --work-review-day-shadow:
+    var(--inset-highlight),
+    0 1px 0 rgba(31, 49, 42, 0.05);
 }
 
 *,
@@ -964,6 +980,9 @@ body {
 .display-panel__theme-swatch--graphite-ops span:nth-child(1) { background: #0b0d0c; }
 .display-panel__theme-swatch--graphite-ops span:nth-child(2) { background: #202521; }
 .display-panel__theme-swatch--graphite-ops span:nth-child(3) { background: #84a8ff; }
+.display-panel__theme-swatch--system span:nth-child(1) { background: linear-gradient(135deg, #0b0d0c 0 50%, #f5f7f4 50% 100%); }
+.display-panel__theme-swatch--system span:nth-child(2) { background: linear-gradient(135deg, #202521 0 50%, #e9efeb 50% 100%); }
+.display-panel__theme-swatch--system span:nth-child(3) { background: linear-gradient(135deg, #84a8ff 0 50%, #315fd1 50% 100%); }
 .display-panel__theme-swatch--paper-ops span:nth-child(1) { background: #f5f7f4; }
 .display-panel__theme-swatch--paper-ops span:nth-child(2) { background: #e9efeb; }
 .display-panel__theme-swatch--paper-ops span:nth-child(3) { background: #315fd1; }
@@ -2965,6 +2984,22 @@ body {
   letter-spacing: var(--letter-label);
   text-transform: uppercase;
   color: var(--text-faint);
+}
+
+.session-stream__model-badge {
+  min-width: 0;
+  max-width: 220px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+  background: color-mix(in srgb, var(--surface-inset) 82%, var(--accent) 8%);
+  color: color-mix(in srgb, var(--text) 68%, var(--muted));
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-stream__artifact-type {
@@ -6120,23 +6155,24 @@ body {
   display: grid;
   gap: 3px;
   padding: 10px;
-  border: 1px solid transparent;
+  border: 1px solid var(--work-review-day-border);
   border-radius: 7px;
   color: var(--text-muted);
-  background: transparent;
+  background: var(--work-review-day-bg);
+  box-shadow: var(--work-review-day-shadow);
   text-align: left;
   cursor: pointer;
   font: inherit;
 }
 
 .work-review__day:hover {
-  border-color: var(--line-subtle);
-  background: var(--surface-hover);
+  border-color: var(--work-review-day-active-border);
+  background: var(--work-review-day-hover-bg);
 }
 
 .work-review__day--active {
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
-  background: var(--surface-active);
+  border-color: var(--work-review-day-active-border);
+  background: var(--work-review-day-active-bg);
   color: var(--text);
 }
 

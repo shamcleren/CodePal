@@ -42,10 +42,18 @@ describe("appSettings", () => {
     expect(settings.locale).toBe("system");
   });
 
-  it("normalizes display theme to the two built-in theme presets", () => {
+  it("normalizes display theme to the two built-in theme presets and system setting", () => {
     expect(APP_THEME_IDS).toEqual(["graphite-ops", "paper-ops"]);
 
     expect(normalizeAppSettings({}).display.theme).toBe("graphite-ops");
+    expect(
+      normalizeAppSettings({
+        version: 1,
+        display: {
+          theme: "system",
+        },
+      }).display.theme,
+    ).toBe("system");
     expect(
       normalizeAppSettings({
         version: 1,

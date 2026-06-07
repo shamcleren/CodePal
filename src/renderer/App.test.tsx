@@ -57,6 +57,14 @@ describe("App", () => {
     ).toBe(true);
   });
 
+  it("resolves system appearance before applying the root theme", () => {
+    const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
+
+    expect(source).toContain('matchMedia("(prefers-color-scheme: light)")');
+    expect(source).toContain("data-theme={resolvedTheme}");
+    expect(source).toContain('data-theme-setting={appSettings.display.theme}');
+  });
+
   it("builds fallback history diagnostics from the intended enabled state", () => {
     expect(buildFallbackHistoryDiagnostics(true)).toEqual({
       enabled: true,
@@ -99,5 +107,40 @@ describe("App", () => {
     const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
 
     expect(source).not.toContain("ReportPreferencesPanel");
+  });
+
+  it("does not duplicate initial provider gateway, history, or session refresh work", () => {
+    const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
+
+    expect(source).not.toContain("void loadProviderGatewayStatus();\n  }, []);");
+    expect(source).not.toContain("void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);\n  }, []);");
+    expect(source).not.toContain("setRows(rowsFromSessions(sessions, resolvedLocale));");
+  });
+
+  it("switches Provider Gateway providers through the dedicated status-returning IPC", () => {
+    const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
+
+    expect(source).toContain(".selectProviderGatewayProvider(providerId)");
+    expect(source).not.toContain("updateAppSettings({ providerGateway: { activeProvider: providerId } })");
+  });
+
+  it("keeps integration refresh scoped to integration diagnostics", () => {
+    const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
+    const refreshStart = source.indexOf("function refreshIntegrations(");
+    const refreshEnd = source.indexOf("function refreshSettingsOverview(", refreshStart);
+    const refreshSource = source.slice(refreshStart, refreshEnd);
+
+    expect(refreshSource).toContain("getIntegrationDiagnostics()");
+    expect(refreshSource).not.toContain("loadProviderGatewayStatus()");
+    expect(refreshSource).not.toContain("loadHistoryDiagnostics(");
+  });
+
+  it("memoizes support diagnostics so session ticks do not rebuild the report", () => {
+    const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
+    const diagnosticsIndex = source.indexOf("const supportDiagnosticsReport = useMemo(");
+
+    expect(diagnosticsIndex).toBeGreaterThan(-1);
+    expect(source.slice(diagnosticsIndex, source.indexOf("const settingsSections", diagnosticsIndex)))
+      .toContain("buildSupportDiagnosticsReport({");
   });
 });

@@ -35,6 +35,7 @@ describe("DisplayPreferencesPanel", () => {
     expect(html).toContain("界面语言");
     expect(html).toContain("跟随系统");
     expect(html).toContain("界面主题");
+    expect(html).toContain("跟随系统外观");
     expect(html).toContain("Graphite Ops");
     expect(html).toContain("Paper Ops");
     expect(html).toContain("推荐");
@@ -42,4 +43,28 @@ describe("DisplayPreferencesPanel", () => {
     expect(html).toContain("Cursor");
   });
 
+  it("renders the system theme option as selectable", () => {
+    const html = renderToStaticMarkup(
+      <I18nProvider locale="en">
+        <DisplayPreferencesPanel
+          settings={{
+            showInStatusBar: true,
+            hiddenAgents: [],
+            density: "detailed",
+            theme: "system",
+          }}
+          onToggleStrip={vi.fn()}
+          onToggleAgent={vi.fn()}
+          onDensityChange={vi.fn()}
+          onThemeChange={vi.fn()}
+          localeSetting="en"
+          onLocaleChange={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(html).toContain("Follow system appearance");
+    expect(html).toContain("display-panel__theme-option--active");
+    expect(html).toContain("display-panel__theme-swatch--system");
+  });
 });

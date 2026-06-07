@@ -31,7 +31,7 @@ const REQUIRED_MODEL_IDS = [
   "gpt-5.3-codex",
   "gpt-5.4",
   "gpt-5.5",
-  "hy3-preview-agent-ioa",
+  "Hy3 preview",
 ] as const;
 
 function loadManifest(): PricingManifest {

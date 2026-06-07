@@ -10,14 +10,16 @@ export type UsageAgentId =
   | "factory";
 
 export const APP_THEME_IDS = ["graphite-ops", "paper-ops"] as const;
+export const APP_THEME_SETTINGS = ["system", ...APP_THEME_IDS] as const;
 
 export type AppThemeId = (typeof APP_THEME_IDS)[number];
+export type AppThemeSetting = (typeof APP_THEME_SETTINGS)[number];
 
 export type UsageDisplaySettings = {
   showInStatusBar: boolean;
   hiddenAgents: UsageAgentId[];
   density: "compact" | "detailed";
-  theme: AppThemeId;
+  theme: AppThemeSetting;
 };
 
 export type CodeBuddyEndpointSettings = {
@@ -408,6 +410,10 @@ function isAppThemeId(value: unknown): value is AppThemeId {
   return APP_THEME_IDS.includes(value as AppThemeId);
 }
 
+function isAppThemeSetting(value: unknown): value is AppThemeSetting {
+  return value === "system" || isAppThemeId(value);
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
@@ -492,7 +498,7 @@ function normalizeUsageDisplaySettings(value: unknown): UsageDisplaySettings {
       candidate.density === "compact" || candidate.density === "detailed"
         ? candidate.density
         : defaultUsageDisplaySettings.density,
-    theme: isAppThemeId(candidate.theme)
+    theme: isAppThemeSetting(candidate.theme)
       ? candidate.theme
       : defaultUsageDisplaySettings.theme,
   };

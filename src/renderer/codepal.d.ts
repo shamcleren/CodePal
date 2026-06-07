@@ -18,9 +18,10 @@ import type { SessionActionType, SessionCapabilityManifest } from "../shared/cap
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry, SessionTokenUsageResult } from "../shared/usageTypes";
 import type {
-  ProviderGatewayClientSetupResult,
+  ProviderGatewayClientSetupUpdateResult,
   ProviderGatewayClientSetupTarget,
   ProviderGatewayProviderUpdateResult,
+  ProviderGatewayProviderSelectResult,
   ProviderGatewayStatus,
   ProviderGatewayTokenUpdateResult,
 } from "../shared/providerGatewayTypes";
@@ -69,6 +70,9 @@ export type CodePalApi = {
     providerId: string,
     provider: ProviderGatewayConfig,
   ) => Promise<ProviderGatewayProviderUpdateResult>;
+  selectProviderGatewayProvider: (
+    providerId: string,
+  ) => Promise<ProviderGatewayProviderSelectResult>;
   deleteProviderGatewayProvider: (
     providerId: string,
   ) => Promise<ProviderGatewayProviderUpdateResult>;
@@ -77,7 +81,7 @@ export type CodePalApi = {
   stopProviderGateway: () => Promise<ProviderGatewayStatus>;
   configureProviderGatewayClient: (
     target: ProviderGatewayClientSetupTarget,
-  ) => Promise<ProviderGatewayClientSetupResult>;
+  ) => Promise<ProviderGatewayClientSetupUpdateResult>;
   getUpdateState: () => Promise<AppUpdateState>;
   checkForUpdates: () => Promise<AppUpdateState>;
   downloadUpdate: () => Promise<AppUpdateState>;

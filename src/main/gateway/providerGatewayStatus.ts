@@ -19,6 +19,8 @@ type BuildProviderGatewayStatusInput = {
   listener: ProviderGatewayListenerInput;
   lastHealthCheck: ProviderGatewayHealthCheckSummary | null;
   claudeDesktopSetup?: ProviderGatewayClientSetupStatus;
+  claudeCliSetup?: ProviderGatewayClientSetupStatus;
+  claudeCliSettingsPath?: string;
   codexDesktopSetup?: ProviderGatewayClientSetupStatus;
 };
 
@@ -152,6 +154,16 @@ export function buildProviderGatewayStatus(
       authScheme: "bearer",
       inferenceModels: claudeDesktopInferenceModels(allModelMappings),
       setup: input.claudeDesktopSetup ?? {
+        configured: false,
+        restartRequired: false,
+      },
+    },
+    claudeCli: {
+      settingsPath: input.claudeCliSettingsPath ?? "~/.claude/settings.json",
+      baseUrl: listener.localUrl,
+      apiKey: "local-proxy",
+      inferenceModels: claudeDesktopInferenceModels(allModelMappings),
+      setup: input.claudeCliSetup ?? {
         configured: false,
         restartRequired: false,
       },

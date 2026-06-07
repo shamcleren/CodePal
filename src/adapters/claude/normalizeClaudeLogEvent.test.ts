@@ -144,6 +144,9 @@ describe("normalizeClaudeLogEvent", () => {
           source: "assistant",
           title: "Assistant",
           body: "根据当前可用的模型选项，我可以使用 Opus 4.6、Sonnet 4.6 和 Haiku 4.5。",
+          meta: {
+            model: "MiniMax-M2.5",
+          },
         },
       ],
       meta: {

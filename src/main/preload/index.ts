@@ -19,10 +19,11 @@ import type { SessionCapabilityManifest, SessionActionType } from "../../shared/
 import type { AppUpdateState } from "../../shared/updateTypes";
 import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry } from "../../shared/usageTypes";
 import type {
-  ProviderGatewayClientSetupResult,
+  ProviderGatewayClientSetupUpdateResult,
   ProviderGatewayClientSetupTarget,
   ProviderGatewayStatus,
   ProviderGatewayProviderUpdateResult,
+  ProviderGatewayProviderSelectResult,
   ProviderGatewayTokenUpdateResult,
 } from "../../shared/providerGatewayTypes";
 
@@ -122,6 +123,11 @@ contextBridge.exposeInMainWorld("codepal", {
       provider,
     }) as Promise<ProviderGatewayProviderUpdateResult>;
   },
+  selectProviderGatewayProvider(providerId: string) {
+    return ipcRenderer.invoke("codepal:select-provider-gateway-provider", {
+      providerId,
+    }) as Promise<ProviderGatewayProviderSelectResult>;
+  },
   deleteProviderGatewayProvider(providerId: string) {
     return ipcRenderer.invoke("codepal:delete-provider-gateway-provider", {
       providerId,
@@ -145,7 +151,7 @@ contextBridge.exposeInMainWorld("codepal", {
   configureProviderGatewayClient(target: ProviderGatewayClientSetupTarget) {
     return ipcRenderer.invoke("codepal:configure-provider-gateway-client", {
       target,
-    }) as Promise<ProviderGatewayClientSetupResult>;
+    }) as Promise<ProviderGatewayClientSetupUpdateResult>;
   },
   getUpdateState() {
     return ipcRenderer.invoke("codepal:get-update-state") as Promise<AppUpdateState>;

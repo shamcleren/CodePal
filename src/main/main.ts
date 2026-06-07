@@ -119,10 +119,15 @@ let providerGatewayRuntime: {
   gatewaySecretStore: GatewaySecretStore;
   homeDir: string;
 } | null = null;
-let quittingAfterProviderGatewayStop = false;
+let quittingAfterProviderGatewayClose = false;
 const PROVIDER_GATEWAY_DISABLED_MESSAGE =
   "Provider Gateway is disabled in settings.";
 const PROVIDER_GATEWAY_FEATURE_ENABLED = true;
+const PROVIDER_GATEWAY_RESUME_STATE_FILE = "provider-gateway-runtime-state.json";
+const PROVIDER_GATEWAY_RESUME_TARGETS = ["claude-desktop", "codex-desktop", "claude-cli"] as const;
+type ProviderGatewayResumeTarget =
+  | Extract<ProviderGatewayClientSetupTarget, "claude-desktop" | "codex-desktop">
+  | "claude-cli";
 const debugCodex = process.env.CODEPAL_DEBUG_CODEX === "1";
 const silentE2E = process.env.CODEPAL_E2E_SILENT === "1";
 const useAccessoryActivationPolicy = shouldUseAccessoryActivationPolicy({
@@ -184,6 +189,43 @@ function providerGatewayStatusForRenderer(
   gatewaySecretStore: GatewaySecretStore,
   homeDir: string,
 ) {
+  const statusInput = providerGatewayStatusInput(settingsService, gatewaySecretStore);
+  const baseStatus = buildProviderGatewayStatus(statusInput);
+  const claudeDesktopSetup = inspectProviderGatewayClientSetup({
+    target: "claude-desktop",
+    status: baseStatus,
+    homeDir,
+  });
+  const claudeCliSetup = inspectProviderGatewayClientSetup({
+    target: "claude-cli",
+    status: baseStatus,
+    homeDir,
+  });
+  const codexDesktopSetup = inspectProviderGatewayClientSetup({
+    target: "codex-desktop",
+    status: baseStatus,
+    homeDir,
+  });
+  return buildProviderGatewayStatus({
+    ...statusInput,
+    claudeDesktopSetup,
+    claudeCliSetup,
+    claudeCliSettingsPath: path.join(homeDir, ".claude", "settings.json"),
+    codexDesktopSetup,
+  });
+}
+
+function providerGatewayBaseStatus(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+) {
+  return buildProviderGatewayStatus(providerGatewayStatusInput(settingsService, gatewaySecretStore));
+}
+
+function providerGatewayStatusInput(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+) {
   const rawSettings = settingsService.getSettings();
   const settings = PROVIDER_GATEWAY_FEATURE_ENABLED
     ? rawSettings
@@ -201,32 +243,13 @@ function providerGatewayStatusForRenderer(
       gatewaySecretStore.tokenStatus(item),
     ]),
   );
-  const baseStatus = buildProviderGatewayStatus({
+  return {
     settings,
     tokenConfigured: provider ? gatewaySecretStore.hasToken(provider) : false,
     tokenStatusByProvider,
     listener: providerGatewayListener,
     lastHealthCheck: providerGatewayHealthCheck,
-  });
-  const claudeDesktopSetup = inspectProviderGatewayClientSetup({
-    target: "claude-desktop",
-    status: baseStatus,
-    homeDir,
-  });
-  const codexDesktopSetup = inspectProviderGatewayClientSetup({
-    target: "codex-desktop",
-    status: baseStatus,
-    homeDir,
-  });
-  return buildProviderGatewayStatus({
-    settings,
-    tokenConfigured: provider ? gatewaySecretStore.hasToken(provider) : false,
-    tokenStatusByProvider,
-    listener: providerGatewayListener,
-    lastHealthCheck: providerGatewayHealthCheck,
-    claudeDesktopSetup,
-    codexDesktopSetup,
-  });
+  };
 }
 
 function defaultReportTrendGranularity(startMs: number, endMs: number): TokenTrendGranularity {
@@ -531,6 +554,33 @@ function wireActionResponseIpc(
       status: providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir),
     };
   });
+  ipcMain.handle("codepal:select-provider-gateway-provider", (_event, payload: unknown) => {
+    const providerId =
+      payload &&
+      typeof payload === "object" &&
+      typeof (payload as Record<string, unknown>).providerId === "string"
+        ? (payload as Record<string, unknown>).providerId.trim()
+        : "";
+    if (!providerId) {
+      throw new Error("provider id is required");
+    }
+    const settings = settingsService.getSettings();
+    if (!(providerId in settings.providerGateway.providers)) {
+      throw new Error("provider not configured");
+    }
+    const nextSettings = settingsService.replaceSettings({
+      ...settings,
+      providerGateway: {
+        ...settings.providerGateway,
+        activeProvider: providerId,
+      },
+    });
+    return {
+      ok: true,
+      settings: nextSettings,
+      status: providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir),
+    };
+  });
   ipcMain.handle("codepal:delete-provider-gateway-provider", (_event, payload: unknown) => {
     const providerId =
       payload &&
@@ -596,7 +646,7 @@ function wireActionResponseIpc(
     if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
       throw new Error(PROVIDER_GATEWAY_DISABLED_MESSAGE);
     }
-    return stopProviderGateway(settingsService, gatewaySecretStore, homeDir);
+    return stopProviderGateway(settingsService, gatewaySecretStore, homeDir, app.getPath("userData"));
   });
   ipcMain.handle("codepal:configure-provider-gateway-client", (_event, payload: unknown) => {
     if (!PROVIDER_GATEWAY_FEATURE_ENABLED) {
@@ -614,15 +664,19 @@ function wireActionResponseIpc(
       throw new Error("unsupported provider gateway client target");
     }
     const setupTarget = target as ProviderGatewayClientSetupTarget;
-    const status = providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+    const status = providerGatewayBaseStatus(settingsService, gatewaySecretStore);
     if (!setupTarget.endsWith("-restore") && status.listener.state !== "listening") {
       throw new Error("Start Provider Gateway before configuring Claude or Codex.");
     }
-    return configureProviderGatewayClient({
+    const result = configureProviderGatewayClient({
       target: setupTarget,
       status,
       homeDir,
     });
+    return {
+      ...result,
+      status: providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir),
+    };
   });
   ipcMain.handle("codepal:get-update-state", () => updateService.getState());
   ipcMain.handle("codepal:check-for-updates", () => updateService.checkForUpdates());
@@ -1119,11 +1173,122 @@ function restoreProviderGatewayClients(
       homeDir,
     }),
     configureProviderGatewayClient({
+      target: "claude-cli-restore",
+      status,
+      homeDir,
+    }),
+    configureProviderGatewayClient({
       target: "codex-desktop-restore",
       status,
       homeDir,
     }),
   ];
+}
+
+function providerGatewayResumeStatePath(userDataPath: string) {
+  return path.join(userDataPath, PROVIDER_GATEWAY_RESUME_STATE_FILE);
+}
+
+function isProviderGatewayResumeTarget(value: unknown): value is ProviderGatewayResumeTarget {
+  return (
+    typeof value === "string" &&
+    (PROVIDER_GATEWAY_RESUME_TARGETS as readonly string[]).includes(value)
+  );
+}
+
+function writeProviderGatewayResumeState(
+  userDataPath: string,
+  targets: readonly ProviderGatewayResumeTarget[],
+) {
+  const statePath = providerGatewayResumeStatePath(userDataPath);
+  if (targets.length === 0) {
+    if (fs.existsSync(statePath)) {
+      fs.rmSync(statePath);
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(statePath), { recursive: true });
+  fs.writeFileSync(
+    statePath,
+    `${JSON.stringify({ targets: [...new Set(targets)], savedAt: Date.now() }, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function readProviderGatewayResumeState(userDataPath: string): ProviderGatewayResumeTarget[] {
+  const statePath = providerGatewayResumeStatePath(userDataPath);
+  if (!fs.existsSync(statePath)) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(statePath, "utf8")) as unknown;
+    if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { targets?: unknown }).targets)) {
+      return [];
+    }
+    return [...new Set((parsed as { targets: unknown[] }).targets.filter(isProviderGatewayResumeTarget))];
+  } catch {
+    return [];
+  }
+}
+
+function deleteProviderGatewayResumeState(userDataPath: string) {
+  writeProviderGatewayResumeState(userDataPath, []);
+}
+
+function activeProviderGatewayClientTargets(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+  homeDir: string,
+): ProviderGatewayResumeTarget[] {
+  const status = providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+  const targets: ProviderGatewayResumeTarget[] = [];
+  if (status.claudeDesktop.setup.active) {
+    targets.push("claude-desktop");
+  }
+  if (status.codexDesktop.setup.active) {
+    targets.push("codex-desktop");
+  }
+  if (status.claudeCli.setup.active) {
+    targets.push("claude-cli");
+  }
+  return targets;
+}
+
+function configureProviderGatewayClients(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+  homeDir: string,
+  targets: readonly ProviderGatewayResumeTarget[],
+) {
+  if (targets.length === 0) {
+    return [];
+  }
+  const status = providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+  if (status.listener.state !== "listening") {
+    return [];
+  }
+  return targets.map((target) =>
+    configureProviderGatewayClient({
+      target,
+      status,
+      homeDir,
+    }),
+  );
+}
+
+function resumeProviderGatewayClients(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+  homeDir: string,
+  userDataPath: string,
+) {
+  const targets = readProviderGatewayResumeState(userDataPath);
+  try {
+    return configureProviderGatewayClients(settingsService, gatewaySecretStore, homeDir, targets);
+  } catch (error) {
+    console.error("[CodePal Gateway] failed to resume client configs after startup:", error);
+    return [];
+  }
 }
 
 function setProviderGatewayEnabled(
@@ -1164,6 +1329,7 @@ async function stopProviderGateway(
   settingsService: ReturnType<typeof createSettingsService>,
   gatewaySecretStore: GatewaySecretStore,
   homeDir: string,
+  userDataPath: string,
   options: { throwOnRestoreError?: boolean } = {},
 ) {
   try {
@@ -1176,9 +1342,30 @@ async function stopProviderGateway(
   }
   await closeProviderGatewayServer();
   providerGatewayHealthCheck = null;
+  deleteProviderGatewayResumeState(userDataPath);
   setProviderGatewayEnabled(settingsService, false);
   markProviderGatewayNotStarted(settingsService);
   return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
+}
+
+async function suspendProviderGatewayForAppQuit(
+  settingsService: ReturnType<typeof createSettingsService>,
+  gatewaySecretStore: GatewaySecretStore,
+  homeDir: string,
+  userDataPath: string,
+) {
+  try {
+    const targets = settingsService.getSettings().providerGateway.enabled
+      ? activeProviderGatewayClientTargets(settingsService, gatewaySecretStore, homeDir)
+      : [];
+    writeProviderGatewayResumeState(userDataPath, targets);
+    restoreProviderGatewayClients(settingsService, gatewaySecretStore, homeDir);
+  } catch (error) {
+    console.error("[CodePal Gateway] failed to restore client configs during app quit:", error);
+  }
+  await closeProviderGatewayServer();
+  providerGatewayHealthCheck = null;
+  markProviderGatewayNotStarted(settingsService);
 }
 
 function markProviderGatewayNotStarted(settingsService: ReturnType<typeof createSettingsService>) {
@@ -1224,17 +1411,21 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
     });
 
     app.on("before-quit", (event) => {
-      if (!quittingAfterProviderGatewayStop && providerGatewayRuntime && providerGatewayServer) {
+      if (!quittingAfterProviderGatewayClose && providerGatewayRuntime && providerGatewayServer) {
         event.preventDefault();
-        quittingAfterProviderGatewayStop = true;
-        void stopProviderGateway(
+        quittingAfterProviderGatewayClose = true;
+        void suspendProviderGatewayForAppQuit(
           providerGatewayRuntime.settingsService,
           providerGatewayRuntime.gatewaySecretStore,
           providerGatewayRuntime.homeDir,
-          { throwOnRestoreError: false },
-        ).finally(() => {
-          app.quit();
-        });
+          app.getPath("userData"),
+        )
+          .catch((error) => {
+            console.error("[CodePal Gateway] failed to suspend server during app quit:", error);
+          })
+          .finally(() => {
+            app.quit();
+          });
         return;
       }
       usageBackfillAbortController?.abort();
@@ -1292,7 +1483,17 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       });
       providerGatewayRuntime = { settingsService, gatewaySecretStore, homeDir };
       installMainProcessFileLogger(path.join(app.getPath("userData"), "logs"));
-      markProviderGatewayNotStarted(settingsService);
+      if (appSettings.providerGateway.enabled) {
+        await startClaudeDesktopProviderGateway(settingsService, gatewaySecretStore);
+        resumeProviderGatewayClients(
+          settingsService,
+          gatewaySecretStore,
+          homeDir,
+          app.getPath("userData"),
+        );
+      } else {
+        markProviderGatewayNotStarted(settingsService);
+      }
       try {
         historyStore = createAppHistoryStore({
           userDataPath: app.getPath("userData"),

@@ -37,12 +37,34 @@ type ReviewProjectGroup = {
   items: DailyWorkReviewEntry[];
 };
 
-function useWorkReviewNow(explicitNow?: number): number {
+export function shouldUseWorkReviewLiveClock(
+  sessions: MonitorSessionRow[],
+  historySessions: SessionHistorySummary[] = [],
+): boolean {
+  void historySessions;
+  return sessions.some((session) => {
+    return (
+      session.status === "running" ||
+      session.status === "waiting" ||
+      session.status === "offline" ||
+      session.pendingCount > 0 ||
+      typeof session.latestRunningStartedAt === "number"
+    );
+  });
+}
+
+function useWorkReviewNow(
+  explicitNow: number | undefined,
+  liveClockEnabled: boolean,
+): number {
   const [liveNow, setLiveNow] = useState(() => explicitNow ?? Date.now());
 
   useEffect(() => {
     if (explicitNow !== undefined) {
       setLiveNow(explicitNow);
+      return;
+    }
+    if (!liveClockEnabled) {
       return;
     }
     setLiveNow(Date.now());
@@ -52,7 +74,7 @@ function useWorkReviewNow(explicitNow?: number): number {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [explicitNow]);
+  }, [explicitNow, liveClockEnabled]);
 
   return explicitNow ?? liveNow;
 }
@@ -330,7 +352,8 @@ export function WorkReviewPage({
   onFocusSession,
 }: WorkReviewPageProps) {
   const { t, locale } = useI18n();
-  const reviewNow = useWorkReviewNow(now);
+  const liveClockEnabled = shouldUseWorkReviewLiveClock(sessions, historySessions);
+  const reviewNow = useWorkReviewNow(now, liveClockEnabled);
   const [rangeDays, setRangeDays] = useState<WorkReviewRangeDays>(
     () => readWorkReviewPagePreferences().rangeDays,
   );

@@ -4,7 +4,17 @@ import type { ProviderGatewayStatus } from "../../shared/providerGatewayTypes";
 import { I18nProvider } from "../i18n";
 import { ProviderGatewayPanel } from "./ProviderGatewayPanel";
 
-const status: ProviderGatewayStatus = {
+type ProviderGatewayStatusWithClaudeCli = ProviderGatewayStatus & {
+  claudeCli: {
+    settingsPath: string;
+    baseUrl: string;
+    apiKey: "local-proxy";
+    inferenceModels: string[];
+    setup: ProviderGatewayStatus["claudeDesktop"]["setup"];
+  };
+};
+
+const status = {
   enabled: true,
   listener: {
     state: "listening",
@@ -71,6 +81,16 @@ const status: ProviderGatewayStatus = {
       restartRequired: false,
     },
   },
+  claudeCli: {
+    settingsPath: "/tmp/home/.claude/settings.json",
+    baseUrl: "http://127.0.0.1:15721",
+    apiKey: "local-proxy",
+    inferenceModels: ["anthropic/MiMo-V2.5-Pro"],
+    setup: {
+      configured: false,
+      restartRequired: false,
+    },
+  },
   codexDesktop: {
     baseUrl: "http://127.0.0.1:15721/v1",
     providerId: "codepal",
@@ -84,7 +104,7 @@ const status: ProviderGatewayStatus = {
     },
   },
   lastHealthCheck: null,
-};
+} as ProviderGatewayStatusWithClaudeCli;
 
 function renderPanel(nextStatus: ProviderGatewayStatus | null = status) {
   return renderToStaticMarkup(
@@ -117,20 +137,11 @@ describe("ProviderGatewayPanel", () => {
     const html = renderPanel();
 
     expect(html).toContain("MiMo Gateway");
-    expect(html).toContain("Qwen DashScope");
     expect(html).toContain("Local token");
-    expect(html).toContain("Token missing");
-    expect(html).toContain("Add provider");
-    expect(html).toContain("Edit");
     expect(html).toContain("http://127.0.0.1:15721");
-    expect(html).toContain("http://127.0.0.1:15721/v1");
-    expect(html).toContain("Codex Desktop setup");
-    expect(html).toContain("Copy config");
-    expect(html).toContain("Claude model");
-    expect(html).toContain("Upstream model");
-    expect(html).toContain("anthropic/MiMo-V2.5-Pro");
-    expect(html).toContain("mimo-v2.5-pro");
-    expect(html).toContain("local-proxy");
+    expect(html).toContain("Claude CLI setup");
+    expect(html).toContain("Codex CLI");
+    expect(html).toContain("Configure Claude CLI");
     expect(html).toContain("Token configured");
     expect(html).not.toContain("mimo.gateway.token");
   });
@@ -142,6 +153,12 @@ describe("ProviderGatewayPanel", () => {
     expect(html).toContain("View model mappings");
     expect(html).toContain("View connection details");
     expect(html).toContain("1 mappings · 1 OK · 0 errors");
+    expect(html).toContain("Manage providers");
+    expect(html).not.toContain("Add provider");
+    expect(html).not.toContain("Copy config");
+    expect(html).not.toContain("Claude model");
+    expect(html).not.toContain("mimo-v2.5-pro");
+    expect(html).not.toContain("local-proxy");
     expect(html).not.toContain("Header-Name=value");
     expect(html).not.toContain("<details open");
   });
@@ -201,7 +218,7 @@ describe("ProviderGatewayPanel", () => {
     expect(html).not.toContain("Configure Codex");
     expect(html).not.toContain("Providers");
     expect(html).not.toContain("Model mappings");
-    expect(html).not.toContain("Codex Desktop setup");
+    expect(html).not.toContain("Codex CLI");
   });
 
   it("disables client setup actions after matching config is detected", () => {
@@ -215,6 +232,16 @@ describe("ProviderGatewayPanel", () => {
           canRestore: true,
           restartRequired: true,
           message: "Configured and active. Restart Claude Desktop to make sure it reloads this gateway profile.",
+        },
+      },
+      claudeCli: {
+        ...status.claudeCli,
+        setup: {
+          configured: true,
+          active: true,
+          canRestore: true,
+          restartRequired: true,
+          message: "Configured and active. Restart Claude CLI sessions to reload CodePal Gateway env.",
         },
       },
       codexDesktop: {
@@ -231,10 +258,13 @@ describe("ProviderGatewayPanel", () => {
 
     expect(html).toContain("Configured");
     expect(html).toContain("Restart Claude Desktop");
+    expect(html).toContain("Restart Claude CLI");
     expect(html).toContain("Restart Codex Desktop");
     expect(html).toContain("Claude on CodePal");
+    expect(html).toContain("Claude CLI on CodePal");
     expect(html).toContain("Codex on CodePal");
     expect(html).toContain("Restore Claude");
+    expect(html).toContain("Restore Claude CLI");
     expect(html).toContain("Restore Codex");
   });
 
@@ -254,5 +284,43 @@ describe("ProviderGatewayPanel", () => {
 
     expect(html).toContain("Switch to CodePal");
     expect(html).not.toContain("Claude on CodePal");
+  });
+
+  it("keeps Claude CLI setup action available when only Claude Desktop is active", () => {
+    const html = renderPanel({
+      ...status,
+      claudeDesktop: {
+        ...status.claudeDesktop,
+        setup: {
+          configured: true,
+          active: true,
+          canRestore: true,
+          restartRequired: true,
+          message: "Configured and active. Restart Claude Desktop to reload CodePal Gateway.",
+        },
+      },
+      claudeCli: {
+        ...status.claudeCli,
+        setup: {
+          configured: false,
+          active: false,
+          restartRequired: false,
+          message: "Claude CLI env has not been written yet.",
+        },
+      },
+    });
+
+    expect(html).toContain("Claude on CodePal");
+    expect(html).toContain("Configure Claude CLI");
+    expect(html).not.toContain("Claude CLI on CodePal");
+  });
+
+  it("keeps the Provider Gateway page open when Claude CLI status is missing from an older main response", () => {
+    const legacyStatus = { ...status } as Partial<ProviderGatewayStatusWithClaudeCli>;
+    delete legacyStatus.claudeCli;
+    const html = renderPanel(legacyStatus as ProviderGatewayStatus);
+
+    expect(html).toContain("Claude CLI setup");
+    expect(html).toContain("Configure Claude CLI");
   });
 });

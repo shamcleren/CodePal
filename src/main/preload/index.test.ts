@@ -85,6 +85,7 @@ describe("preload history bridge", () => {
 
     expect(typeof api.getProviderGatewayStatus).toBe("function");
     expect(typeof api.updateProviderGatewayToken).toBe("function");
+    expect(typeof api.selectProviderGatewayProvider).toBe("function");
     expect(typeof api.runProviderGatewayHealthCheck).toBe("function");
     expect(typeof api.startProviderGateway).toBe("function");
     expect(typeof api.stopProviderGateway).toBe("function");
@@ -95,6 +96,7 @@ describe("preload history bridge", () => {
       "mimo",
       "secret",
     );
+    (api.selectProviderGatewayProvider as (providerId: string) => Promise<unknown>)("qwen");
     (api.runProviderGatewayHealthCheck as () => Promise<unknown>)();
     (api.startProviderGateway as () => Promise<unknown>)();
     (api.stopProviderGateway as () => Promise<unknown>)();
@@ -105,10 +107,13 @@ describe("preload history bridge", () => {
       providerId: "mimo",
       token: "secret",
     });
-    expect(invoke).toHaveBeenNthCalledWith(3, "codepal:run-provider-gateway-health-check");
-    expect(invoke).toHaveBeenNthCalledWith(4, "codepal:start-provider-gateway");
-    expect(invoke).toHaveBeenNthCalledWith(5, "codepal:stop-provider-gateway");
-    expect(invoke).toHaveBeenNthCalledWith(6, "codepal:configure-provider-gateway-client", {
+    expect(invoke).toHaveBeenNthCalledWith(3, "codepal:select-provider-gateway-provider", {
+      providerId: "qwen",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, "codepal:run-provider-gateway-health-check");
+    expect(invoke).toHaveBeenNthCalledWith(5, "codepal:start-provider-gateway");
+    expect(invoke).toHaveBeenNthCalledWith(6, "codepal:stop-provider-gateway");
+    expect(invoke).toHaveBeenNthCalledWith(7, "codepal:configure-provider-gateway-client", {
       target: "codex-desktop",
     });
   });

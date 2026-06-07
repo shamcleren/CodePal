@@ -10,12 +10,23 @@ import type {
 export type ProviderGatewayClientSetupTarget =
   | "claude-desktop"
   | "claude-desktop-restore"
+  | "claude-cli"
+  | "claude-cli-restore"
   | "codex-desktop"
   | "codex-desktop-restore";
 
 export type ProviderGatewayClientSetupResult = {
   ok: boolean;
   target: ProviderGatewayClientSetupTarget;
+  changed: boolean;
+  configPath: string;
+  backupPath?: string;
+  message: string;
+};
+
+export type ClaudeCliGatewaySetupResult = {
+  ok: boolean;
+  target: "claude-cli";
   changed: boolean;
   configPath: string;
   backupPath?: string;
@@ -42,6 +53,12 @@ type ClaudeConfigMeta = {
   appliedId?: string;
   codePalPreviousAppliedId?: string | null;
   entries?: ClaudeConfigMetaEntry[];
+};
+
+type ClaudeCliGatewayRestoreState = {
+  previousValues: Record<string, unknown>;
+  missingKeys: string[];
+  savedAt: number;
 };
 
 type CodexGatewayRestoreState = {
@@ -240,17 +257,14 @@ function restoreClaudeDesktop(
   const configPath = findClaudeConfigPath(homeDir, status);
   const metaPath = claudeMetaPath(homeDir);
   const current = readClaudeMeta(homeDir);
-  const cliEnvChanged = removeLegacyClaudeCliGatewayEnv(status, homeDir, now);
   const hasPrevious = Object.prototype.hasOwnProperty.call(current, "codePalPreviousAppliedId");
   if (!hasPrevious) {
     return {
       ok: true,
       target: "claude-desktop-restore",
-      changed: cliEnvChanged,
+      changed: false,
       configPath,
-      message: cliEnvChanged
-        ? "Legacy Claude CLI CodePal Gateway env removed. Claude Desktop has no saved previous provider selection to restore."
-        : "Claude Desktop has no saved previous provider selection to restore.",
+      message: "Claude Desktop has no saved previous provider selection to restore.",
     };
   }
   const next: ClaudeConfigMeta = { ...current };
@@ -277,7 +291,7 @@ function restoreClaudeDesktop(
   return {
     ok: true,
     target: "claude-desktop-restore",
-    changed: previousText !== `${JSON.stringify(next, null, 2)}\n` || removedConfig || cliEnvChanged,
+    changed: previousText !== `${JSON.stringify(next, null, 2)}\n` || removedConfig,
     configPath,
     message: "Claude Desktop restored to the previous provider selection. Restart Claude Desktop to reload it.",
   };
@@ -285,6 +299,233 @@ function restoreClaudeDesktop(
 
 function claudeCliSettingsPath(homeDir: string): string {
   return path.join(homeDir, ".claude", "settings.json");
+}
+
+function claudeCliGatewayRestoreStatePath(homeDir: string): string {
+  return path.join(homeDir, ".claude", "codepal-provider-gateway-state.json");
+}
+
+function readClaudeCliGatewayRestoreState(homeDir: string): ClaudeCliGatewayRestoreState | null {
+  const statePath = claudeCliGatewayRestoreStatePath(homeDir);
+  if (!fs.existsSync(statePath)) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(statePath, "utf8")) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as ClaudeCliGatewayRestoreState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeClaudeCliGatewayRestoreState(
+  homeDir: string,
+  state: ClaudeCliGatewayRestoreState,
+  now: () => number,
+): void {
+  writeJsonIfChanged(claudeCliGatewayRestoreStatePath(homeDir), state, now);
+}
+
+function deleteClaudeCliGatewayRestoreState(homeDir: string): void {
+  const statePath = claudeCliGatewayRestoreStatePath(homeDir);
+  if (fs.existsSync(statePath)) {
+    fs.rmSync(statePath);
+  }
+}
+
+function preferredClaudeModel(models: string[], keyword: string): string {
+  return models.find((model) => model.toLowerCase().includes(keyword)) ?? models[0] ?? "sonnet";
+}
+
+function claudeCliGatewayEnv(status: ProviderGatewayStatus): Record<string, string> {
+  const sonnet = preferredClaudeModel(status.claudeDesktop.inferenceModels, "sonnet");
+  const opus = preferredClaudeModel(status.claudeDesktop.inferenceModels, "opus");
+  const haiku = preferredClaudeModel(status.claudeDesktop.inferenceModels, "haiku");
+  return {
+    CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+    ANTHROPIC_BASE_URL: status.claudeDesktop.baseUrl,
+    ANTHROPIC_AUTH_TOKEN: status.claudeDesktop.apiKey,
+    ANTHROPIC_MODEL: sonnet,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: sonnet,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: opus,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: haiku,
+  };
+}
+
+const CLAUDE_CLI_GATEWAY_ENV_KEYS = [
+  "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
+  "ANTHROPIC_BASE_URL",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_MODEL",
+  "ANTHROPIC_DEFAULT_SONNET_MODEL",
+  "ANTHROPIC_DEFAULT_OPUS_MODEL",
+  "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+] as const;
+
+function hasNonCodePalClaudeCliEnv(
+  env: Record<string, unknown>,
+  status: ProviderGatewayStatus,
+): boolean {
+  const expected = claudeCliGatewayEnv(status);
+  const codePalModelSet = new Set(status.claudeDesktop.inferenceModels);
+  const ownedValues: Record<string, string | Set<string>> = {
+    CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+    ANTHROPIC_BASE_URL: expected.ANTHROPIC_BASE_URL,
+    ANTHROPIC_AUTH_TOKEN: expected.ANTHROPIC_AUTH_TOKEN,
+    ANTHROPIC_MODEL: codePalModelSet,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: codePalModelSet,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: codePalModelSet,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: codePalModelSet,
+  };
+  return Object.entries(ownedValues).some(([key, ownedValue]) => {
+    const value = env[key];
+    if (typeof value !== "string") {
+      return value !== undefined;
+    }
+    return ownedValue instanceof Set ? !ownedValue.has(value) : value !== ownedValue;
+  });
+}
+
+export function isClaudeCliGatewayEnvCurrent(options: {
+  status: ProviderGatewayStatus;
+  homeDir: string;
+}): boolean {
+  const configPath = claudeCliSettingsPath(options.homeDir);
+  if (!fs.existsSync(configPath)) {
+    return false;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as unknown;
+  } catch {
+    return false;
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return false;
+  }
+  const env = (parsed as Record<string, unknown>).env;
+  if (!env || typeof env !== "object" || Array.isArray(env)) {
+    return false;
+  }
+  const current = env as Record<string, unknown>;
+  return Object.entries(claudeCliGatewayEnv(options.status)).every(
+    ([key, value]) => current[key] === value,
+  );
+}
+
+export function configureClaudeCliGatewayEnv(options: {
+  status: ProviderGatewayStatus;
+  homeDir: string;
+  force?: boolean;
+  now?: () => number;
+}): ClaudeCliGatewaySetupResult {
+  const now = options.now ?? Date.now;
+  const configPath = claudeCliSettingsPath(options.homeDir);
+  let parsed: unknown = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as unknown;
+    } catch {
+      parsed = {};
+    }
+  }
+  const settings = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
+  const currentEnv = settings.env && typeof settings.env === "object" && !Array.isArray(settings.env)
+    ? (settings.env as Record<string, unknown>)
+    : {};
+  if (hasNonCodePalClaudeCliEnv(currentEnv, options.status) && !options.force) {
+    return {
+      ok: true,
+      target: "claude-cli",
+      changed: false,
+      configPath,
+      message: "Claude CLI has a non-CodePal provider env; leaving it unchanged.",
+    };
+  }
+  if (!isClaudeCliGatewayEnvCurrent(options) && !readClaudeCliGatewayRestoreState(options.homeDir)) {
+    const previousValues: Record<string, unknown> = {};
+    const missingKeys: string[] = [];
+    for (const key of CLAUDE_CLI_GATEWAY_ENV_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(currentEnv, key)) {
+        previousValues[key] = currentEnv[key];
+      } else {
+        missingKeys.push(key);
+      }
+    }
+    writeClaudeCliGatewayRestoreState(
+      options.homeDir,
+      {
+        previousValues,
+        missingKeys,
+        savedAt: now(),
+      },
+      now,
+    );
+  }
+  const next = {
+    ...settings,
+    env: {
+      ...currentEnv,
+      ...claudeCliGatewayEnv(options.status),
+    },
+  };
+  const writeResult = writeJsonIfChanged(configPath, next, now);
+  return {
+    ok: true,
+    target: "claude-cli",
+    changed: writeResult.changed,
+    configPath,
+    backupPath: writeResult.backupPath,
+    message: writeResult.changed
+      ? "Claude CLI CodePal Gateway env updated. Restart Claude CLI sessions to reload it."
+      : "Claude CLI CodePal Gateway env is already up to date.",
+  };
+}
+
+function restoreClaudeCliGatewayEnv(
+  status: ProviderGatewayStatus,
+  homeDir: string,
+  now: () => number,
+): boolean {
+  const state = readClaudeCliGatewayRestoreState(homeDir);
+  if (!state) {
+    return removeLegacyClaudeCliGatewayEnv(status, homeDir, now);
+  }
+  const configPath = claudeCliSettingsPath(homeDir);
+  let parsed: unknown = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as unknown;
+    } catch {
+      parsed = {};
+    }
+  }
+  const settings = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
+  const currentEnv = settings.env && typeof settings.env === "object" && !Array.isArray(settings.env)
+    ? { ...(settings.env as Record<string, unknown>) }
+    : {};
+  for (const key of CLAUDE_CLI_GATEWAY_ENV_KEYS) {
+    delete currentEnv[key];
+  }
+  for (const [key, value] of Object.entries(state.previousValues ?? {})) {
+    currentEnv[key] = value;
+  }
+  for (const key of state.missingKeys ?? []) {
+    delete currentEnv[key];
+  }
+  const next = { ...settings };
+  if (Object.keys(currentEnv).length > 0) {
+    next.env = currentEnv;
+  } else {
+    delete next.env;
+  }
+  const writeResult = writeJsonIfChanged(configPath, next, now);
+  deleteClaudeCliGatewayRestoreState(homeDir);
+  return writeResult.changed;
 }
 
 function removeLegacyClaudeCliGatewayEnv(
@@ -344,6 +585,24 @@ function removeLegacyClaudeCliGatewayEnv(
   }
   writeJsonIfChanged(configPath, next, now);
   return true;
+}
+
+function restoreClaudeCliGatewayEnvResult(
+  status: ProviderGatewayStatus,
+  homeDir: string,
+  now: () => number,
+): ProviderGatewayClientSetupResult {
+  const configPath = claudeCliSettingsPath(homeDir);
+  const changed = restoreClaudeCliGatewayEnv(status, homeDir, now);
+  return {
+    ok: true,
+    target: "claude-cli-restore",
+    changed,
+    configPath,
+    message: changed
+      ? "Claude CLI restored to the previous provider env. Restart Claude CLI sessions to reload it."
+      : "Claude CLI has no saved CodePal Gateway env to restore.",
+  };
 }
 
 function codexConfigPath(homeDir: string): string {
@@ -582,6 +841,17 @@ export function configureProviderGatewayClient(
   if (options.target === "claude-desktop-restore") {
     return restoreClaudeDesktop(options.status, options.homeDir, now);
   }
+  if (options.target === "claude-cli") {
+    return configureClaudeCliGatewayEnv({
+      status: options.status,
+      homeDir: options.homeDir,
+      force: true,
+      now,
+    });
+  }
+  if (options.target === "claude-cli-restore") {
+    return restoreClaudeCliGatewayEnvResult(options.status, options.homeDir, now);
+  }
   if (options.target === "codex-desktop-restore") {
     return restoreCodexDesktop(options.status, options.homeDir, now);
   }
@@ -605,18 +875,19 @@ export function inspectProviderGatewayClientSetup(options: {
     }
     try {
       const parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as unknown;
-      const configured = isClaudeConfigCurrent(parsed, options.status);
+      const desktopConfigured = isClaudeConfigCurrent(parsed, options.status);
+      const configured = desktopConfigured;
       const meta = readClaudeMeta(options.homeDir);
-      const active = configured && meta.appliedId === claudeConfigId(configPath);
+      const desktopActive = desktopConfigured && meta.appliedId === claudeConfigId(configPath);
       const canRestore = Object.prototype.hasOwnProperty.call(meta, "codePalPreviousAppliedId");
       return {
         configured,
-        active,
+        active: desktopActive,
         canRestore,
         configPath,
         restartRequired: configured,
         message: configured
-          ? active
+          ? desktopActive
             ? "Configured and active. Restart Claude Desktop to make sure it reloads this gateway profile. Use Restore to switch back to the previous provider."
             : "Configured but not active. Click Configure Claude to switch Claude Desktop to CodePal Gateway."
           : "Claude Desktop config exists but does not match current CodePal Gateway settings.",
@@ -629,6 +900,30 @@ export function inspectProviderGatewayClientSetup(options: {
         message: "Claude Desktop config exists but is not valid JSON.",
       };
     }
+  }
+  if (options.target === "claude-cli") {
+    const configPath = claudeCliSettingsPath(options.homeDir);
+    if (!fs.existsSync(configPath)) {
+      return {
+        configured: false,
+        active: false,
+        canRestore: Boolean(readClaudeCliGatewayRestoreState(options.homeDir)),
+        configPath,
+        restartRequired: false,
+        message: "Claude CLI env has not been written yet.",
+      };
+    }
+    const configured = isClaudeCliGatewayEnvCurrent(options);
+    return {
+      configured,
+      active: configured,
+      canRestore: Boolean(readClaudeCliGatewayRestoreState(options.homeDir)),
+      configPath,
+      restartRequired: true,
+      message: configured
+        ? "Configured and active. Restart Claude CLI sessions to reload CodePal Gateway env. Use Restore to switch back to the previous provider env."
+        : "Claude CLI settings exist, but env is not using CodePal Gateway. Click Configure Claude CLI to update it.",
+    };
   }
   const configPath = codexConfigPath(options.homeDir);
   if (!fs.existsSync(configPath)) {

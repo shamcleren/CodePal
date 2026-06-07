@@ -36,8 +36,9 @@ import { createI18nValue, I18nProvider, resolveLocale } from "./i18n";
 import { formatSettingsPathForDisplay } from "./settingsPath";
 import { SUPPORT_LINKS } from "./supportLinks";
 import { buildSupportDiagnosticsReport } from "./supportDiagnostics";
-import { hydrateRowsIfEmpty, reconcileRows, rowsFromSessions } from "./sessionBootstrap";
+import { hydrateRowsIfEmpty, reconcileRows } from "./sessionBootstrap";
 import {
+  type AppThemeId,
   type UsageAgentId,
 } from "./usageDisplaySettings";
 
@@ -99,6 +100,24 @@ export function buildFallbackHistoryDiagnostics(enabled: boolean): HistoryDiagno
   };
 }
 
+function systemPrefersLightTheme(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: light)").matches
+  );
+}
+
+export function resolveAppTheme(
+  theme: AppSettings["display"]["theme"],
+  systemPrefersLight: boolean,
+): AppThemeId {
+  if (theme === "system") {
+    return systemPrefersLight ? "paper-ops" : "graphite-ops";
+  }
+  return theme;
+}
+
 export function App() {
   const [rows, setRows] = useState<MonitorSessionRow[]>([]);
   const [integrationDiagnostics, setIntegrationDiagnostics] =
@@ -134,6 +153,7 @@ export function App() {
   const [workReviewPricing, setWorkReviewPricing] = useState<ModelPricing[]>([]);
   const [sessionHistoryClearing, setSessionHistoryClearing] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
+  const [systemPrefersLight, setSystemPrefersLight] = useState(systemPrefersLightTheme);
   const [appSettingsPath, setAppSettingsPath] = useState("");
   const [homeDir, setHomeDir] = useState("");
   const [updateState, setUpdateState] = useState<AppUpdateState | null>(null);
@@ -148,16 +168,29 @@ export function App() {
     typeof navigator !== "undefined" ? navigator.language : undefined,
   );
   const i18n = createI18nValue(resolvedLocale);
-  const supportDiagnosticsReport = buildSupportDiagnosticsReport({
-    generatedAt: Date.now(),
-    resolvedLocale,
-    appSettings,
-    appSettingsPath,
-    homeDir,
-    integrationDiagnostics,
-    historyDiagnostics,
-    updateState,
-  });
+  const resolvedTheme = resolveAppTheme(appSettings.display.theme, systemPrefersLight);
+  const supportDiagnosticsReport = useMemo(
+    () =>
+      buildSupportDiagnosticsReport({
+        generatedAt: Date.now(),
+        resolvedLocale,
+        appSettings,
+        appSettingsPath,
+        homeDir,
+        integrationDiagnostics,
+        historyDiagnostics,
+        updateState,
+      }),
+    [
+      resolvedLocale,
+      appSettings,
+      appSettingsPath,
+      homeDir,
+      integrationDiagnostics,
+      historyDiagnostics,
+      updateState,
+    ],
+  );
   const settingsSections: SettingsSection[] = [
     {
       id: "overview",
@@ -261,12 +294,10 @@ export function App() {
     setProviderGatewayFeedback(null);
     setProviderGatewayError(null);
     return window.codepal
-      .updateAppSettings({ providerGateway: { activeProvider: providerId } })
-      .then((settings) => {
-        setAppSettings(settings);
-        return loadProviderGatewayStatus();
-      })
-      .then(() => {
+      .selectProviderGatewayProvider(providerId)
+      .then((result) => {
+        setAppSettings(result.settings);
+        setProviderGatewayStatus(result.status);
         setProviderGatewayFeedback(i18n.t("providerGateway.provider.switched"));
       })
       .catch((error: unknown) => {
@@ -375,10 +406,7 @@ export function App() {
       .configureProviderGatewayClient(target)
       .then((result) => {
         setProviderGatewayFeedback(result.message);
-        return window.codepal.getProviderGatewayStatus();
-      })
-      .then((status) => {
-        setProviderGatewayStatus(status);
+        setProviderGatewayStatus(result.status);
       })
       .catch((error: unknown) => {
         setProviderGatewayError((error as Error).message);
@@ -403,7 +431,10 @@ export function App() {
       .finally(() => {
         setIntegrationLoading(false);
       });
+  }
 
+  function refreshSettingsOverview() {
+    refreshIntegrations();
     void loadProviderGatewayStatus();
     void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
   }
@@ -444,6 +475,10 @@ export function App() {
     }
     if (section === "advanced") {
       void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
+      return;
+    }
+    if (section === "overview") {
+      refreshSettingsOverview();
       return;
     }
     refreshIntegrations();
@@ -511,6 +546,20 @@ export function App() {
     void reloadAppSettings();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: light)");
+    const updateSystemTheme = () => setSystemPrefersLight(mediaQuery.matches);
+    updateSystemTheme();
+    mediaQuery.addEventListener?.("change", updateSystemTheme);
+    return () => {
+      mediaQuery.removeEventListener?.("change", updateSystemTheme);
+    };
+  }, []);
+
   function reloadAppSettings() {
     return Promise.all([
       window.codepal.reloadAppSettings(),
@@ -544,20 +593,6 @@ export function App() {
       unsub();
     };
   }, [resolvedLocale]);
-
-  useEffect(() => {
-    void window.codepal.getSessions().then((sessions) => {
-      setRows(rowsFromSessions(sessions, resolvedLocale));
-    });
-  }, [resolvedLocale]);
-
-  useEffect(() => {
-    void loadProviderGatewayStatus();
-  }, []);
-
-  useEffect(() => {
-    void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
-  }, []);
 
   useEffect(() => {
     if (activeView !== "review") return;
@@ -738,7 +773,11 @@ export function App() {
 
   return (
     <I18nProvider locale={resolvedLocale}>
-    <div className="app app-shell" data-theme={appSettings.display.theme}>
+    <div
+      className="app app-shell"
+      data-theme={resolvedTheme}
+      data-theme-setting={appSettings.display.theme}
+    >
       <div className="app-header">
         <div className="app-header__meta">
           <h1 className="app-title">CodePal</h1>

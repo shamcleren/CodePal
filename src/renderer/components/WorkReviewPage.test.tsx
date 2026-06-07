@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { MonitorSessionRow } from "../monitorSession";
 import { I18nProvider } from "../i18n";
 import { writeWorkReviewPagePreferences } from "../projectViewPreferences";
-import { WorkReviewPage } from "./WorkReviewPage";
+import { shouldUseWorkReviewLiveClock, WorkReviewPage } from "./WorkReviewPage";
 
 function row(overrides: Partial<MonitorSessionRow>): MonitorSessionRow {
   return {
@@ -57,6 +57,39 @@ function fakeStorage(): Storage {
 }
 
 describe("WorkReviewPage", () => {
+  it("does not keep a second-level live clock for completed-only review data", () => {
+    expect(
+      shouldUseWorkReviewLiveClock(
+        [
+          row({ id: "completed", status: "completed" }),
+          row({ id: "idle", status: "idle" }),
+        ],
+        [
+          {
+            id: "history",
+            tool: "codex",
+            status: "completed",
+            title: "历史事项",
+            task: "历史事项",
+            updatedAt: Date.parse("2026-05-20T18:00:00+08:00"),
+          },
+        ],
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps the live clock when current review data has active sessions", () => {
+    expect(
+      shouldUseWorkReviewLiveClock([
+        row({
+          id: "running",
+          status: "running",
+          latestRunningStartedAt: Date.parse("2026-05-25T11:58:00+08:00"),
+        }),
+      ]),
+    ).toBe(true);
+  });
+
   it("renders a calm daily summary with one grouped item list", () => {
     const html = renderToStaticMarkup(
       <I18nProvider locale="zh-CN">

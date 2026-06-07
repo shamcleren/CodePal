@@ -37,6 +37,22 @@ test("keeps the renderer alive while editing Provider Gateway providers", async 
 
     await page.locator(".app-settings-trigger").click();
     await page.locator(".settings-nav").getByRole("button", { name: /Provider Gateway/ }).click();
+    await expect(page.locator(".provider-gateway-panel")).toBeVisible({
+      timeout: 15_000,
+    });
+    const providerSections = page.locator(".provider-gateway-panel__details--section summary");
+    await providerSections.first().waitFor({ state: "visible", timeout: 1_000 }).catch(() => undefined);
+    if ((await providerSections.count()) < 2) {
+      const startGateway = page.getByRole("button", { name: /Start Gateway|启动 Gateway/ });
+      await expect(startGateway).toBeVisible({ timeout: 15_000 });
+      await startGateway.click();
+      await expect(providerSections.nth(1)).toBeVisible({ timeout: 15_000 });
+    }
+    await providerSections
+      .nth(1)
+      .evaluate((summary) => {
+        (summary as HTMLElement).click();
+      });
     await expect(page.getByRole("button", { name: /Add provider|新增 provider/ })).toBeVisible({
       timeout: 15_000,
     });

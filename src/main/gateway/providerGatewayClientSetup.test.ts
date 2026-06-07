@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { ProviderGatewayStatus } from "../../shared/providerGatewayTypes";
 import {
   codexConfigContents,
+  configureClaudeCliGatewayEnv,
   configureProviderGatewayClient,
   inspectProviderGatewayClientSetup,
+  isClaudeCliGatewayEnvCurrent,
 } from "./providerGatewayClientSetup";
 
 const tempDirs: string[] = [];
@@ -213,7 +215,7 @@ describe("provider gateway client setup", () => {
     expect(fs.existsSync(metaPath)).toBe(false);
   });
 
-  it("removes legacy Claude CLI gateway env when restoring Claude Desktop", () => {
+  it("removes legacy Claude CLI gateway env when restoring Claude CLI", () => {
     const homeDir = mkHome();
     const configDir = path.join(homeDir, "Library", "Application Support", "Claude-3p", "configLibrary");
     fs.mkdirSync(configDir, { recursive: true });
@@ -252,7 +254,7 @@ describe("provider gateway client setup", () => {
     );
 
     const restore = configureProviderGatewayClient({
-      target: "claude-desktop-restore",
+      target: "claude-cli-restore",
       status: status(),
       homeDir,
       now: () => 333,
@@ -263,6 +265,110 @@ describe("provider gateway client setup", () => {
     expect(parsed.env).toEqual({
       USER_VALUE: "preserved",
     });
+  });
+
+  it("writes Claude CLI gateway env without replacing other settings", () => {
+    const homeDir = mkHome();
+    const claudeCliPath = path.join(homeDir, ".claude", "settings.json");
+    fs.mkdirSync(path.dirname(claudeCliPath), { recursive: true });
+    fs.writeFileSync(
+      claudeCliPath,
+      JSON.stringify(
+        {
+          model: "opus",
+          env: {
+            USER_VALUE: "preserved",
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const result = configureClaudeCliGatewayEnv({
+      status: status(),
+      homeDir,
+      now: () => 336,
+    });
+
+    const parsed = JSON.parse(fs.readFileSync(claudeCliPath, "utf8"));
+    expect(result.changed).toBe(true);
+    expect(result.target).toBe("claude-cli");
+    expect(parsed.model).toBe("opus");
+    expect(parsed.env).toEqual({
+      USER_VALUE: "preserved",
+      CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:15721",
+      ANTHROPIC_AUTH_TOKEN: "local-proxy",
+      ANTHROPIC_MODEL: "claude-sonnet-4-6",
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6",
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-7",
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku-4-5",
+    });
+    expect(isClaudeCliGatewayEnvCurrent({ status: status(), homeDir })).toBe(true);
+  });
+
+  it("does not overwrite provider-switch Claude CLI env that does not point at CodePal", () => {
+    const homeDir = mkHome();
+    const claudeCliPath = path.join(homeDir, ".claude", "settings.json");
+    fs.mkdirSync(path.dirname(claudeCliPath), { recursive: true });
+    const providerSwitchSettings = {
+      env: {
+        CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+        ANTHROPIC_BASE_URL: "https://ccswitch.example.test",
+        ANTHROPIC_AUTH_TOKEN: "ccswitch-token",
+        ANTHROPIC_MODEL: "ccswitch-model",
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "ccswitch-sonnet",
+      },
+    };
+    fs.writeFileSync(claudeCliPath, JSON.stringify(providerSwitchSettings, null, 2), "utf8");
+
+    const result = configureClaudeCliGatewayEnv({
+      status: status(),
+      homeDir,
+      now: () => 337,
+    });
+
+    const parsed = JSON.parse(fs.readFileSync(claudeCliPath, "utf8"));
+    expect(result.changed).toBe(false);
+    expect(parsed.env).toEqual(providerSwitchSettings.env);
+  });
+
+  it("explicit Claude CLI configure can replace provider-switch CLI env and restore it later", () => {
+    const homeDir = mkHome();
+    const claudeCliPath = path.join(homeDir, ".claude", "settings.json");
+    fs.mkdirSync(path.dirname(claudeCliPath), { recursive: true });
+    const providerSwitchSettings = {
+      env: {
+        CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: "1",
+        ANTHROPIC_BASE_URL: "https://ccswitch.example.test",
+        ANTHROPIC_AUTH_TOKEN: "ccswitch-token",
+        ANTHROPIC_MODEL: "ccswitch-model",
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "ccswitch-sonnet",
+      },
+    };
+    fs.writeFileSync(claudeCliPath, JSON.stringify(providerSwitchSettings, null, 2), "utf8");
+
+    const configure = configureProviderGatewayClient({
+      target: "claude-cli",
+      status: status(),
+      homeDir,
+      now: () => 338,
+    });
+
+    expect(configure.changed).toBe(true);
+    expect(isClaudeCliGatewayEnvCurrent({ status: status(), homeDir })).toBe(true);
+
+    configureProviderGatewayClient({
+      target: "claude-cli-restore",
+      status: status(),
+      homeDir,
+      now: () => 339,
+    });
+
+    const restored = JSON.parse(fs.readFileSync(claudeCliPath, "utf8"));
+    expect(restored.env).toEqual(providerSwitchSettings.env);
   });
 
   it("keeps provider-switch Claude CLI env that does not point at CodePal", () => {
@@ -464,6 +570,42 @@ describe("provider gateway client setup", () => {
       configured: true,
       active: true,
       canRestore: true,
+      restartRequired: true,
+    });
+  });
+
+  it("reports Claude Desktop and Claude CLI setup independently", () => {
+    const homeDir = mkHome();
+    configureProviderGatewayClient({
+      target: "claude-desktop",
+      status: status(),
+      homeDir,
+      now: () => 1,
+    });
+    const claudeCliPath = path.join(homeDir, ".claude", "settings.json");
+    fs.mkdirSync(path.dirname(claudeCliPath), { recursive: true });
+    fs.writeFileSync(
+      claudeCliPath,
+      JSON.stringify({ model: "opus", env: {} }, null, 2),
+      "utf8",
+    );
+
+    expect(inspectProviderGatewayClientSetup({
+      target: "claude-desktop",
+      status: status(),
+      homeDir,
+    })).toMatchObject({
+      configured: true,
+      active: true,
+      restartRequired: true,
+    });
+    expect(inspectProviderGatewayClientSetup({
+      target: "claude-cli",
+      status: status(),
+      homeDir,
+    })).toMatchObject({
+      configured: false,
+      active: false,
       restartRequired: true,
     });
   });

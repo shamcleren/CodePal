@@ -29,6 +29,6 @@ npm test -- src/main/pricing/modelPricingSync.test.ts src/shared/appSettings.tes
 
 ## Notes
 
-- `hy3-preview-agent-ioa` is the CodeBuddy Hy3 preview model and is intentionally priced at `0`.
+- `Hy3 preview` is the CodeBuddy Hy3 preview model name and is intentionally priced at `0`.
 - Cache creation is `0` when the provider says cache writes are free or does not publish a separate cache-write price.
 - Custom user providers cannot be pre-enumerated; add those rows when a stable default or observed model ID needs cost estimates.

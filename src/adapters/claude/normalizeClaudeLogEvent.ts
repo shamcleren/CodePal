@@ -222,6 +222,11 @@ function buildMeta(entry: Record<string, unknown>, sourcePath: string): Record<s
   return meta;
 }
 
+function messageModelMeta(meta: Record<string, unknown>): { meta: { model: string } } | Record<string, never> {
+  const model = typeof meta.model === "string" && meta.model.trim() ? meta.model.trim() : "";
+  return model ? { meta: { model } } : {};
+}
+
 function userMessageText(entry: Record<string, unknown>): string | undefined {
   const message = asRecord(entry.message);
   const content = message?.content;
@@ -387,6 +392,7 @@ export function normalizeClaudeLogEvent(
           title: "User",
           body: text,
           timestamp,
+          ...messageModelMeta(meta),
         },
       ],
     };
@@ -416,6 +422,7 @@ export function normalizeClaudeLogEvent(
           title: "Assistant",
           body: textBody,
           timestamp,
+          ...messageModelMeta(meta),
         },
       ],
     };

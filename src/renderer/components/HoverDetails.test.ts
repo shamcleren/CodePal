@@ -10,6 +10,7 @@ import {
   buildPrimaryDisplayItems,
   HoverDetails,
   summarizeToolGroup,
+  timelineItemModelLabel,
 } from "./HoverDetails";
 import { toRenderableMessageBody } from "../messageBody";
 
@@ -143,6 +144,36 @@ describe("buildPrimaryDisplayItems", () => {
 });
 
 describe("HoverDetails", () => {
+  it("renders a model badge on message items when model metadata is present", () => {
+    const item: TimelineItem = {
+      id: "assistant-model",
+      kind: "message",
+      source: "assistant",
+      label: "Assistant",
+      title: "Assistant",
+      body: "Done.",
+      timestamp: 100,
+      meta: {
+        model: "Hy3 preview",
+      },
+    };
+    const html = renderToStaticMarkup(
+      createElement(
+        I18nProvider,
+        { locale: "en" },
+        createElement(HoverDetails, {
+          sessionStatus: "idle",
+          items: [item],
+        }),
+      ),
+    );
+
+    expect(timelineItemModelLabel(item)).toBe("Hy3 preview");
+    expect(html).toContain("session-stream__model-badge");
+    expect(html).toContain("Hy3 preview");
+    expect(timelineItemModelLabel(toolItem("tool-model", 1))).toBeNull();
+  });
+
   it("renders newest-first input as a chronological transcript with the first user message before tools and assistant replies", () => {
     const html = renderToStaticMarkup(
       createElement(

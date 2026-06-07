@@ -3,7 +3,7 @@ import path from "node:path";
 import type { SessionEvent } from "../session/sessionStore";
 import { ACTIVE_SESSION_STALENESS_MS } from "../session/sessionStore";
 import { normalizeCodexLogEvent } from "../../adapters/codex/normalizeCodexLogEvent";
-import { isSessionStatus } from "../../shared/sessionTypes";
+import { isSessionStatus, type ActivityItem } from "../../shared/sessionTypes";
 import type { UsageSnapshot, TokenUsageWrite } from "../../shared/usageTypes";
 import type { ProjectAttribution } from "../../shared/projectAttribution";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
@@ -23,6 +23,27 @@ type FileCursor = {
   offset: number;
   remainder: string;
 };
+
+function attachModelToMessageItems(
+  items: ActivityItem[] | undefined,
+  model: string | undefined,
+): ActivityItem[] | undefined {
+  const normalizedModel = model?.trim();
+  if (!items || !normalizedModel) {
+    return items;
+  }
+  return items.map((item) =>
+    item.kind === "message"
+      ? {
+          ...item,
+          meta: {
+            ...item.meta,
+            model: normalizedModel,
+          },
+        }
+      : item,
+  );
+}
 
 function listJsonlFiles(root: string): string[] {
   if (!fs.existsSync(root)) return [];
@@ -314,6 +335,14 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
           normalized.task ?? "",
         );
       }
+      const normalizedModel =
+        typeof normalized.meta?.model === "string"
+          ? normalized.meta.model
+          : sessionModelMap.get(normalized.sessionId);
+      const activityItems = attachModelToMessageItems(
+        normalized.activityItems,
+        normalizedModel,
+      );
       options.onEvent({
         type: normalized.type,
         sessionId: normalized.sessionId,
@@ -322,7 +351,7 @@ export function createCodexSessionWatcher(options: CodexSessionWatcherOptions) {
         task: normalized.task,
         timestamp: normalized.timestamp,
         ...(normalized.meta !== undefined ? { meta: normalized.meta } : {}),
-        ...(normalized.activityItems !== undefined ? { activityItems: normalized.activityItems } : {}),
+        ...(activityItems !== undefined ? { activityItems } : {}),
       });
     }
 

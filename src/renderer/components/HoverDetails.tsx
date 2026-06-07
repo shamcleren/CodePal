@@ -116,6 +116,18 @@ function messageRole(label: string): "user" | "agent" | "assistant" {
   return "agent";
 }
 
+export function timelineItemModelLabel(item: Pick<TimelineItem, "kind" | "meta">): string | null {
+  if (item.kind !== "message") {
+    return null;
+  }
+  const model = item.meta?.model;
+  if (typeof model !== "string") {
+    return null;
+  }
+  const normalized = model.replace(/\s+/g, " ").trim();
+  return normalized || null;
+}
+
 function isExternalTarget(href: string): boolean {
   if (/^https?:\/\//i.test(href)) {
     return true;
@@ -599,6 +611,7 @@ function PrimaryStreamItem({
 }) {
   const i18n = useI18n();
   const { item, isTypingItem, renderKey } = entry;
+  const modelLabel = timelineItemModelLabel(item);
 
   if (item.kind === "message") {
     return (
@@ -611,6 +624,11 @@ function PrimaryStreamItem({
       >
         <div className="session-stream__header">
           <span className="session-stream__label">{item.label}</span>
+          {modelLabel ? (
+            <span className="session-stream__model-badge" title={`Model: ${modelLabel}`}>
+              {modelLabel}
+            </span>
+          ) : null}
         </div>
         <div className="session-stream__body">
           {isTypingItem ? (

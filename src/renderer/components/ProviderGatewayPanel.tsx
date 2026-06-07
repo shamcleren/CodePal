@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import type { ProviderGatewayConfig } from "../../shared/appSettings";
 import { defaultProviderGatewaySettings } from "../../shared/appSettings";
 import type {
@@ -92,6 +92,32 @@ function parseKeyValueLines(text: string): Record<string, string> {
         return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
       })
       .filter(([key, value]) => key && value),
+  );
+}
+
+function LazyDetails({
+  className,
+  summary,
+  children,
+}: {
+  className?: string;
+  summary: string;
+  children: ReactNode;
+}) {
+  const [mounted, setMounted] = useState(false);
+
+  return (
+    <details
+      className={className}
+      onToggle={(event) => {
+        if (event.currentTarget.open) {
+          setMounted(true);
+        }
+      }}
+    >
+      <summary>{summary}</summary>
+      {mounted ? children : null}
+    </details>
   );
 }
 
@@ -201,9 +227,26 @@ export function ProviderGatewayPanel({
   const activeProviderTokenSource = status.provider
     ? tokenSourceLabel(status.provider.tokenSource, i18n.t)
     : i18n.t("providerGateway.status.tokenMissing");
+  const claudeCli = (status as ProviderGatewayStatus & {
+    claudeCli?: ProviderGatewayStatus["claudeCli"];
+  }).claudeCli ?? {
+    settingsPath: "~/.claude/settings.json",
+    baseUrl: status.claudeDesktop.baseUrl,
+    apiKey: status.claudeDesktop.apiKey,
+    inferenceModels: status.claudeDesktop.inferenceModels,
+    setup: {
+      configured: false,
+      active: false,
+      restartRequired: false,
+      message: i18n.t("providerGateway.client.notConfigured"),
+    },
+  };
   const modelList = status.claudeDesktop.inferenceModels.join("\n");
-  const claudeConfigured = status.claudeDesktop.setup.configured;
-  const claudeActive = claudeConfigured && status.claudeDesktop.setup.active;
+  const claudeCliModelList = claudeCli.inferenceModels.join("\n");
+  const claudeDesktopConfigured = status.claudeDesktop.setup.configured;
+  const claudeDesktopActive = claudeDesktopConfigured && status.claudeDesktop.setup.active;
+  const claudeCliConfigured = claudeCli.setup.configured;
+  const claudeCliActive = claudeCliConfigured && claudeCli.setup.active;
   const codexConfigured = status.codexDesktop.setup.configured;
   const codexActive = codexConfigured && status.codexDesktop.setup.active;
   const builtinProviderIds = new Set(Object.keys(defaultProviderGatewaySettings.providers));
@@ -351,8 +394,10 @@ export function ProviderGatewayPanel({
         </div>
       </div>
 
-      <details className="display-panel__subsection-block provider-gateway-panel__details provider-gateway-panel__details--section">
-        <summary>{i18n.t("providerGateway.token.manage")}</summary>
+      <LazyDetails
+        className="display-panel__subsection-block provider-gateway-panel__details provider-gateway-panel__details--section"
+        summary={i18n.t("providerGateway.token.manage")}
+      >
         <div className="display-panel__header">
           <div>
             <div className="display-panel__title">{i18n.t("providerGateway.profile.title")}</div>
@@ -400,10 +445,12 @@ export function ProviderGatewayPanel({
             {tokenSaving ? i18n.t("providerGateway.token.saving") : i18n.t("providerGateway.token.save")}
           </button>
         </form>
-      </details>
+      </LazyDetails>
 
-      <details className="display-panel__subsection-block provider-gateway-panel__details provider-gateway-panel__details--section">
-        <summary>{i18n.t("providerGateway.providers.manage")}</summary>
+      <LazyDetails
+        className="display-panel__subsection-block provider-gateway-panel__details provider-gateway-panel__details--section"
+        summary={i18n.t("providerGateway.providers.manage")}
+      >
         <div className="display-panel__header">
           <div>
             <div className="display-panel__title">{i18n.t("providerGateway.providers.title")}</div>
@@ -525,8 +572,10 @@ export function ProviderGatewayPanel({
                 }}
               />
             </div>
-            <details className="provider-gateway-panel__details">
-              <summary>{i18n.t("providerGateway.provider.advanced")}</summary>
+            <LazyDetails
+              className="provider-gateway-panel__details"
+              summary={i18n.t("providerGateway.provider.advanced")}
+            >
               <div className="provider-gateway-panel__form-grid provider-gateway-panel__form-grid--advanced">
                 <input
                   className="provider-gateway-panel__token-input"
@@ -556,7 +605,7 @@ export function ProviderGatewayPanel({
                   }}
                 />
               </div>
-            </details>
+            </LazyDetails>
             <div className="provider-gateway-panel__actions">
               <button type="submit" className="integration-panel__refresh">
                 {i18n.t("providerGateway.provider.save")}
@@ -571,7 +620,7 @@ export function ProviderGatewayPanel({
             </div>
           </form>
         ) : null}
-      </details>
+      </LazyDetails>
 
       <div className="display-panel__subsection-block">
         <div className="display-panel__header">
@@ -590,8 +639,10 @@ export function ProviderGatewayPanel({
             {healthChecking ? i18n.t("providerGateway.health.checking") : i18n.t("providerGateway.health.run")}
           </button>
         </div>
-        <details className="provider-gateway-panel__details">
-          <summary>{i18n.t("providerGateway.models.details")}</summary>
+        <LazyDetails
+          className="provider-gateway-panel__details"
+          summary={i18n.t("providerGateway.models.details")}
+        >
           <div className="provider-gateway-panel__mapping-list">
             <div className="provider-gateway-panel__mapping-row provider-gateway-panel__mapping-row--header">
               <span>{i18n.t("providerGateway.models.clientModel")}</span>
@@ -612,7 +663,7 @@ export function ProviderGatewayPanel({
               </div>
             ))}
           </div>
-        </details>
+        </LazyDetails>
       </div>
 
       <div className="display-panel__subsection-block">
@@ -625,16 +676,16 @@ export function ProviderGatewayPanel({
             <button
               type="button"
               className="integration-panel__refresh"
-              disabled={clientSetupDisabled || clientSetupTarget !== null || claudeActive}
+              disabled={clientSetupDisabled || clientSetupTarget !== null || claudeDesktopActive}
               onClick={() => {
                 void onConfigureClient("claude-desktop");
               }}
             >
-              {claudeActive
+              {claudeDesktopActive
                 ? i18n.t("providerGateway.client.activeClaude")
                 : clientSetupTarget === "claude-desktop"
                 ? i18n.t("providerGateway.client.configuring")
-                : claudeConfigured
+                : claudeDesktopConfigured
                 ? i18n.t("providerGateway.client.activateClaude")
                 : i18n.t("providerGateway.client.configureClaude")}
             </button>
@@ -642,7 +693,7 @@ export function ProviderGatewayPanel({
               <button
                 type="button"
                 className="integration-panel__refresh integration-panel__refresh--secondary"
-                disabled={clientSetupTarget !== null || !claudeActive}
+                disabled={clientSetupTarget !== null || !claudeDesktopActive}
                 onClick={() => {
                   void onConfigureClient("claude-desktop-restore");
                 }}
@@ -657,8 +708,10 @@ export function ProviderGatewayPanel({
         <p className="provider-gateway-panel__setup-status">
           {setupLabel(status.claudeDesktop.setup, i18n.t("providerGateway.client.notConfigured"))}
         </p>
-        <details className="provider-gateway-panel__details">
-          <summary>{i18n.t("providerGateway.client.connectionDetails")}</summary>
+        <LazyDetails
+          className="provider-gateway-panel__details"
+          summary={i18n.t("providerGateway.client.connectionDetails")}
+        >
           <div className="provider-gateway-panel__setup-list">
             <div className="provider-gateway-panel__setup-row">
               <span>{i18n.t("providerGateway.claude.baseUrl")}</span>
@@ -684,7 +737,88 @@ export function ProviderGatewayPanel({
               </button>
             </div>
           </div>
-        </details>
+        </LazyDetails>
+      </div>
+
+      <div className="display-panel__subsection-block">
+        <div className="display-panel__header">
+          <div>
+            <div className="display-panel__title">{i18n.t("providerGateway.claudeCli.title")}</div>
+            <div className="display-panel__subtitle">{i18n.t("providerGateway.claudeCli.subtitle")}</div>
+          </div>
+          <div className="provider-gateway-panel__actions">
+            <button
+              type="button"
+              className="integration-panel__refresh"
+              disabled={clientSetupDisabled || clientSetupTarget !== null || claudeCliActive}
+              onClick={() => {
+                void onConfigureClient("claude-cli");
+              }}
+            >
+              {claudeCliActive
+                ? i18n.t("providerGateway.client.activeClaudeCli")
+                : clientSetupTarget === "claude-cli"
+                ? i18n.t("providerGateway.client.configuring")
+                : claudeCliConfigured
+                ? i18n.t("providerGateway.client.activateClaudeCli")
+                : i18n.t("providerGateway.client.configureClaudeCli")}
+            </button>
+            {claudeCli.setup.canRestore ? (
+              <button
+                type="button"
+                className="integration-panel__refresh integration-panel__refresh--secondary"
+                disabled={clientSetupTarget !== null || !claudeCliActive}
+                onClick={() => {
+                  void onConfigureClient("claude-cli-restore");
+                }}
+              >
+                {clientSetupTarget === "claude-cli-restore"
+                  ? i18n.t("providerGateway.client.configuring")
+                  : i18n.t("providerGateway.client.restoreClaudeCli")}
+              </button>
+            ) : null}
+          </div>
+        </div>
+        <p className="provider-gateway-panel__setup-status">
+          {setupLabel(claudeCli.setup, i18n.t("providerGateway.client.notConfigured"))}
+        </p>
+        <LazyDetails
+          className="provider-gateway-panel__details"
+          summary={i18n.t("providerGateway.client.connectionDetails")}
+        >
+          <div className="provider-gateway-panel__setup-list">
+            <div className="provider-gateway-panel__setup-row">
+              <span>{i18n.t("providerGateway.claudeCli.settingsPath")}</span>
+              <span className="provider-gateway-panel__value">{claudeCli.settingsPath}</span>
+              <button type="button" className="integration-panel__refresh integration-panel__refresh--secondary" onClick={() => onCopy(claudeCli.settingsPath)}>
+                {i18n.t("providerGateway.copyPath")}
+              </button>
+            </div>
+            <div className="provider-gateway-panel__setup-row">
+              <span>{i18n.t("providerGateway.claude.baseUrl")}</span>
+              <span className="provider-gateway-panel__value">{claudeCli.baseUrl}</span>
+              <button type="button" className="integration-panel__refresh integration-panel__refresh--secondary" onClick={() => onCopy(claudeCli.baseUrl)}>
+                {i18n.t("providerGateway.copyBaseUrl")}
+              </button>
+            </div>
+            <div className="provider-gateway-panel__setup-row">
+              <span>{i18n.t("providerGateway.claude.apiKey")}</span>
+              <span className="provider-gateway-panel__value">{claudeCli.apiKey}</span>
+              <button type="button" className="integration-panel__refresh integration-panel__refresh--secondary" onClick={() => onCopy(claudeCli.apiKey)}>
+                {i18n.t("providerGateway.copyApiKey")}
+              </button>
+            </div>
+            <div className="provider-gateway-panel__setup-row">
+              <span>{i18n.t("providerGateway.claude.models")}</span>
+              <span className="provider-gateway-panel__value" title={claudeCliModelList}>
+                {claudeCli.inferenceModels.length}
+              </span>
+              <button type="button" className="integration-panel__refresh integration-panel__refresh--secondary" onClick={() => onCopy(claudeCliModelList)}>
+                {i18n.t("providerGateway.copyModels")}
+              </button>
+            </div>
+          </div>
+        </LazyDetails>
       </div>
 
       <div className="display-panel__subsection-block">
@@ -729,8 +863,10 @@ export function ProviderGatewayPanel({
         <p className="provider-gateway-panel__setup-status">
           {setupLabel(status.codexDesktop.setup, i18n.t("providerGateway.client.notConfigured"))}
         </p>
-        <details className="provider-gateway-panel__details">
-          <summary>{i18n.t("providerGateway.client.connectionDetails")}</summary>
+        <LazyDetails
+          className="provider-gateway-panel__details"
+          summary={i18n.t("providerGateway.client.connectionDetails")}
+        >
           <div className="provider-gateway-panel__setup-list">
             <div className="provider-gateway-panel__setup-row">
               <span>{i18n.t("providerGateway.codex.baseUrl")}</span>
@@ -751,7 +887,7 @@ export function ProviderGatewayPanel({
               <span className="provider-gateway-panel__value">{status.codexDesktop.model}</span>
             </div>
           </div>
-        </details>
+        </LazyDetails>
       </div>
     </section>
   );

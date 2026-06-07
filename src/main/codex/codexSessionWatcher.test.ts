@@ -208,6 +208,13 @@ describe("createCodexSessionWatcher", () => {
           cwd: "/Users/demo/codepal",
           model: "gpt-5.5",
         },
+      })}\n${JSON.stringify({
+        timestamp: "2026-06-02T02:05:22.000Z",
+        type: "event_msg",
+        payload: {
+          type: "user_message",
+          message: "请检查一下状态",
+        },
       })}\n`,
     );
 
@@ -229,6 +236,23 @@ describe("createCodexSessionWatcher", () => {
           event_type: "turn_context",
           model: "gpt-5.5",
         }),
+      }),
+    );
+    expect(onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "019e8613-e961-7e90-94b0-e56a8fa0e537",
+        tool: "codex",
+        status: "running",
+        activityItems: [
+          expect.objectContaining({
+            kind: "message",
+            source: "user",
+            body: "请检查一下状态",
+            meta: {
+              model: "gpt-5.5",
+            },
+          }),
+        ],
       }),
     );
   });

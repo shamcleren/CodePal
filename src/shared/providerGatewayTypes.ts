@@ -1,4 +1,4 @@
-import type { ProviderGatewayType } from "./appSettings";
+import type { AppSettings, ProviderGatewayType } from "./appSettings";
 
 export type ProviderGatewayTokenSource = "local" | "env" | "missing";
 
@@ -63,6 +63,13 @@ export type ProviderGatewayStatus = {
     inferenceModels: string[];
     setup: ProviderGatewayClientSetupStatus;
   };
+  claudeCli: {
+    settingsPath: string;
+    baseUrl: string;
+    apiKey: "local-proxy";
+    inferenceModels: string[];
+    setup: ProviderGatewayClientSetupStatus;
+  };
   codexDesktop: {
     baseUrl: string;
     providerId: "codepal";
@@ -87,9 +94,18 @@ export type ProviderGatewayProviderUpdateResult = {
   message?: string;
 };
 
+export type ProviderGatewayProviderSelectResult = {
+  ok: boolean;
+  settings: AppSettings;
+  status: ProviderGatewayStatus;
+  message?: string;
+};
+
 export const PROVIDER_GATEWAY_CLIENT_SETUP_TARGETS = [
   "claude-desktop",
   "claude-desktop-restore",
+  "claude-cli",
+  "claude-cli-restore",
   "codex-desktop",
   "codex-desktop-restore",
 ] as const;
@@ -105,3 +121,8 @@ export type ProviderGatewayClientSetupResult = {
   backupPath?: string;
   message: string;
 };
+
+export type ProviderGatewayClientSetupUpdateResult =
+  ProviderGatewayClientSetupResult & {
+    status: ProviderGatewayStatus;
+  };

@@ -427,6 +427,8 @@ describe("createCodeBuddySessionWatcher", () => {
   it("extracts token usage from CodeBuddy IDE history request usage", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-codebuddy-ide-usage-"));
     const historyRoot = path.join(tmpDir, "CodeBuddyExtension", "Data");
+    const projectDir = path.join(tmpDir, "workspace", "CodeBuddyProject");
+    fs.mkdirSync(projectDir, { recursive: true });
     const conversationDir = path.join(
       historyRoot,
       "user-1",
@@ -477,12 +479,17 @@ describe("createCodeBuddySessionWatcher", () => {
         role: "user",
         message: JSON.stringify({
           role: "user",
-          content: [{ type: "text", text: "<user_query>\n你好\n</user_query>" }],
+          content: [
+            {
+              type: "text",
+              text: `<user_info>\nWorkspace Folder: ${projectDir}\n</user_info>\n\n<user_query>\n你好\n</user_query>`,
+            },
+          ],
         }),
         extra: JSON.stringify({
           requestId: "request-1",
-          modelId: "claude-sonnet-4-6",
-          modelName: "Claude Sonnet 4.6",
+          modelId: "hy3-preview-agent-ioa",
+          modelName: "Hy3 preview",
           sourceContentBlocks: [{ type: "text", text: "你好" }],
         }),
       }),
@@ -501,11 +508,42 @@ describe("createCodeBuddySessionWatcher", () => {
 
     await watcher.pollOnce();
 
+    expect(onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "update",
+        sessionId: "usage-session",
+        tool: "codebuddy",
+        status: "running",
+        activityItems: [
+          expect.objectContaining({
+            kind: "message",
+            source: "user",
+            body: "你好",
+            meta: {
+              model: "Hy3 preview",
+            },
+          }),
+        ],
+      }),
+    );
+    expect(onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "update",
+        sessionId: "usage-session",
+        tool: "codebuddy",
+        status: "completed",
+        meta: expect.objectContaining({
+          request_id: "request-1",
+          model: "Hy3 preview",
+          workspacePath: projectDir,
+        }),
+      }),
+    );
     expect(onTokenUsage).toHaveBeenCalledTimes(1);
     expect(onTokenUsage).toHaveBeenCalledWith({
       sessionId: "usage-session",
       agent: "codebuddy",
-      model: "claude-sonnet-4-6",
+      model: "Hy3 preview",
       timestamp: 1775569531215,
       inputTokens: 1200,
       outputTokens: 320,
@@ -514,6 +552,8 @@ describe("createCodeBuddySessionWatcher", () => {
       reasoningTokens: 9,
       sourceKind: "codebuddy-history",
       sourceKey: "usage-session:request-1",
+      projectPath: projectDir,
+      projectName: "CodeBuddyProject",
     });
   });
 });
