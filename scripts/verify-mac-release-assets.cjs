@@ -17,6 +17,20 @@ function run(command, args) {
   }
 }
 
+function runCapture(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    ...options,
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  return {
+    output: `${result.stdout || ""}${result.stderr || ""}`,
+    status: result.status,
+  };
+}
+
 function sha512Base64(filePath) {
   return crypto.createHash("sha512").update(fs.readFileSync(filePath)).digest("base64");
 }
@@ -30,7 +44,37 @@ function findTopLevelApp(dir) {
 
 function verifyAppGatekeeper(appPath) {
   run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]);
+  verifyDeveloperIdAuthority(appPath);
   run("spctl", ["--assess", "--type", "execute", "--verbose=4", appPath]);
+}
+
+function verifyDeveloperIdAuthority(appPath) {
+  const display = runCapture("codesign", ["--display", "--verbose=4", appPath]);
+  if (display.status !== 0) {
+    throw new Error(`Unable to inspect code signature for ${appPath}:\n${display.output}`);
+  }
+  if (!display.output.includes("Authority=Developer ID Application:")) {
+    throw new Error(`${appPath} is not signed with an embedded Developer ID Application authority.`);
+  }
+  if (display.output.includes("Authority=(unavailable)")) {
+    throw new Error(`${appPath} has no portable embedded signing authority.`);
+  }
+
+  const certDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-release-certs-"));
+  try {
+    const certs = runCapture("codesign", ["--display", "--extract-certificates", appPath], {
+      cwd: certDir,
+    });
+    if (certs.status !== 0) {
+      throw new Error(`Unable to extract code signing certificates for ${appPath}:\n${certs.output}`);
+    }
+    const extractedCertificates = fs.readdirSync(certDir).filter((fileName) => fileName.startsWith("codesign"));
+    if (extractedCertificates.length === 0) {
+      throw new Error(`${appPath} code signature does not embed any signing certificates.`);
+    }
+  } finally {
+    fs.rmSync(certDir, { recursive: true, force: true });
+  }
 }
 
 function verifyZipApp(zipPath) {
