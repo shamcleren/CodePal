@@ -6,3 +6,4 @@ This hotfix focuses on updater self-healing and CodeBuddy quota compatibility.
 - Kept the updater UI aligned with the installed app version so completed installs do not continue to prompt for reinstall.
 - Switched CodeBuddy Code quota fetching to the token.woa quota API using the authenticated Electron browser session cookies.
 - Preserved compatibility with the previous CodeBuddy quota payload shape and migrated the default CodeBuddy Code quota endpoint.
+- Added CodeBuddy cache-hit token parsing for DeepSeek / OpenAI-compatible usage payloads so Analytics cache-hit rates populate correctly.

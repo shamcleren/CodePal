@@ -85,7 +85,7 @@
 - v1.3.7 shipped: safer opt-in Provider Gateway setup, startup safety hardening, Work Review light-theme polish, Follow system theme, and pricing sync refresh
 - v1.3.8 shipped: cross-agent session lifecycle alignment, legacy reply / pending-action response UI disabled, and ACP Sessions documented as the next major operation-entry direction
 - v1.3.9 shipped: macOS updater zip repackaging from the final signed app, final asset signing checks, post-upload release asset validation, and Daily Trend grouping by Agent / Model
-- v1.3.10 shipped: stale updater-cache self-healing after completed installs, updater state alignment with the installed app version, and token.woa CodeBuddy quota fetching through the authenticated browser session
+- v1.3.10 shipped: stale updater-cache self-healing after completed installs, updater state alignment with the installed app version, token.woa CodeBuddy quota fetching through the authenticated browser session, and CodeBuddy cache-hit token parsing for OpenAI-compatible usage payloads
 - v1.3.5 validation covered the Analytics chart-domain refresh regression and report-format alignment follow-up found after v1.3.4:
   - `npm test -- src/renderer/components/AnalyticsPage.test.ts src/renderer/components/AnalyticsLineChart.test.tsx src/renderer/App.test.tsx`
   - `npm test -- src/main/report/generateHtmlReport.test.ts`
@@ -103,8 +103,9 @@
   - `npm test`
   - `npm run build`
   - `git diff --check`
-- v1.3.10 local validation on 2026-06-08 covers updater stale-pending self-healing and CodeBuddy token.woa quota compatibility:
+- v1.3.10 local validation on 2026-06-08 covers updater stale-pending self-healing, CodeBuddy token.woa quota compatibility, and CodeBuddy cache-hit token parsing:
   - `npm test -- src/main/update/updateService.test.ts src/main/usage/codebuddyQuotaService.test.ts src/shared/appSettings.test.ts src/main/settings/settingsService.test.ts`
+  - `npm test -- src/main/codebuddy/codebuddySessionWatcher.test.ts src/main/ingress/hookIngress.test.ts src/main/update/updateService.test.ts src/main/usage/codebuddyQuotaService.test.ts src/shared/appSettings.test.ts`
   - `npm run lint`
   - `npm test`
   - `npm run build`

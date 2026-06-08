@@ -186,13 +186,77 @@ function firstString(record: Record<string, unknown> | null, keys: readonly stri
 
 function firstNumber(record: Record<string, unknown> | null, keys: readonly string[]): number {
   if (!record) return 0;
+  const value = firstNumberValue(record, keys);
+  return value ?? 0;
+}
+
+function firstNumberValue(
+  record: Record<string, unknown> | null,
+  keys: readonly string[],
+): number | undefined {
+  if (!record) return undefined;
   for (const key of keys) {
     const value = record[key];
     if (typeof value === "number" && Number.isFinite(value)) {
       return Math.max(0, Math.trunc(value));
     }
   }
-  return 0;
+  return undefined;
+}
+
+function nestedNumber(
+  record: Record<string, unknown> | null,
+  parentKey: string,
+  childKey: string,
+): number | undefined {
+  const parent = asRecord(record?.[parentKey]);
+  return firstNumberValue(parent, [childKey]);
+}
+
+function extractCacheReadTokens(usage: Record<string, unknown>): number {
+  return (
+    firstNumberValue(usage, [
+      "cacheReadTokens",
+      "cache_read_tokens",
+      "cache_read_input_tokens",
+      "cachedInputTokens",
+      "cached_input_tokens",
+      "prompt_cache_hit_tokens",
+    ]) ??
+    nestedNumber(usage, "prompt_tokens_details", "cached_tokens") ??
+    nestedNumber(usage, "input_tokens_details", "cached_tokens") ??
+    0
+  );
+}
+
+function extractInputTokens(usage: Record<string, unknown>, cacheReadTokens: number): number {
+  const promptCacheMissTokens = firstNumberValue(usage, ["prompt_cache_miss_tokens"]);
+  if (promptCacheMissTokens !== undefined) {
+    return promptCacheMissTokens;
+  }
+
+  const promptTokens = firstNumberValue(usage, ["promptTokens", "prompt_tokens"]);
+  if (
+    promptTokens !== undefined &&
+    (nestedNumber(usage, "prompt_tokens_details", "cached_tokens") !== undefined ||
+      nestedNumber(usage, "input_tokens_details", "cached_tokens") !== undefined)
+  ) {
+    return Math.max(0, promptTokens - cacheReadTokens);
+  }
+
+  const inputTokens = firstNumberValue(usage, [
+    "inputTokens",
+    "input_tokens",
+    "total_input_tokens",
+  ]);
+  if (
+    inputTokens !== undefined &&
+    nestedNumber(usage, "input_tokens_details", "cached_tokens") !== undefined
+  ) {
+    return Math.max(0, inputTokens - cacheReadTokens);
+  }
+
+  return inputTokens ?? 0;
 }
 
 function projectFields(project: ProjectAttribution | null | undefined) {
@@ -224,13 +288,8 @@ function extractCodeBuddyTokenUsage(entry: Record<string, unknown>): Omit<
     return null;
   }
 
-  const inputTokens = firstNumber(usage, [
-    "inputTokens",
-    "input_tokens",
-    "promptTokens",
-    "prompt_tokens",
-    "total_input_tokens",
-  ]);
+  const cacheReadTokens = extractCacheReadTokens(usage);
+  const inputTokens = extractInputTokens(usage, cacheReadTokens);
   const outputTokens = firstNumber(usage, [
     "outputTokens",
     "output_tokens",
@@ -238,24 +297,26 @@ function extractCodeBuddyTokenUsage(entry: Record<string, unknown>): Omit<
     "completion_tokens",
     "total_output_tokens",
   ]);
-  const cacheReadTokens = firstNumber(usage, [
-    "cacheReadTokens",
-    "cache_read_tokens",
-    "cachedInputTokens",
-    "cached_input_tokens",
-    "prompt_cache_hit_tokens",
-  ]);
-  const cacheCreationTokens = firstNumber(usage, [
-    "cacheCreationTokens",
-    "cache_creation_tokens",
-    "cache_creation_input_tokens",
-    "prompt_cache_write_tokens",
-  ]);
-  const reasoningTokens = firstNumber(usage, [
-    "reasoningTokens",
-    "reasoning_tokens",
-    "completion_thinking_tokens",
-  ]);
+  const cacheCreationTokens =
+    firstNumberValue(usage, [
+      "cacheCreationTokens",
+      "cacheCreationInputTokens",
+      "cache_creation_tokens",
+      "cache_creation_input_tokens",
+      "prompt_cache_write_tokens",
+    ]) ??
+    nestedNumber(usage, "prompt_tokens_details", "cache_creation_tokens") ??
+    nestedNumber(usage, "input_tokens_details", "cache_creation_tokens") ??
+    0;
+  const reasoningTokens =
+    firstNumberValue(usage, [
+      "reasoningTokens",
+      "reasoning_tokens",
+      "completion_thinking_tokens",
+    ]) ??
+    nestedNumber(usage, "completion_tokens_details", "reasoning_tokens") ??
+    nestedNumber(usage, "output_tokens_details", "reasoning_tokens") ??
+    0;
 
   if (inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens + reasoningTokens <= 0) {
     return null;

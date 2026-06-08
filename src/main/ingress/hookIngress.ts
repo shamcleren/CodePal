@@ -148,6 +148,18 @@ function firstNumber(payload: Record<string, unknown>, keys: readonly string[]):
   return undefined;
 }
 
+function nestedNumber(
+  payload: Record<string, unknown> | undefined,
+  parentKey: string,
+  childKey: string,
+): number | undefined {
+  const parent = payload?.[parentKey];
+  if (!parent || typeof parent !== "object") {
+    return undefined;
+  }
+  return firstNumber(parent as Record<string, unknown>, [childKey]);
+}
+
 function pickRawSessionId(payload: Record<string, unknown>): string | undefined {
   return firstString(payload, [
     "sessionId",
@@ -182,17 +194,42 @@ function usageSnapshotFromRecord(payload: Record<string, unknown>): UsageSnapsho
 
   const tokenSource = usage ?? meta;
   const total = firstNumber(payload, ["total_tokens"]) ?? firstNumber(tokenSource ?? {}, ["total", "total_tokens"]);
-  const input =
-    firstNumber(payload, ["prompt_cache_miss_tokens", "input_tokens"]) ??
-    firstNumber(tokenSource ?? {}, ["input", "prompt_cache_miss_tokens", "input_tokens"]);
-  const output =
-    firstNumber(payload, ["output_tokens"]) ?? firstNumber(tokenSource ?? {}, ["output", "output_tokens"]);
+  const nestedCachedInput =
+    nestedNumber(tokenSource, "prompt_tokens_details", "cached_tokens") ??
+    nestedNumber(tokenSource, "input_tokens_details", "cached_tokens");
+  const promptCacheMissTokens =
+    firstNumber(payload, ["prompt_cache_miss_tokens"]) ??
+    firstNumber(tokenSource ?? {}, ["prompt_cache_miss_tokens"]);
+  const promptTokens =
+    firstNumber(payload, ["prompt_tokens"]) ??
+    firstNumber(tokenSource ?? {}, ["promptTokens", "prompt_tokens"]);
+  const rawInput =
+    firstNumber(payload, ["input_tokens"]) ??
+    firstNumber(tokenSource ?? {}, ["input", "input_tokens"]);
   const cachedInput =
-    firstNumber(payload, ["cached_input_tokens", "prompt_cache_hit_tokens"]) ??
-    firstNumber(tokenSource ?? {}, ["cachedInput", "cached_input_tokens", "prompt_cache_hit_tokens"]);
+    firstNumber(payload, ["cache_read_input_tokens", "cached_input_tokens", "prompt_cache_hit_tokens"]) ??
+    firstNumber(tokenSource ?? {}, [
+      "cachedInput",
+      "cache_read_input_tokens",
+      "cached_input_tokens",
+      "prompt_cache_hit_tokens",
+    ]) ??
+    nestedCachedInput;
+  const input =
+    promptCacheMissTokens ??
+    (promptTokens !== undefined && nestedCachedInput !== undefined
+      ? Math.max(0, promptTokens - nestedCachedInput)
+      : rawInput !== undefined && nestedNumber(tokenSource, "input_tokens_details", "cached_tokens") !== undefined
+        ? Math.max(0, rawInput - (cachedInput ?? 0))
+        : rawInput);
+  const output =
+    firstNumber(payload, ["output_tokens", "completion_tokens"]) ??
+    firstNumber(tokenSource ?? {}, ["output", "output_tokens", "completion_tokens"]);
   const reasoningOutput =
     firstNumber(payload, ["reasoning_output_tokens"]) ??
-    firstNumber(tokenSource ?? {}, ["reasoningOutput", "reasoning_output_tokens"]);
+    firstNumber(tokenSource ?? {}, ["reasoningOutput", "reasoning_output_tokens"]) ??
+    nestedNumber(tokenSource, "completion_tokens_details", "reasoning_tokens") ??
+    nestedNumber(tokenSource, "output_tokens_details", "reasoning_tokens");
 
   const contextUsed =
     firstNumber(context ?? {}, ["used"]) ??

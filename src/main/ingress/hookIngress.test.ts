@@ -730,6 +730,34 @@ describe("lineToUsageSnapshot", () => {
     });
   });
 
+  it("extracts OpenAI-compatible cached token fields from generic usage payloads", () => {
+    const snapshot = lineToUsageSnapshot(
+      JSON.stringify({
+        tool: "codebuddy",
+        session_id: "codebuddy-openai-cache",
+        timestamp: 1,
+        usage: {
+          prompt_tokens: 120,
+          prompt_tokens_details: { cached_tokens: 96 },
+          completion_tokens: 8,
+          completion_tokens_details: { reasoning_tokens: 3 },
+        },
+      }),
+    );
+
+    expect(snapshot).toMatchObject({
+      agent: "codebuddy",
+      sessionId: "codebuddy-openai-cache",
+      tokens: {
+        input: 24,
+        output: 8,
+        total: undefined,
+        cachedInput: 96,
+        reasoningOutput: 3,
+      },
+    });
+  });
+
   it("returns null when the payload carries no usage information", () => {
     const snapshot = lineToUsageSnapshot(
       JSON.stringify({

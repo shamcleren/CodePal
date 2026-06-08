@@ -459,11 +459,15 @@ describe("createCodeBuddySessionWatcher", () => {
               state: "complete",
               startedAt: 1775569531215,
               usage: {
-                inputTokens: 1200,
-                outputTokens: 320,
-                prompt_cache_hit_tokens: 40,
-                cache_creation_input_tokens: 12,
-                completion_thinking_tokens: 9,
+                prompt_tokens: 1240,
+                completion_tokens: 320,
+                prompt_tokens_details: {
+                  cached_tokens: 40,
+                  cache_creation_tokens: 12,
+                },
+                completion_tokens_details: {
+                  reasoning_tokens: 9,
+                },
               },
             },
           ],
