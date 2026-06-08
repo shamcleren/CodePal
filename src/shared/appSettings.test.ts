@@ -85,6 +85,11 @@ describe("appSettings", () => {
       "RIO_TOKEN_HTTPS",
       "P_RIO_TOKEN",
       "BK_TICKET",
+      "bk_ticket",
+      "bk_uid",
+      "t_uid",
+      "km_uid",
+      "x-client-ssid",
       "tof_auth",
       "keycloak_session",
       "x_host_key_access",
@@ -190,6 +195,25 @@ describe("appSettings", () => {
 
     expect(settings.cookieNames).toEqual(["ONE", "TWO"]);
     expect(settings.cookieNames).not.toBe(endpointDefaults.cookieNames);
+  });
+
+  it("migrates the legacy CodeBuddy Code quota endpoint to token.woa", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      codebuddy: {
+        code: {
+          enabled: true,
+          label: "CodeBuddy Code",
+          loginUrl: "https://tencent.sso.codebuddy.cn/profile/usage",
+          quotaEndpoint: "https://tencent.sso.codebuddy.cn/billing/meter/get-enterprise-user-usage",
+        },
+      },
+    });
+
+    expect(settings.codebuddy.code).toMatchObject({
+      loginUrl: "https://token.woa.com/",
+      quotaEndpoint: "https://token.woa.com/api/query-quota?platform=codebuddy",
+    });
   });
 
   it("adds default provider gateway profiles without storing tokens", () => {

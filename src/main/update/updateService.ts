@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import electronUpdater from "electron-updater";
 import type { AppUpdateState } from "../../shared/updateTypes";
 import { createUpdateStateStore } from "./updateStateStore";
@@ -8,6 +10,7 @@ type UpdateServiceOptions = {
   isPackaged: boolean;
   currentVersion: string;
   stateFilePath: string;
+  updateCacheDir?: string;
   onStateChange?: (state: AppUpdateState) => void;
   onBeforeInstall?: () => void;
 };
@@ -120,6 +123,55 @@ function mergeUpdateInfo(state: AppUpdateState, info?: UpdateInfoLike): AppUpdat
   };
 }
 
+function parseVersionSegments(version: string): number[] | null {
+  const normalized = version.trim().replace(/^v/i, "").split(/[+-]/, 1)[0];
+  if (!normalized) {
+    return null;
+  }
+  const segments = normalized.split(".");
+  if (!segments.every((segment) => /^\d+$/.test(segment))) {
+    return null;
+  }
+  return segments.map((segment) => Number.parseInt(segment, 10));
+}
+
+function compareVersions(left: string, right: string): number | null {
+  const leftSegments = parseVersionSegments(left);
+  const rightSegments = parseVersionSegments(right);
+  if (!leftSegments || !rightSegments) {
+    return null;
+  }
+  const length = Math.max(leftSegments.length, rightSegments.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (leftSegments[index] ?? 0) - (rightSegments[index] ?? 0);
+    if (diff !== 0) {
+      return diff > 0 ? 1 : -1;
+    }
+  }
+  return 0;
+}
+
+function isInstalledVersionCurrentOrNewer(currentVersion: string, availableVersion: string | null) {
+  if (!availableVersion) {
+    return false;
+  }
+  const comparison = compareVersions(currentVersion, availableVersion);
+  return comparison !== null && comparison >= 0;
+}
+
+function clearPendingUpdateCache(updateCacheDir: string | undefined) {
+  if (!updateCacheDir) {
+    return;
+  }
+  const normalized = path.normalize(updateCacheDir);
+  if (!path.basename(normalized).endsWith("-updater")) {
+    return;
+  }
+  for (const entry of ["pending", "update.zip", "current.blockmap"]) {
+    fs.rmSync(path.join(normalized, entry), { recursive: true, force: true });
+  }
+}
+
 export function createUpdateService(options: UpdateServiceOptions) {
   const store = createUpdateStateStore(options.stateFilePath);
   let state = createBaseState(options.currentVersion, store.getSkippedVersion(), options.isPackaged);
@@ -168,6 +220,21 @@ export function createUpdateService(options: UpdateServiceOptions) {
 
   autoUpdater.on("update-available", (info) => {
     const withInfo = mergeUpdateInfo(state, info);
+    if (isInstalledVersionCurrentOrNewer(options.currentVersion, withInfo.availableVersion)) {
+      clearPendingUpdateCache(options.updateCacheDir);
+      emitState({
+        ...withInfo,
+        phase: "idle",
+        availableVersion: null,
+        releaseName: null,
+        releaseNotes: null,
+        releaseDate: null,
+        downloadPercent: null,
+        errorMessage: null,
+        lastCheckedAt: Date.now(),
+      });
+      return;
+    }
     const nextPhase =
       withInfo.availableVersion && withInfo.availableVersion === state.skippedVersion
         ? "skipped"
@@ -190,6 +257,21 @@ export function createUpdateService(options: UpdateServiceOptions) {
 
   autoUpdater.on("update-downloaded", (info) => {
     const withInfo = mergeUpdateInfo(state, info);
+    if (isInstalledVersionCurrentOrNewer(options.currentVersion, withInfo.availableVersion)) {
+      clearPendingUpdateCache(options.updateCacheDir);
+      emitState({
+        ...withInfo,
+        phase: "idle",
+        availableVersion: null,
+        releaseName: null,
+        releaseNotes: null,
+        releaseDate: null,
+        downloadPercent: null,
+        errorMessage: null,
+        lastCheckedAt: Date.now(),
+      });
+      return;
+    }
     emitState({
       ...withInfo,
       phase: "downloaded",

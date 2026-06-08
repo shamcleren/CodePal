@@ -82,6 +82,12 @@ function cookieHeader(cookies: CodeBuddyQuotaCookie[]): string {
   return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 }
 
+function withCacheBust(endpoint: string, timestamp: number): string {
+  const url = new URL(endpoint);
+  url.searchParams.set("_t", String(timestamp));
+  return url.toString();
+}
+
 function isAuthExpiredStatus(status: number): boolean {
   return status === 401 || status === 403;
 }
@@ -219,30 +225,33 @@ async function requestQuotaWithFallback(
   cookies: CodeBuddyQuotaCookie[],
   enterpriseId: string | undefined,
   fetchImpl: FetchLike,
+  timestamp: number,
 ): Promise<Response> {
+  const requestUrl = withCacheBust(endpoint, timestamp);
+  const origin = new URL(loginUrl).origin;
   const requestInit = {
-    method: "POST",
+    method: "GET",
     headers: {
       accept: "*/*",
-      "content-type": "application/json",
-      origin: new URL(loginUrl).origin,
+      "cache-control": "no-cache",
       cookie: cookieHeader(cookies),
+      pragma: "no-cache",
+      referer: `${origin}/`,
       ...(enterpriseId ? { "x-enterprise-id": enterpriseId } : {}),
     },
-    body: "{}",
   } satisfies RequestInit;
 
   const sessionFetch = (session as SessionWithFetch).fetch;
   if (typeof sessionFetch === "function") {
-    return sessionFetch.call(session, endpoint, requestInit).catch(async (error: unknown) => {
+    return sessionFetch.call(session, requestUrl, requestInit).catch(async (error: unknown) => {
       if (error instanceof Error && error.message.includes("ERR_BLOCKED_BY_CLIENT")) {
-        return await fetchImpl(endpoint, requestInit);
+        return await fetchImpl(requestUrl, requestInit);
       }
       throw error;
     });
   }
 
-  return fetchImpl(endpoint, requestInit);
+  return fetchImpl(requestUrl, requestInit);
 }
 
 function notConfiguredDiagnostics(
@@ -336,6 +345,10 @@ export function buildCodeBuddyQuotaSnapshot(
   updatedAt: number,
   label = "CodeBuddy Code",
 ): UsageSnapshot | null {
+  if (payload.success === true) {
+    return buildCodeBuddyTokenQuotaSnapshot(payload, updatedAt, label);
+  }
+
   if (payload.code !== 0) {
     return null;
   }
@@ -395,6 +408,70 @@ export function buildCodeBuddyQuotaSnapshot(
       cycleEndTime: data.cycleEndTime,
       cycleResetTime: data.cycleResetTime,
       limitNum: limit,
+    },
+  };
+}
+
+function buildCodeBuddyTokenQuotaSnapshot(
+  payload: Record<string, unknown>,
+  updatedAt: number,
+  label: string,
+): UsageSnapshot | null {
+  const totalUsed = numberValue(payload.total_used);
+  const totalQuota = numberValue(payload.total_quota);
+  const usedPercent =
+    numberValue(payload.total_usage_rate) ??
+    numberValue(payload.usage_percentage_default) ??
+    numberValue(payload.usage_percentage);
+  const remainingPercent =
+    numberValue(payload.remaining_percentage_total) ??
+    numberValue(payload.remaining_percentage);
+
+  if (
+    totalUsed === undefined ||
+    totalQuota === undefined ||
+    usedPercent === undefined ||
+    !Number.isFinite(totalUsed) ||
+    !Number.isFinite(totalQuota) ||
+    !Number.isFinite(usedPercent) ||
+    totalQuota <= 0
+  ) {
+    return null;
+  }
+
+  const remaining = Math.max(0, totalQuota - totalUsed);
+
+  return {
+    agent: "codebuddy",
+    sessionId: "codebuddy-quota",
+    source: "provider-derived",
+    updatedAt,
+    title: `${label} usage`,
+    rateLimit: {
+      remaining,
+      limit: totalQuota,
+      usedPercent,
+      windowLabel: "total",
+      planType: "credits",
+      windows: [
+        {
+          key: "total",
+          label: "Total",
+          remaining,
+          limit: totalQuota,
+          usedPercent,
+          planType: "credits",
+        },
+      ],
+    },
+    meta: {
+      total_used: totalUsed,
+      total_quota: totalQuota,
+      total_usage_rate: usedPercent,
+      ...(remainingPercent !== undefined ? { remaining_percentage_total: remainingPercent } : {}),
+      quota_hidden: payload.quota_hidden,
+      quota_hidden_confirmed: payload.quota_hidden_confirmed,
+      quota_hidden_unverified: payload.quota_hidden_unverified,
     },
   };
 }
@@ -493,6 +570,7 @@ export function createCodeBuddyQuotaService(options: CodeBuddyQuotaServiceOption
         cookies,
         lastEnterpriseId,
         fetchImpl,
+        now(),
       );
     } catch (error) {
       lastVerifiedConnected = false;

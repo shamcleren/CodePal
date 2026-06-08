@@ -1589,6 +1589,7 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         isPackaged: app.isPackaged,
         currentVersion: app.getVersion(),
         stateFilePath: path.join(app.getPath("userData"), "update-state.json"),
+        updateCacheDir: path.join(app.getPath("cache"), "codepal-updater"),
         onStateChange: broadcastUpdateState,
         onBeforeInstall: () => {
           historyWriter?.close();

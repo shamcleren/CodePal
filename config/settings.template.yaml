@@ -34,13 +34,18 @@ codebuddy:
   code:
     enabled: true
     label: CodeBuddy Code
-    loginUrl: https://tencent.sso.codebuddy.cn/profile/usage
-    quotaEndpoint: https://tencent.sso.codebuddy.cn/billing/meter/get-enterprise-user-usage
+    loginUrl: https://token.woa.com/
+    quotaEndpoint: https://token.woa.com/api/query-quota?platform=codebuddy
     cookieNames:
       - RIO_TOKEN
       - RIO_TOKEN_HTTPS
       - P_RIO_TOKEN
       - BK_TICKET
+      - bk_ticket
+      - bk_uid
+      - t_uid
+      - km_uid
+      - x-client-ssid
       - tof_auth
       - keycloak_session
       - x_host_key_access
@@ -56,6 +61,11 @@ codebuddy:
       - RIO_TOKEN_HTTPS
       - P_RIO_TOKEN
       - BK_TICKET
+      - bk_ticket
+      - bk_uid
+      - t_uid
+      - km_uid
+      - x-client-ssid
       - tof_auth
       - keycloak_session
       - x_host_key_access

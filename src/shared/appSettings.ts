@@ -118,12 +118,23 @@ const MIMO_DEFAULT_UPSTREAM_MODEL = "mimo-v2.5";
 const MIMO_LEGACY_HAIKU_UPSTREAM_MODEL = "mimo-v2";
 export const DEFAULT_MODEL_PRICING_REMOTE_URL =
   "https://shamcleren.github.io/CodePal/model-pricing.json";
+const LEGACY_CODEBUDDY_CODE_LOGIN_URL = "https://tencent.sso.codebuddy.cn/profile/usage";
+const LEGACY_CODEBUDDY_CODE_QUOTA_ENDPOINT =
+  "https://tencent.sso.codebuddy.cn/billing/meter/get-enterprise-user-usage";
+const TOKEN_WOA_CODEBUDDY_LOGIN_URL = "https://token.woa.com/";
+const TOKEN_WOA_CODEBUDDY_QUOTA_ENDPOINT =
+  "https://token.woa.com/api/query-quota?platform=codebuddy";
 
 export const DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES = [
   "RIO_TOKEN",
   "RIO_TOKEN_HTTPS",
   "P_RIO_TOKEN",
   "BK_TICKET",
+  "bk_ticket",
+  "bk_uid",
+  "t_uid",
+  "km_uid",
+  "x-client-ssid",
   "tof_auth",
   "keycloak_session",
   "x_host_key_access",
@@ -334,8 +345,8 @@ export const defaultAppSettings: AppSettings = {
     code: {
       enabled: true,
       label: "CodeBuddy Code",
-      loginUrl: "https://tencent.sso.codebuddy.cn/profile/usage",
-      quotaEndpoint: "https://tencent.sso.codebuddy.cn/billing/meter/get-enterprise-user-usage",
+      loginUrl: TOKEN_WOA_CODEBUDDY_LOGIN_URL,
+      quotaEndpoint: TOKEN_WOA_CODEBUDDY_QUOTA_ENDPOINT,
       cookieNames: [...DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES],
     },
     enterprise: {
@@ -762,6 +773,16 @@ export function normalizeCodeBuddyEndpointSettings(
     };
   }
 
+  const loginUrl =
+    "loginUrl" in candidate ? normalizeHttpsUrl(candidate.loginUrl) : defaults.loginUrl;
+  const quotaEndpoint =
+    "quotaEndpoint" in candidate
+      ? normalizeHttpsUrl(candidate.quotaEndpoint)
+      : defaults.quotaEndpoint;
+  const migrateLegacyCodeEndpoint =
+    defaults.quotaEndpoint === TOKEN_WOA_CODEBUDDY_QUOTA_ENDPOINT &&
+    quotaEndpoint === LEGACY_CODEBUDDY_CODE_QUOTA_ENDPOINT;
+
   return {
     enabled: typeof candidate.enabled === "boolean" ? candidate.enabled : defaults.enabled,
     label:
@@ -769,11 +790,10 @@ export function normalizeCodeBuddyEndpointSettings(
         ? candidate.label.trim()
         : defaults.label,
     loginUrl:
-      "loginUrl" in candidate ? normalizeHttpsUrl(candidate.loginUrl) : defaults.loginUrl,
-    quotaEndpoint:
-      "quotaEndpoint" in candidate
-        ? normalizeHttpsUrl(candidate.quotaEndpoint)
-        : defaults.quotaEndpoint,
+      migrateLegacyCodeEndpoint && loginUrl === LEGACY_CODEBUDDY_CODE_LOGIN_URL
+        ? TOKEN_WOA_CODEBUDDY_LOGIN_URL
+        : loginUrl,
+    quotaEndpoint: migrateLegacyCodeEndpoint ? TOKEN_WOA_CODEBUDDY_QUOTA_ENDPOINT : quotaEndpoint,
     cookieNames: normalizeCookieNames(candidate.cookieNames, defaults.cookieNames),
   };
 }

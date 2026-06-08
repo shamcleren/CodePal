@@ -196,6 +196,62 @@ describe("createUpdateService", () => {
     });
   });
 
+  it("ignores stale available updates that are already installed", () => {
+    const updateCacheDir = path.join(tempDir, "codepal-updater");
+    fs.mkdirSync(path.join(updateCacheDir, "pending"), { recursive: true });
+    fs.writeFileSync(path.join(updateCacheDir, "pending", "update-info.json"), "{}", "utf8");
+    fs.writeFileSync(path.join(updateCacheDir, "update.zip"), "zip", "utf8");
+    fs.writeFileSync(path.join(updateCacheDir, "current.blockmap"), "blockmap", "utf8");
+    const service = createUpdateService({
+      isPackaged: true,
+      currentVersion: "1.3.9",
+      stateFilePath,
+      updateCacheDir,
+    });
+
+    emit("update-available", {
+      version: "1.3.9",
+      releaseName: "v1.3.9",
+      releaseNotes: "Already installed",
+    });
+
+    expect(service.getState()).toMatchObject({
+      phase: "idle",
+      availableVersion: null,
+      downloadPercent: null,
+      errorMessage: null,
+    });
+    expect(fs.existsSync(path.join(updateCacheDir, "pending"))).toBe(false);
+    expect(fs.existsSync(path.join(updateCacheDir, "update.zip"))).toBe(false);
+    expect(fs.existsSync(path.join(updateCacheDir, "current.blockmap"))).toBe(false);
+  });
+
+  it("ignores stale downloaded updates that are older than the installed app", () => {
+    const updateCacheDir = path.join(tempDir, "codepal-updater");
+    fs.mkdirSync(path.join(updateCacheDir, "pending"), { recursive: true });
+    fs.writeFileSync(path.join(updateCacheDir, "pending", "update-info.json"), "{}", "utf8");
+    const service = createUpdateService({
+      isPackaged: true,
+      currentVersion: "1.3.10",
+      stateFilePath,
+      updateCacheDir,
+    });
+
+    emit("update-downloaded", {
+      version: "1.3.9",
+      releaseName: "v1.3.9",
+      releaseNotes: "Older pending package",
+    });
+
+    expect(service.getState()).toMatchObject({
+      phase: "idle",
+      availableVersion: null,
+      downloadPercent: null,
+      errorMessage: null,
+    });
+    expect(fs.existsSync(path.join(updateCacheDir, "pending"))).toBe(false);
+  });
+
   it("surfaces unsupported state for unpackaged builds", async () => {
     const service = createUpdateService({
       isPackaged: false,

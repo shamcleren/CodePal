@@ -142,6 +142,44 @@ describe("codebuddyQuotaService", () => {
     });
   });
 
+  it("builds a usage snapshot from token.woa quota response", () => {
+    expect(
+      buildCodeBuddyQuotaSnapshot(
+        {
+          success: true,
+          quota_hidden: false,
+          quota_hidden_confirmed: false,
+          quota_hidden_unverified: false,
+          total_usage_rate: 4.39306,
+          total_used: 307.51419999999996,
+          total_quota: 7000.0,
+          remaining_percentage_total: 95.61,
+          remaining_percentage: 95.61,
+        },
+        1_775_000_000_000,
+      ),
+    ).toMatchObject({
+      agent: "codebuddy",
+      sessionId: "codebuddy-quota",
+      source: "provider-derived",
+      updatedAt: 1_775_000_000_000,
+      title: "CodeBuddy Code usage",
+      rateLimit: {
+        remaining: 6692.4858,
+        limit: 7000,
+        usedPercent: 4.39306,
+        windowLabel: "total",
+        planType: "credits",
+      },
+      meta: {
+        total_used: 307.51419999999996,
+        total_quota: 7000,
+        total_usage_rate: 4.39306,
+        remaining_percentage_total: 95.61,
+      },
+    });
+  });
+
   it("returns null when quota payload is unsuccessful", () => {
     expect(
       buildCodeBuddyQuotaSnapshot(
@@ -159,15 +197,11 @@ describe("codebuddyQuotaService", () => {
     const fetchImpl = vi.fn(async () =>
       new Response(
         JSON.stringify({
-          code: 0,
-          msg: "OK",
-          data: {
-            credit: 905.96,
-            cycleStartTime: "2026-04-01 00:00:00",
-            cycleEndTime: "2026-04-30 23:59:59",
-            limitNum: 100000,
-            cycleResetTime: "2026-05-01 00:00:00",
-          },
+          success: true,
+          total_usage_rate: 4.39306,
+          total_used: 307.51419999999996,
+          total_quota: 7000.0,
+          remaining_percentage_total: 95.61,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
@@ -205,16 +239,19 @@ describe("codebuddyQuotaService", () => {
       }),
     );
     expect(fetchImpl).toHaveBeenCalledWith(
-      config.quotaEndpoint,
+      `${config.quotaEndpoint}&_t=1775000000000`,
       expect.objectContaining({
+        method: "GET",
         headers: expect.objectContaining({
-          origin: new URL(config.loginUrl).origin,
+          "cache-control": "no-cache",
           cookie: "RIO_TOKEN=secret",
+          pragma: "no-cache",
+          referer: "https://token.woa.com/",
         }),
       }),
     );
     const requestInit = fetchImpl.mock.calls[0]?.[1] as { headers?: Record<string, string> } | undefined;
-    expect(requestInit?.headers?.referer).toBeUndefined();
+    expect(requestInit?.headers?.origin).toBeUndefined();
   });
 
   it("marks the quota as connected once refresh succeeds even if cookie names are non-standard", async () => {
