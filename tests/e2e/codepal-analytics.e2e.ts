@@ -119,12 +119,13 @@ test("renders analytics from persisted token usage", async () => {
 
     await page.getByRole("button", { name: /30 Days|30 天/ }).click();
     await expect(page.locator(".analytics-page__range-btn--active")).toHaveText(/30 Days|30 天/);
-    await page.getByRole("button", { name: /By Model|按模型/ }).click();
-    await expect(page.getByRole("button", { name: /By Model|按模型/ })).toHaveClass(/analytics-page__segment--active/);
+    const breakdownControls = page.getByLabel(/Compact Breakdown|精简拆分/);
+    await breakdownControls.getByRole("button", { name: /By Model|按模型/ }).click();
+    await expect(breakdownControls.getByRole("button", { name: /By Model|按模型/ })).toHaveClass(/analytics-page__segment--active/);
     await expect(page.locator(".analytics-page__table")).toContainText("gpt-5.5");
 
-    await page.getByRole("button", { name: /By Agent|按 Agent/ }).click();
-    await expect(page.getByRole("button", { name: /By Agent|按 Agent/ })).toHaveClass(/analytics-page__segment--active/);
+    await breakdownControls.getByRole("button", { name: /By Agent|按 Agent/ }).click();
+    await expect(breakdownControls.getByRole("button", { name: /By Agent|按 Agent/ })).toHaveClass(/analytics-page__segment--active/);
     await expect(page.locator(".analytics-page__table")).toContainText("codex");
   } finally {
     historyStore?.close();
