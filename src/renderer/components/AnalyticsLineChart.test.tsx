@@ -167,6 +167,64 @@ describe("AnalyticsLineChart", () => {
     expect(html).not.toContain("Cache");
   });
 
+  it("can group token trend lines by agent", () => {
+    const html = renderToStaticMarkup(
+      <AnalyticsLineChart
+        points={[
+          {
+            ...points[0],
+            bucketStart: 1,
+            agent: "codex",
+            totalTokens: 16,
+          },
+          {
+            ...points[1],
+            bucketStart: 1,
+            agent: "claude",
+            totalTokens: 22,
+          },
+        ]}
+        metric="tokens"
+        groupMode="agent"
+      />,
+    );
+
+    expect(html).toContain("Codex");
+    expect(html).toContain("Claude");
+    expect(html).not.toContain("Input");
+    expect(html).not.toContain("Output");
+    expect(html).not.toContain("Cache");
+  });
+
+  it("can group token trend lines by model", () => {
+    const html = renderToStaticMarkup(
+      <AnalyticsLineChart
+        points={[
+          {
+            ...points[0],
+            bucketStart: 1,
+            model: "gpt-5.5",
+            totalTokens: 16,
+          },
+          {
+            ...points[1],
+            bucketStart: 1,
+            model: "Claude-Opus-4.8",
+            totalTokens: 22,
+          },
+        ]}
+        metric="tokens"
+        groupMode="model"
+      />,
+    );
+
+    expect(html).toContain("gpt-5.5");
+    expect(html).toContain("Claude-Opus-4.8");
+    expect(html).not.toContain("Input");
+    expect(html).not.toContain("Output");
+    expect(html).not.toContain("Cache");
+  });
+
   it("keeps the top project lines readable by grouping smaller projects into a counted Other series", () => {
     const manyProjects = Array.from({ length: 8 }, (_, index): TokenTrendPoint => ({
       ...points[0],

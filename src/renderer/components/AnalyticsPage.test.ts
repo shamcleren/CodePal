@@ -113,8 +113,8 @@ describe("AnalyticsPage helpers", () => {
     expect(TREND_METRICS).toEqual(["tokens", "cost"]);
   });
 
-  it("defaults trend grouping to projects while preserving token type as a secondary view", () => {
-    expect(TREND_GROUP_MODES).toEqual(["project", "tokenType"]);
+  it("defaults trend grouping to projects while preserving operational split views", () => {
+    expect(TREND_GROUP_MODES).toEqual(["project", "agent", "model", "tokenType"]);
   });
 
   it("keeps the daily trend controls visible when filtered trend data is empty", () => {

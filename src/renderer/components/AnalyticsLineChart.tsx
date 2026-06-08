@@ -24,7 +24,7 @@ type Series = {
   points: AnalyticsPoint[];
 };
 
-export type TrendGroupMode = "project" | "tokenType";
+export type TrendGroupMode = "project" | "agent" | "model" | "tokenType";
 
 type Translate = ReturnType<typeof useI18n>["t"];
 
@@ -70,6 +70,14 @@ const PROJECT_COLORS = [
 ];
 const MAX_PROJECT_SERIES = 5;
 const OTHER_PROJECTS_LABEL = "Other";
+const AGENT_LABELS: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  codebuddy: "CodeBuddy",
+  cursor: "Cursor",
+  goland: "GoLand",
+  pycharm: "PyCharm",
+};
 
 const TICK_BUCKET_STEPS: Record<TokenTrendGranularity, number[]> = {
   minute: [1, 5, 10, 15, 30, 60, 120, 240, 360, 720, 1440],
@@ -656,6 +664,26 @@ function seriesForMetric(
   if (groupMode === "project") {
     return projectSeriesForMetric(points, metric, costForPoint, t);
   }
+  if (groupMode === "agent") {
+    return dimensionSeriesForMetric(
+      points,
+      metric,
+      costForPoint,
+      t,
+      "agent",
+      (point) => dimensionInfo(point.agent, agentLabel(point.agent)),
+    );
+  }
+  if (groupMode === "model") {
+    return dimensionSeriesForMetric(
+      points,
+      metric,
+      costForPoint,
+      t,
+      "model",
+      (point) => dimensionInfo(point.model, point.model),
+    );
+  }
 
   const buckets = new Map<number, TokenTrendPoint[]>();
   for (const point of points) {
@@ -814,6 +842,74 @@ function projectSeriesForMetric(
   }));
 }
 
+function dimensionSeriesForMetric(
+  points: TokenTrendPoint[],
+  metric: AnalyticsMetric,
+  costForPoint: (point: TokenTrendPoint) => number,
+  t: Translate,
+  keyPrefix: string,
+  infoForPoint: (point: TokenTrendPoint) => { key: string; label: string },
+): Series[] {
+  const ranks = new Map<string, { key: string; label: string; value: number }>();
+
+  for (const point of points) {
+    const info = infoForPoint(point);
+    const rank = ranks.get(info.key) ?? {
+      key: info.key,
+      label: info.label,
+      value: 0,
+    };
+    rank.value += projectPointValue(point, metric, costForPoint);
+    ranks.set(info.key, rank);
+  }
+
+  const ranked = Array.from(ranks.values())
+    .filter((entry) => entry.value > 0)
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+  const visible = ranked.slice(0, MAX_PROJECT_SERIES);
+  const visibleKeys = new Set(visible.map((entry) => entry.key));
+  const otherCount = ranked.filter((entry) => !visibleKeys.has(entry.key)).length;
+  const hasOther = otherCount > 0;
+
+  const buckets = new Map<number, Map<string, number>>();
+  for (const point of points) {
+    const bucket = buckets.get(point.bucketStart) ?? new Map<string, number>();
+    const info = infoForPoint(point);
+    const key = visibleKeys.has(info.key) ? info.key : hasOther ? OTHER_PROJECTS_LABEL : info.key;
+    bucket.set(key, (bucket.get(key) ?? 0) + projectPointValue(point, metric, costForPoint));
+    buckets.set(point.bucketStart, bucket);
+  }
+
+  const sortedBuckets = Array.from(buckets.entries()).sort((a, b) => a[0] - b[0]);
+  const seriesTargets = [
+    ...visible.map((entry) => ({ key: entry.key, label: entry.label })),
+    ...(hasOther
+      ? [{
+          key: OTHER_PROJECTS_LABEL,
+          label: t("tokenStats.trend.otherCount", { count: otherCount }),
+        }]
+      : []),
+  ];
+
+  return seriesTargets.map((entry, index) => ({
+    key: `${keyPrefix}-${index}`,
+    label: entry.label,
+    color: PROJECT_COLORS[index] ?? PROJECT_COLORS[PROJECT_COLORS.length - 1],
+    points: sortedBuckets.map(([bucketStart, bucket]) => ({
+      x: bucketStart,
+      y: bucket.get(entry.key) ?? 0,
+    })),
+  }));
+}
+
+function dimensionInfo(key: string, label: string): { key: string; label: string } {
+  const normalized = key.trim();
+  return {
+    key: normalized || "unknown",
+    label: label.trim() || "Unknown",
+  };
+}
+
 function projectInfo(point: TokenTrendPoint): { key: string; label: string; unknown: boolean } {
   const projectPath = point.projectPath?.trim() || UNKNOWN_PROJECT_PATH;
   const unknown = isUnknownProjectPath(projectPath);
@@ -845,6 +941,10 @@ function projectPointValue(
 function basename(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
   return parts.at(-1) ?? path;
+}
+
+function agentLabel(agent: string): string {
+  return AGENT_LABELS[agent] ?? agent;
 }
 
 function fillSeriesBucketGaps(

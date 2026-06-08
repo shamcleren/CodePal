@@ -11,7 +11,7 @@ export type AnalyticsPagePreferences = {
   breakdownMode: "project" | "model" | "agent";
   granularity: "minute" | "hour" | "day";
   metric: "tokens" | "cost";
-  trendGroupMode: "project" | "tokenType";
+  trendGroupMode: "project" | "agent" | "model" | "tokenType";
   projectFilter?: string;
   agentFilter?: string;
   modelFilter?: string;
@@ -128,7 +128,7 @@ export function readAnalyticsPagePreferences(
     breakdownMode: oneOf(record.breakdownMode, ["project", "model", "agent"] as const, "project"),
     granularity: oneOf(record.granularity, ["minute", "hour", "day"] as const, "hour"),
     metric: oneOf(record.metric, ["tokens", "cost"] as const, "tokens"),
-    trendGroupMode: oneOf(record.trendGroupMode, ["project", "tokenType"] as const, "project"),
+    trendGroupMode: oneOf(record.trendGroupMode, ["project", "agent", "model", "tokenType"] as const, "project"),
     projectFilter: optionalString(record.projectFilter),
     agentFilter: optionalString(record.agentFilter),
     modelFilter: optionalString(record.modelFilter),

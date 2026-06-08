@@ -13,7 +13,7 @@ type RangePreset = "today" | "7d" | "30d" | "custom";
 type BreakdownMode = "project" | "model" | "agent";
 
 export const TREND_METRICS = ["tokens", "cost"] as const satisfies readonly AnalyticsMetric[];
-export const TREND_GROUP_MODES = ["project", "tokenType"] as const satisfies readonly TrendGroupMode[];
+export const TREND_GROUP_MODES = ["project", "agent", "model", "tokenType"] as const satisfies readonly TrendGroupMode[];
 export const BREAKDOWN_MODES = ["project", "model", "agent"] as const satisfies readonly BreakdownMode[];
 export const ANALYTICS_AUTO_REFRESH_INTERVAL_MS = 30_000;
 

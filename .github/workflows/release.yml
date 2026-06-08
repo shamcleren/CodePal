@@ -15,7 +15,7 @@ concurrency:
 jobs:
   release:
     name: Build & Release
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Checkout
@@ -26,6 +26,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Select stable Xcode
+        run: |
+          set -euo pipefail
+          candidate="$(find /Applications -maxdepth 1 -name 'Xcode_16*.app' -print | sort -V | tail -n 1 || true)"
+          if [ -n "$candidate" ]; then
+            sudo xcode-select -s "$candidate/Contents/Developer"
+          fi
+          xcodebuild -version
 
       - name: Install dependencies
         run: npm ci
@@ -78,3 +87,14 @@ jobs:
             release/*.zip
             release/*.zip.blockmap
             release/latest-mac.yml
+
+      - name: Verify uploaded release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          download_dir="$RUNNER_TEMP/codepal-release-download"
+          rm -rf "$download_dir"
+          mkdir -p "$download_dir"
+          gh release download "${{ steps.version.outputs.tag }}" --dir "$download_dir" --clobber
+          node scripts/verify-mac-release-assets.cjs "$download_dir"
