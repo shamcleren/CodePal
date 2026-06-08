@@ -110,7 +110,7 @@ beforeEach(() => {
               recursive: true,
             });
           }
-          if (command.endsWith("app-builder_arm64") || command.endsWith("app-builder_x64")) {
+          if (/app-builder_(arm64|x64|amd64)$/.test(command)) {
             const outputArg = args.find((arg) => arg.startsWith("--output="));
             if (outputArg) {
               fsSync.writeFileSync(outputArg.slice("--output=".length), "");
@@ -218,7 +218,7 @@ test("rebuilds updater zip before notarization, blockmap, and latest-mac metadat
     );
     const zipBlockmapIndex = spawnCalls.findIndex(
       (call) =>
-        (call.command.endsWith("app-builder_arm64") || call.command.endsWith("app-builder_x64")) &&
+        /app-builder_(arm64|x64|amd64)$/.test(call.command) &&
         call.args.includes(`--input=${zipPath}`),
     );
 
@@ -331,7 +331,7 @@ test("notarizes zip and dmg, staples only dmg, and publishes refreshed updater m
   );
 
   const blockmapCalls = spawnCalls
-    .filter((call) => call.command.endsWith("app-builder_arm64") || call.command.endsWith("app-builder_x64"))
+    .filter((call) => /app-builder_(arm64|x64|amd64)$/.test(call.command))
     .map((call) => call.args);
   expect(blockmapCalls).toEqual(
     expect.arrayContaining([
