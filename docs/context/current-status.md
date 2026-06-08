@@ -61,7 +61,7 @@
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
 - v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
-- v1.0.3 through v1.3.10 are all shipped. Current shipped baseline is **v1.3.10**.
+- v1.0.3 through v1.3.11 are all shipped. Current shipped baseline is **v1.3.11**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -86,6 +86,7 @@
 - v1.3.8 shipped: cross-agent session lifecycle alignment, legacy reply / pending-action response UI disabled, and ACP Sessions documented as the next major operation-entry direction
 - v1.3.9 shipped: macOS updater zip repackaging from the final signed app, final asset signing checks, post-upload release asset validation, and Daily Trend grouping by Agent / Model
 - v1.3.10 shipped: stale updater-cache self-healing after completed installs, updater state alignment with the installed app version, token.woa CodeBuddy quota fetching through the authenticated browser session, and CodeBuddy cache-hit token parsing for OpenAI-compatible usage payloads
+- v1.3.11 shipped: final release upload now re-uploads the rebuilt zip/dmg alongside refreshed blockmaps and `latest-mac.yml`, preventing updater metadata from pointing at a stale zip asset
 - v1.3.5 validation covered the Analytics chart-domain refresh regression and report-format alignment follow-up found after v1.3.4:
   - `npm test -- src/renderer/components/AnalyticsPage.test.ts src/renderer/components/AnalyticsLineChart.test.tsx src/renderer/App.test.tsx`
   - `npm test -- src/main/report/generateHtmlReport.test.ts`
@@ -106,6 +107,12 @@
 - v1.3.10 local validation on 2026-06-08 covers updater stale-pending self-healing, CodeBuddy token.woa quota compatibility, and CodeBuddy cache-hit token parsing:
   - `npm test -- src/main/update/updateService.test.ts src/main/usage/codebuddyQuotaService.test.ts src/shared/appSettings.test.ts src/main/settings/settingsService.test.ts`
   - `npm test -- src/main/codebuddy/codebuddySessionWatcher.test.ts src/main/ingress/hookIngress.test.ts src/main/update/updateService.test.ts src/main/usage/codebuddyQuotaService.test.ts src/shared/appSettings.test.ts`
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`
+  - `git diff --check`
+- v1.3.11 local validation on 2026-06-08 covers final release upload hardening plus the carried updater / CodeBuddy fixes:
+  - `npm test -- src/main/releaseBuild/finalizeMacReleaseMetadataScript.test.ts src/main/codebuddy/codebuddySessionWatcher.test.ts src/main/ingress/hookIngress.test.ts src/main/update/updateService.test.ts src/main/usage/codebuddyQuotaService.test.ts src/shared/appSettings.test.ts`
   - `npm run lint`
   - `npm test`
   - `npm run build`

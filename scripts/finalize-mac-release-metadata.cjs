@@ -89,6 +89,7 @@ if (process.env.CODEPAL_PUBLISH_RELEASE === "1") {
     "release",
     "upload",
     tag,
+    ...artifactPaths,
     ...artifactPaths.map((filePath) => `${filePath}.blockmap`),
     latestMacPath,
     "--clobber",
