@@ -98,3 +98,8 @@ jobs:
           mkdir -p "$download_dir"
           gh release download "${{ steps.version.outputs.tag }}" --dir "$download_dir" --clobber
           node scripts/verify-mac-release-assets.cjs "$download_dir"
+
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ steps.version.outputs.tag }}" --draft=false --latest
