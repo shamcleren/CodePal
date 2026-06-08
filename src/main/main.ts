@@ -124,6 +124,7 @@ let providerGatewayRuntime: {
   homeDir: string;
 } | null = null;
 let quittingAfterProviderGatewayClose = false;
+let installingUpdate = false;
 const PROVIDER_GATEWAY_DISABLED_MESSAGE =
   "Provider Gateway is disabled in settings.";
 const PROVIDER_GATEWAY_FEATURE_ENABLED = true;
@@ -1430,7 +1431,12 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
     });
 
     app.on("before-quit", (event) => {
-      if (!quittingAfterProviderGatewayClose && providerGatewayRuntime && providerGatewayServer) {
+      if (
+        !installingUpdate &&
+        !quittingAfterProviderGatewayClose &&
+        providerGatewayRuntime &&
+        providerGatewayServer
+      ) {
         event.preventDefault();
         quittingAfterProviderGatewayClose = true;
         void suspendProviderGatewayForAppQuit(
@@ -1592,7 +1598,9 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         updateCacheDir: path.join(app.getPath("cache"), "codepal-updater"),
         onStateChange: broadcastUpdateState,
         onBeforeInstall: () => {
+          installingUpdate = true;
           historyWriter?.close();
+          void closeProviderGatewayServer();
         },
       });
       const notificationService = createNotificationService({

@@ -67,10 +67,30 @@ describe("main process startup safety", () => {
     expect(quitSuspendSource).not.toContain("preserveClaudeCliGatewayEnv");
     expect(quitSuspendSource).toContain("closeProviderGatewayServer()");
     expect(quitSuspendSource).not.toContain("setProviderGatewayEnabled(");
+    expect(beforeQuitSource).toContain("!installingUpdate");
     expect(beforeQuitSource).toContain("suspendProviderGatewayForAppQuit(");
     expect(beforeQuitSource).not.toContain("stopProviderGateway(");
     expect(beforeQuitSource).not.toContain("setProviderGatewayEnabled(");
     expect(beforeQuitSource).not.toContain("configureProviderGatewayClient(");
+  });
+
+  it("lets macOS updater quit bypass the async provider gateway suspend path", () => {
+    const mainSource = fs.readFileSync(path.resolve(process.cwd(), "src/main/main.ts"), "utf8");
+    const beforeQuitStart = mainSource.indexOf('app.on("before-quit"');
+    const beforeQuitEnd = mainSource.indexOf('app.on("window-all-closed"', beforeQuitStart);
+    const beforeQuitSource = mainSource.slice(beforeQuitStart, beforeQuitEnd);
+    const updateServiceStart = mainSource.indexOf("const updateService = createUpdateService(");
+    const updateServiceEnd = mainSource.indexOf("const notificationService", updateServiceStart);
+    const updateServiceSource = mainSource.slice(updateServiceStart, updateServiceEnd);
+
+    expect(mainSource).toContain("let installingUpdate = false;");
+    expect(updateServiceSource).toContain("onBeforeInstall: () => {");
+    expect(updateServiceSource).toContain("installingUpdate = true;");
+    expect(updateServiceSource).toContain("void closeProviderGatewayServer();");
+    expect(beforeQuitSource).toContain("!installingUpdate");
+    expect(beforeQuitSource.indexOf("!installingUpdate")).toBeLessThan(
+      beforeQuitSource.indexOf("suspendProviderGatewayForAppQuit("),
+    );
   });
 
   it("can resume Claude CLI gateway env after startup when it was active before quit", () => {

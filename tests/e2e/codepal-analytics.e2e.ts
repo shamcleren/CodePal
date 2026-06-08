@@ -38,6 +38,18 @@ test("renders analytics from persisted token usage", async () => {
     sourceKind: "e2e",
     sourceKey: "analytics-e2e-token-row",
   });
+  historyStore.writeTokenUsage({
+    sessionId: "analytics-e2e-codebuddy-session",
+    agent: "codebuddy",
+    model: "Claude-Opus-4.8",
+    timestamp: now - 20_000,
+    inputTokens: 300,
+    outputTokens: 50,
+    cacheReadTokens: 240,
+    cacheCreationTokens: 10,
+    sourceKind: "e2e",
+    sourceKey: "analytics-e2e-codebuddy-cache-row",
+  });
   historyStore.setUsageImportStatus({
     completedAt: now - 10_000,
     claudeRowsImported: 2,
@@ -123,6 +135,11 @@ test("renders analytics from persisted token usage", async () => {
     await breakdownControls.getByRole("button", { name: /By Model|按模型/ }).click();
     await expect(breakdownControls.getByRole("button", { name: /By Model|按模型/ })).toHaveClass(/analytics-page__segment--active/);
     await expect(page.locator(".analytics-page__table")).toContainText("gpt-5.5");
+    const codebuddyModelRow = page
+      .locator(".analytics-page__table tbody tr")
+      .filter({ hasText: "Claude-Opus-4.8" });
+    await expect(codebuddyModelRow).toContainText("codebuddy");
+    await expect(codebuddyModelRow.locator(".analytics-page__table-num").nth(4)).toHaveText("44%");
 
     await breakdownControls.getByRole("button", { name: /By Agent|按 Agent/ }).click();
     await expect(breakdownControls.getByRole("button", { name: /By Agent|按 Agent/ })).toHaveClass(/analytics-page__segment--active/);
