@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { appBuilderPath } = require("app-builder-bin");
 const YAML = require("yaml");
 
 const projectRoot = path.join(__dirname, "..");
@@ -37,10 +38,24 @@ function artifactInfo(fileName) {
   };
 }
 
-const artifacts = [
-  artifactInfo(`CodePal-${version}-arm64.zip`),
-  artifactInfo(`CodePal-${version}-arm64.dmg`),
+function refreshBlockmap(filePath) {
+  run(appBuilderPath, [
+    "blockmap",
+    `--input=${filePath}`,
+    `--output=${filePath}.blockmap`,
+  ]);
+}
+
+const artifactNames = [
+  `CodePal-${version}-arm64.zip`,
+  `CodePal-${version}-arm64.dmg`,
 ];
+const artifactPaths = artifactNames.map((fileName) => path.join(releaseDir, fileName));
+for (const filePath of artifactPaths) {
+  refreshBlockmap(filePath);
+}
+
+const artifacts = artifactNames.map(artifactInfo);
 const latestMacPath = path.join(releaseDir, "latest-mac.yml");
 const latestMac = {
   version,
@@ -70,5 +85,12 @@ for (const artifact of artifacts) {
 console.log(`[release:mac] refreshed final ${latestMacPath}`);
 
 if (process.env.CODEPAL_PUBLISH_RELEASE === "1") {
-  run("gh", ["release", "upload", tag, latestMacPath, "--clobber"]);
+  run("gh", [
+    "release",
+    "upload",
+    tag,
+    ...artifactPaths.map((filePath) => `${filePath}.blockmap`),
+    latestMacPath,
+    "--clobber",
+  ]);
 }
