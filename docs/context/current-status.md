@@ -18,7 +18,7 @@
   - `npx playwright test -c playwright.e2e.config.ts tests/e2e/codepal-history-pagination.e2e.ts`
 - Repository now also includes a minimal GitHub Actions CI workflow for `lint + test + build`
 - Repository now also includes a separate macOS GitHub Actions workflow for Electron E2E runs on `main` and manual dispatch
-- Release workflow validates macOS updater assets, including `latest-mac.yml`, dmg / zip artifacts, and blockmap files
+- Release workflow validates macOS updater assets, including `latest-mac.yml`, dmg / zip artifacts, blockmap files, zip-extracted app signing, and dmg-mounted app signing
 - v1.1.6 candidate validation on 2026-05-19:
   - `npm test -- src/adapters/codex/normalizeCodexLogEvent.test.ts src/main/session/sessionStore.test.ts src/renderer/sessionRows.test.ts`
   - `npm run lint`
@@ -61,7 +61,7 @@
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
 - v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
-- v1.0.3 through v1.3.8 are all shipped. Current shipped baseline is **v1.3.8**.
+- v1.0.3 through v1.3.9 are all shipped. Current shipped baseline is **v1.3.9**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -84,6 +84,7 @@
 - v1.3.6 shipped: Provider Gateway client mutation paths disabled while the safety model is tightened
 - v1.3.7 shipped: safer opt-in Provider Gateway setup, startup safety hardening, Work Review light-theme polish, Follow system theme, and pricing sync refresh
 - v1.3.8 shipped: cross-agent session lifecycle alignment, legacy reply / pending-action response UI disabled, and ACP Sessions documented as the next major operation-entry direction
+- v1.3.9 shipped: macOS updater zip repackaging from the final signed app, final asset signing checks, and hardened release checklist validation
 - v1.3.5 validation covered the Analytics chart-domain refresh regression and report-format alignment follow-up found after v1.3.4:
   - `npm test -- src/renderer/components/AnalyticsPage.test.ts src/renderer/components/AnalyticsLineChart.test.tsx src/renderer/App.test.tsx`
   - `npm test -- src/main/report/generateHtmlReport.test.ts`
@@ -94,6 +95,12 @@
   - `npm test`
   - `npm run lint`
   - `npm run build`
+- v1.3.9 local validation on 2026-06-08 covers the macOS updater packaging hotfix and release asset validation hardening:
+  - `npm test -- src/main/releaseBuild/afterAllArtifactBuild.test.ts`
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`
+  - `git diff --check`
 - v1.3.0 local lint / test / build verification is green on 2026-05-26:
   - `npm run lint`
   - `npm test` — 976 tests across 107 files, all passing
@@ -369,9 +376,9 @@ npm run dist:mac
 - team sharing, cloud sync, billing, and broader control surfaces until the individual local workflow has proven sustained value
 - any productivity-scoring or team-ranking surface
 
-### v1.1.0–v1.3.8 Release Track
+### v1.1.0–v1.3.9 Release Track
 
-v1.1.0 through v1.3.8 are shipped. See individual release notes for details:
+v1.1.0 through v1.3.9 are shipped. See individual release notes for details:
 
 - `docs/release/notes/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release/notes/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -395,6 +402,7 @@ v1.1.0 through v1.3.8 are shipped. See individual release notes for details:
 - `docs/release/notes/release-notes-v1.3.6.md` — release-facing safety patch for disabled client mutation paths
 - `docs/release/notes/release-notes-v1.3.7.md` — safer opt-in Provider Gateway setup, startup safety, Work Review light-theme polish, Follow system theme, and pricing refresh
 - `docs/release/notes/release-notes-v1.3.8.md` — session lifecycle alignment, disabled legacy reply / pending-action response entry points, and ACP Sessions roadmap handoff
+- `docs/release/notes/release-notes-v1.3.9.md` — macOS updater zip repackaging, final signing checks, and release checklist hardening
 
 ## Next Product Direction Handoff
 

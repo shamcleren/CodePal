@@ -145,6 +145,17 @@ function verifyZipApp(zipPath) {
   }
 }
 
+function rebuildZipArtifact(appPath, zipPath) {
+  const tempZipPath = `${zipPath}.tmp-${process.pid}`;
+  fs.rmSync(tempZipPath, { force: true });
+  try {
+    run("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", appPath, tempZipPath]);
+    fs.renameSync(tempZipPath, zipPath);
+  } finally {
+    fs.rmSync(tempZipPath, { force: true });
+  }
+}
+
 function verifyDmgApp(dmgPath) {
   const mountPoint = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-dmg-verify-"));
   let attached = false;
@@ -294,6 +305,10 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
 
   verifyAppCodeSignature(appPath);
 
+  for (const zipPath of zipPaths) {
+    rebuildZipArtifact(appPath, zipPath);
+  }
+
   for (const artifactPath of [...zipPaths, ...dmgPaths]) {
     run("xcrun", ["notarytool", "submit", artifactPath, ...getNotaryAuthArgs(), "--wait"]);
   }
@@ -307,8 +322,8 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   }
   verifyAppCodeSignature(appPath);
 
-  for (const dmgPath of dmgPaths) {
-    refreshBlockmap(dmgPath);
+  for (const artifactPath of [...zipPaths, ...dmgPaths]) {
+    refreshBlockmap(artifactPath);
   }
   const latestMacPath = refreshLatestMacYml(buildResult.outDir, artifactPaths, version);
   validateLatestMacYml(latestMacPath, artifactPaths);
@@ -330,13 +345,17 @@ exports.default = async function afterAllArtifactBuild(buildResult) {
   }
 
   // electron-builder uploads artifacts to the draft release BEFORE this hook
-  // runs. Re-upload the stapled dmg plus refreshed metadata so GitHub matches
-  // what we just verified locally.
+  // runs. Re-upload the rebuilt zip, stapled dmg, and refreshed metadata so
+  // GitHub matches what we just verified locally.
   const tagForUpload = `v${version}`;
+  for (const zipPath of zipPaths) {
+    run("gh", ["release", "upload", tagForUpload, zipPath, "--clobber"]);
+  }
   for (const dmgPath of dmgPaths) {
     run("gh", ["release", "upload", tagForUpload, dmgPath, "--clobber"]);
   }
   const refreshedArtifacts = [
+    ...zipPaths.map((zipPath) => `${zipPath}.blockmap`).filter((blockmapPath) => fs.existsSync(blockmapPath)),
     ...dmgPaths.map((dmgPath) => `${dmgPath}.blockmap`).filter((blockmapPath) => fs.existsSync(blockmapPath)),
     ...(latestMacPath ? [latestMacPath] : []),
   ];

@@ -105,6 +105,9 @@
 - [ ] `codesign --display --verbose=4` 确认签名身份正确
 - [ ] notarization 已提交并通过
 - [ ] 最终 `.dmg` 已 `notarytool submit --wait` 并返回 `Accepted`
+- [ ] 最终 `.zip` 由已签名 app bundle 重新打包，随后再完成 notarization、`.zip.blockmap` 与 `latest-mac.yml` 刷新
+- [ ] `node scripts/verify-mac-release-assets.cjs release` 已通过；该脚本会解开 `.zip`、挂载 `.dmg`，并对两边的 `.app` 跑 `codesign --verify` 与 `spctl --assess`
+- [ ] GitHub Release 草稿上传后，先下载最终 `.zip` / `.dmg` 到本机或 CI 临时目录，重新运行 `node scripts/verify-mac-release-assets.cjs <下载目录>`，确认 GitHub 上的最终资产与本地校验一致
 - [ ] `codesign --verify` 与 app 级别 notarization 校验通过
 - [ ] README / release notes / current-status 没有保留测试分发或待签名表述
 
