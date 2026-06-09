@@ -910,20 +910,25 @@ describe("codebuddyQuotaService", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it("shows the login window immediately while the login page loads", async () => {
+  it("shows a local loading page before slow login navigation finishes", async () => {
     let closedHandler: (() => void) | undefined;
-    let resolveLoad: (() => void) | undefined;
+    let resolveRemoteLoad: (() => void) | undefined;
+    let loadingPageUrl = "";
     const show = vi.fn();
+    const loadURL = vi.fn((url: string) => {
+      if (url === config.loginUrl) {
+        return new Promise<void>((resolve) => {
+          resolveRemoteLoad = resolve;
+        });
+      }
+      loadingPageUrl = url;
+      return Promise.resolve();
+    });
     const service = createCodeBuddyQuotaService({
       config,
       createWindow: () =>
         ({
-          loadURL: vi.fn(
-            () =>
-              new Promise<void>((resolve) => {
-                resolveLoad = resolve;
-              }),
-          ),
+          loadURL,
           show,
           isDestroyed: vi.fn(() => false),
           close: vi.fn(),
@@ -950,17 +955,93 @@ describe("codebuddyQuotaService", () => {
 
     const resultPromise = service.connectAndSync();
     await vi.waitFor(() => {
-      expect(resolveLoad).toBeTypeOf("function");
+      expect(loadingPageUrl).toContain("data:text/html");
+      expect(resolveRemoteLoad).toBeTypeOf("function");
       expect(closedHandler).toBeTypeOf("function");
     });
 
+    expect(decodeURIComponent(loadingPageUrl)).toContain("正在打开 CodeBuddy 登录页");
     expect(show).toHaveBeenCalledOnce();
 
-    resolveLoad?.();
+    resolveRemoteLoad?.();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(show).toHaveBeenCalledOnce();
     closedHandler?.();
     await resultPromise;
+  });
+
+  it("shows a readable error page when the CodeBuddy login page fails to load", async () => {
+    let closedHandler: (() => void) | undefined;
+    let didFinishLoadHandler: (() => void) | undefined;
+    const dataPageUrls: string[] = [];
+    const show = vi.fn();
+    const loadURL = vi.fn(async (url: string) => {
+      if (url === config.loginUrl) {
+        throw new Error("ERR_SSL_PROTOCOL_ERROR (-107) loading 'https://token.woa.com/'");
+      }
+      dataPageUrls.push(url);
+      didFinishLoadHandler?.();
+    });
+    const service = createCodeBuddyQuotaService({
+      config,
+      createWindow: () =>
+        ({
+          loadURL,
+          show,
+          isDestroyed: vi.fn(() => false),
+          close: vi.fn(),
+          on: vi.fn((event: string, handler: () => void) => {
+            if (event === "closed") {
+              closedHandler = handler;
+            }
+          }),
+          once: vi.fn(),
+          webContents: {
+            on: vi.fn((_event: string, handler: () => void) => {
+              if (_event === "did-finish-load") {
+                didFinishLoadHandler = handler;
+              }
+            }),
+            removeListener: vi.fn(),
+            executeJavaScript: vi.fn(async () => undefined),
+          },
+        }) as never,
+      session: {
+        cookies: {
+          get: vi.fn(async () => []),
+          on: vi.fn(),
+          removeListener: vi.fn(),
+        },
+      } as never,
+    });
+
+    const resultPromise = service.connectAndSync();
+    await vi.waitFor(() => {
+      expect(loadURL).toHaveBeenCalledWith(config.loginUrl);
+      expect(
+        dataPageUrls.some((url) =>
+          decodeURIComponent(url).includes("CodeBuddy 登录页打开失败"),
+        ),
+      ).toBe(true);
+    });
+
+    const loginErrorPageUrl =
+      dataPageUrls.find((url) =>
+        decodeURIComponent(url).includes("CodeBuddy 登录页打开失败"),
+      ) ?? "";
+    expect(dataPageUrls.some((url) => decodeURIComponent(url).includes("正在打开"))).toBe(true);
+    expect(decodeURIComponent(loginErrorPageUrl)).toContain("CodeBuddy 登录页打开失败");
+    expect(decodeURIComponent(loginErrorPageUrl)).toContain("ERR_SSL_PROTOCOL_ERROR");
+    expect(show).toHaveBeenCalledOnce();
+
+    closedHandler?.();
+    await expect(resultPromise).resolves.toMatchObject({
+      synced: false,
+      diagnostics: {
+        state: "error",
+        messageKey: "codebuddy.message.open_failed",
+      },
+    });
   });
 
   it("returns when the login window closes before the login page finishes loading", async () => {
@@ -1169,15 +1250,19 @@ describe("codebuddyQuotaService", () => {
       fetchImpl,
       createWindow: () =>
         ({
-          loadURL: vi.fn(
-            () =>
+          loadURL: vi.fn((url: string) => {
+            if (url !== config.loginUrl) {
+              return Promise.resolve();
+            }
+            return (
               new Promise<void>((resolve) => {
                 resolveLoad = () => {
                   loadResolved = true;
                   resolve();
                 };
-              }),
-          ),
+              })
+            );
+          }),
           show: vi.fn(),
           isDestroyed: vi.fn(() => false),
           close,

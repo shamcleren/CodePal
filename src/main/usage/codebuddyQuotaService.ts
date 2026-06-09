@@ -202,6 +202,92 @@ function isIgnorableNavigationError(error: unknown): boolean {
   return error.message.includes("ERR_ABORTED") || error.message.includes("(-3)");
 }
 
+function htmlEscape(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function navigationErrorDetail(error: Error): string {
+  return error.message || String(error);
+}
+
+function codeBuddyLoginErrorDataUrl(loginUrl: string, error: Error): string {
+  const detail = navigationErrorDetail(error);
+  const html = [
+    "<!doctype html>",
+    "<html>",
+    "<head>",
+    '<meta charset="utf-8">',
+    "<title>登录 CodeBuddy 用量</title>",
+    "<style>",
+    "body{margin:0;background:#fff;color:#111827;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}",
+    ".wrap{max-width:720px;margin:96px auto;padding:0 32px;line-height:1.6;}",
+    "h1{font-size:24px;margin:0 0 16px;}",
+    "p{font-size:15px;margin:0 0 12px;color:#4b5563;}",
+    "code{display:block;white-space:pre-wrap;word-break:break-word;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:12px;color:#111827;}",
+    "</style>",
+    "</head>",
+    "<body>",
+    '<main class="wrap">',
+    "<h1>CodeBuddy 登录页打开失败</h1>",
+    "<p>CodePal 无法在登录窗口中加载当前 CodeBuddy 登录地址。请检查网络/VPN 后重试。</p>",
+    `<p>登录地址</p><code>${htmlEscape(loginUrl)}</code>`,
+    `<p>错误信息</p><code>${htmlEscape(detail)}</code>`,
+    "</main>",
+    "</body>",
+    "</html>",
+  ].join("");
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+function codeBuddyLoginLoadingDataUrl(loginUrl: string): string {
+  const html = [
+    "<!doctype html>",
+    "<html>",
+    "<head>",
+    '<meta charset="utf-8">',
+    "<title>登录 CodeBuddy 用量</title>",
+    "<style>",
+    "body{margin:0;background:#fff;color:#111827;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}",
+    ".wrap{max-width:720px;margin:96px auto;padding:0 32px;line-height:1.6;}",
+    "h1{font-size:24px;margin:0 0 16px;}",
+    "p{font-size:15px;margin:0 0 12px;color:#4b5563;}",
+    "code{display:block;white-space:pre-wrap;word-break:break-word;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:12px;color:#111827;}",
+    "</style>",
+    "</head>",
+    "<body>",
+    '<main class="wrap">',
+    "<h1>正在打开 CodeBuddy 登录页</h1>",
+    "<p>CodePal 正在加载 CodeBuddy 登录地址，请稍候。</p>",
+    `<p>登录地址</p><code>${htmlEscape(loginUrl)}</code>`,
+    "</main>",
+    "</body>",
+    "</html>",
+  ].join("");
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+async function showCodeBuddyLoginLoadingPage(window: BrowserWindow, loginUrl: string) {
+  if (window.isDestroyed()) {
+    return;
+  }
+  await window.loadURL(codeBuddyLoginLoadingDataUrl(loginUrl)).catch(() => undefined);
+}
+
+async function showCodeBuddyLoginErrorPage(
+  window: BrowserWindow,
+  loginUrl: string,
+  error: Error,
+) {
+  if (window.isDestroyed()) {
+    return;
+  }
+  await window.loadURL(codeBuddyLoginErrorDataUrl(loginUrl, error)).catch(() => undefined);
+}
+
 function normalizeEnterpriseId(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -408,7 +494,7 @@ async function extractPageTokenFromWindow(window: BrowserWindow): Promise<string
 
 function defaultCreateWindow(): BrowserWindow {
   return createQuotaBrowserWindow({
-    show: true,
+    show: false,
     title: "登录 CodeBuddy 用量",
   });
 }
@@ -1268,7 +1354,6 @@ export function createCodeBuddyQuotaService(options: CodeBuddyQuotaServiceOption
     };
 
     try {
-      revealLoginWindow();
       if (typeof loginWindow.once === "function") {
         loginWindow.once("ready-to-show", revealLoginWindow);
       }
@@ -1276,8 +1361,14 @@ export function createCodeBuddyQuotaService(options: CodeBuddyQuotaServiceOption
         "did-finish-load",
         onDidFinishLoad,
       );
-      const loadResult = await Promise.race([
-        loginWindow
+      const loadRemoteLoginPage = async () => {
+        await showCodeBuddyLoginLoadingPage(loginWindow, config.loginUrl);
+        revealLoginWindow();
+        await updateLoginHints();
+        if (loginWindow.isDestroyed()) {
+          return;
+        }
+        await loginWindow
           .loadURL(config.loginUrl)
           .then(() => {
             revealLoginWindow();
@@ -1289,10 +1380,19 @@ export function createCodeBuddyQuotaService(options: CodeBuddyQuotaServiceOption
               return updateLoginHints();
             }
             openError = error instanceof Error ? error : new Error(String(error));
-            revealLoginWindow();
-            return updateLoginHints();
-          })
-          .then(() => "loaded" as const),
+            console.error(
+              `[CodePal CodeBuddy Quota] login page failed to load: ${navigationErrorDetail(openError)}`,
+            );
+            return showCodeBuddyLoginErrorPage(loginWindow, config.loginUrl, openError).then(
+              () => {
+                revealLoginWindow();
+                return updateLoginHints();
+              },
+            );
+          });
+      };
+      const loadResult = await Promise.race([
+        loadRemoteLoginPage().then(() => "loaded" as const),
         waitForWindowClosedOnce(loginWindow).then(() => "closed" as const),
       ]);
       releaseInitialCookieCheck();
