@@ -23,15 +23,43 @@ type UsageAgentSummary = {
   resetHints: string[];
 };
 
-function formatPercent(value: number | undefined): string | null {
+function formatPercent(value: number | undefined, fractionDigits = 0): string | null {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return null;
   }
-  return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
+  const clamped = Math.max(0, Math.min(100, value));
+  return `${clamped.toLocaleString("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })}%`;
 }
 
-function toRemainingPercent(usedPercent: number | undefined): string | null {
-  return formatPercent(typeof usedPercent === "number" ? 100 - usedPercent : undefined);
+function toAvailablePercent(usedPercent: number | undefined, fractionDigits = 0): string | null {
+  return formatPercent(typeof usedPercent === "number" ? 100 - usedPercent : undefined, fractionDigits);
+}
+
+function formatAvailablePercent(
+  value: number | undefined,
+  i18n: ReturnType<typeof useI18n>,
+  fractionDigits = 0,
+): string | null {
+  const percent = formatPercent(value, fractionDigits);
+  return percent ? i18n.t("usage.availablePercent", { value: percent }) : null;
+}
+
+function formatCodeBuddyQuotaAmount(value: number): string {
+  return `¥${value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatCodeBuddyQuotaRawAmount(value: number): string {
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  });
 }
 
 function formatResetTime(
@@ -63,19 +91,20 @@ function summarizeCodex(
 
   const segments = limits
     .map((limit) => {
-      const percent = toRemainingPercent(limit.usedPercent);
+      const percent = toAvailablePercent(limit.usedPercent);
       const windowLabel = translateWindowLabel(limit.windowLabel, i18n.t);
       const resetTime = formatResetTime(limit.resetAt, i18n);
       if (!percent) {
         return null;
       }
+      const availableText = i18n.t("usage.availablePercent", { value: percent });
       if (settings.density === "detailed" && resetTime) {
         return [
-          { text: `${windowLabel} ${percent}`, tone: "primary" as const },
+          { text: `${windowLabel} ${availableText}`, tone: "primary" as const },
           { text: resetTime, tone: "secondary" as const },
         ];
       }
-      return [{ text: `${windowLabel} ${percent}`, tone: "primary" as const }];
+      return [{ text: `${windowLabel} ${availableText}`, tone: "primary" as const }];
     })
     .flat()
     .filter((part): part is { text: string; tone: "primary" | "secondary" } => Boolean(part));
@@ -115,19 +144,20 @@ function summarizeClaude(
   }
   const segments = limits
     .map((limit) => {
-      const percent = toRemainingPercent(limit.usedPercent);
+      const percent = toAvailablePercent(limit.usedPercent);
       const windowLabel = translateWindowLabel(limit.windowLabel, i18n.t);
       const resetTime = formatResetTime(limit.resetAt, i18n);
       if (!percent) {
         return null;
       }
+      const availableText = i18n.t("usage.availablePercent", { value: percent });
       if (settings.density === "detailed" && resetTime) {
         return [
-          { text: `${windowLabel} ${percent}`, tone: "primary" as const },
+          { text: `${windowLabel} ${availableText}`, tone: "primary" as const },
           { text: resetTime, tone: "secondary" as const },
         ];
       }
-      return [{ text: `${windowLabel} ${percent}`, tone: "primary" as const }];
+      return [{ text: `${windowLabel} ${availableText}`, tone: "primary" as const }];
     })
     .flat()
     .filter((part): part is { text: string; tone: "primary" | "secondary" } => Boolean(part));
@@ -178,14 +208,15 @@ function summarizeCursor(
       segments.push({ text: `${usedAmount} / ${limit.limit}`, tone: "primary" });
     }
   }
-  const percent = toRemainingPercent(limit.usedPercent);
+  const percent = toAvailablePercent(limit.usedPercent);
   if (percent) {
+    const availableText = i18n.t("usage.availablePercent", { value: percent });
     const resetTime = formatResetTime(limit.resetAt, i18n);
     if (settings.density === "detailed" && resetTime) {
-      segments.push({ text: percent, tone: "primary" });
+      segments.push({ text: availableText, tone: "primary" });
       segments.push({ text: resetTime, tone: "secondary" });
     } else {
-      segments.push({ text: percent, tone: "primary" });
+      segments.push({ text: availableText, tone: "primary" });
     }
   }
   if (segments.length === 0) {
@@ -219,15 +250,44 @@ function summarizeCodeBuddy(
 
   for (const limit of limits) {
     const label = translateWindowLabel(limit.windowLabel, i18n.t);
-    const remainingPercent =
+    const availablePercentValue =
       typeof limit.remaining === "number" && typeof limit.limit === "number" && limit.limit > 0
-        ? Math.round((limit.remaining / limit.limit) * 100)
-        : toRemainingPercent(limit.usedPercent)
-          ? Number.parseInt(toRemainingPercent(limit.usedPercent) ?? "", 10)
-          : null;
+        ? (limit.remaining / limit.limit) * 100
+        : typeof limit.usedPercent === "number"
+          ? 100 - limit.usedPercent
+          : undefined;
+    const availablePercent = formatPercent(availablePercentValue, 1);
+    const availableText = formatAvailablePercent(availablePercentValue, i18n, 1);
+    const hasCreditQuota =
+      limit.planType === "credits" &&
+      typeof limit.remaining === "number" &&
+      typeof limit.limit === "number" &&
+      limit.limit > 0;
 
-    if (remainingPercent !== null && Number.isFinite(remainingPercent)) {
-      segments.push({ text: `${label} ${remainingPercent}%`, tone: "primary" });
+    if (hasCreditQuota) {
+      const usedAmount = Math.max(0, limit.limit - limit.remaining);
+      segments.push({
+        text: i18n.t("usage.usedQuota", {
+          used: formatCodeBuddyQuotaAmount(usedAmount),
+          total: formatCodeBuddyQuotaAmount(limit.limit),
+        }),
+        tone: "primary",
+      });
+      if (availableText) {
+        segments.push({ text: availableText, tone: "primary" });
+      }
+      if (availablePercent) {
+        resetHints.push(
+          i18n.t("usage.codebuddyQuotaSource", {
+            label,
+            used: formatCodeBuddyQuotaRawAmount(usedAmount),
+            total: formatCodeBuddyQuotaRawAmount(limit.limit),
+            percent: availablePercent,
+          }),
+        );
+      }
+    } else if (availableText) {
+      segments.push({ text: `${label} ${availableText}`, tone: "primary" });
     }
 
     const resetTime = formatResetTime(limit.resetAt, i18n);
@@ -238,8 +298,8 @@ function summarizeCodeBuddy(
     if (resetTime) {
       resetHints.push(i18n.t("usage.reset", { label, time: resetTime }));
     }
-    if (remainingPercent !== null && Number.isFinite(remainingPercent)) {
-      resetHints.push(i18n.t("usage.remaining", { label, value: `${remainingPercent}%` }));
+    if (!hasCreditQuota && availableText) {
+      resetHints.push(`${label} ${availableText}`);
     }
   }
 

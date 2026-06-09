@@ -6,6 +6,7 @@ import {
   isResponseTarget,
   type PendingAction,
 } from "../../shared/sessionTypes";
+import { isGenericToolName, normalizeToolInvocationText } from "../shared/toolInvocationText";
 
 function firstString(
   payload: Record<string, unknown>,
@@ -15,6 +16,19 @@ function firstString(
     const value = payload[key];
     if (typeof value === "string" && value.trim()) {
       return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function firstRecord(
+  payload: Record<string, unknown>,
+  keys: readonly string[],
+): Record<string, unknown> | undefined {
+  for (const key of keys) {
+    const value = payload[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
     }
   }
   return undefined;
@@ -192,9 +206,17 @@ function pickMeta(
   unsupported?: UnsupportedActionMeta,
 ): Record<string, unknown> | undefined {
   const metaEntries: [string, string][] = [];
+  const meta = firstRecord(payload, ["meta"]);
+  const usage = firstRecord(payload, ["usage", "token_usage"]);
 
   const hookEventName = firstString(payload, ["hook_event_name"]);
   if (hookEventName) metaEntries.push(["hook_event_name", hookEventName]);
+
+  const model =
+    firstString(payload, ["model", "model_id", "modelId", "model_name", "modelName"]) ??
+    firstString(meta ?? {}, ["model", "model_id", "modelId", "model_name", "modelName"]) ??
+    firstString(usage ?? {}, ["model", "model_id", "modelId", "model_name", "modelName"]);
+  if (model) metaEntries.push(["model", model]);
 
   const cwd = firstString(payload, ["cwd"]);
   if (cwd) metaEntries.push(["cwd", cwd]);
@@ -314,15 +336,16 @@ function buildCursorActivityItems(
   }
 
   if (hookEventName === "PreToolUse" && toolName) {
+    const invocation = normalizeToolInvocationText(toolName, commandText ?? toolName);
     return [
       {
-        id: `cursor:${timestamp}:tool:${toolName}`,
+        id: `cursor:${timestamp}:tool:${invocation.toolName}`,
         kind: "tool",
         source: "tool",
-        title: toolName,
-        body: commandText ?? toolName,
+        title: invocation.toolName,
+        body: invocation.body,
         timestamp,
-        toolName,
+        toolName: invocation.toolName,
         toolPhase: "call",
       },
     ];
@@ -334,15 +357,16 @@ function buildCursorActivityItems(
       hookEventName === "beforeReadFile") &&
     toolName
   ) {
+    const invocation = normalizeToolInvocationText(toolName, commandText ?? task ?? toolName);
     return [
       {
-        id: `cursor:${timestamp}:${hookEventName}:${toolName}`,
+        id: `cursor:${timestamp}:${hookEventName}:${invocation.toolName}`,
         kind: "tool",
         source: "tool",
-        title: toolName,
-        body: commandText ?? task ?? toolName,
+        title: invocation.toolName,
+        body: invocation.body,
         timestamp,
-        toolName,
+        toolName: invocation.toolName,
         toolPhase: "call",
       },
     ];
@@ -478,6 +502,14 @@ function buildCursorActivityItems(
   return undefined;
 }
 
+function normalizeTaskFromToolActivity(
+  task: string | undefined,
+  activityItems: ActivityItem[] | undefined,
+): string | undefined {
+  const toolName = activityItems?.find((item) => item.kind === "tool")?.toolName;
+  return isGenericToolName(task) && toolName ? toolName : task;
+}
+
 export function normalizeCursorEvent(
   payload: Record<string, unknown>,
 ): StatusChangeUpstreamEvent | null {
@@ -499,13 +531,14 @@ export function normalizeCursorEvent(
   const task = unsupported ? `Unsupported Cursor action: ${unsupported.type}` : pickTask(payload);
   const status = pickStatus(payload);
   const activityItems = buildCursorActivityItems(payload, status, task, unsupported);
+  const normalizedTask = normalizeTaskFromToolActivity(task, activityItems);
 
   return {
     type: "status_change",
     sessionId: identity.id,
     tool: "cursor",
     status,
-    task,
+    task: normalizedTask,
     timestamp: pickTimestamp(payload),
     meta: pickMeta(payload, identity.source, unsupported),
     ...(activityItems ? { activityItems } : {}),

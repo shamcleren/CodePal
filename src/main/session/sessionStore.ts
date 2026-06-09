@@ -684,11 +684,35 @@ function shouldPreservePreviousStatus(
     return true;
   }
 
+  if (shouldPreserveActiveStatusForAuxiliaryEvent(prev, event)) {
+    return true;
+  }
+
   if (event.timestamp === prev.updatedAt && statusPriority(event.status) < statusPriority(prev.status)) {
     return true;
   }
 
   return false;
+}
+
+function shouldPreserveActiveStatusForAuxiliaryEvent(
+  prev: InternalSessionRecord,
+  event: SessionEvent,
+): boolean {
+  if (!isCurrentStatus(prev.status)) {
+    return false;
+  }
+  if (!isOutcomeStatus(event.status) && !isPassiveStatus(event.status)) {
+    return false;
+  }
+  if (event.pendingClosed || eventCarriesToolProgress(event)) {
+    return true;
+  }
+  return (
+    event.tool === "codex" &&
+    !isCodexSubexecutionMeta(prev.meta) &&
+    isCodexSubexecutionMeta(event.meta)
+  );
 }
 
 function resolveNextExternalApproval(
@@ -1533,9 +1557,10 @@ export function createSessionStore(options?: SessionStoreOptions) {
         promoteCodexUserFromSubexecution: promotingCodexUserFromSubexecution,
       });
       const nextProject = resolveSessionProject(prev, event, nextExternalApproval, nextMeta);
+      const nextTool = prev?.tool ?? event.tool;
       const internal: InternalSessionRecord = {
         id: sessionId,
-        tool: event.tool,
+        tool: nextTool,
         status: nextStatus,
         title: nextFirstUserPrompt ??
           (preservePreviousStatus && prev?.title

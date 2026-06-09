@@ -131,6 +131,21 @@ function disabledHistoryDiagnostics(): HistoryDiagnostics {
   };
 }
 
+function closedHistoryPage() {
+  return {
+    items: [],
+    nextCursor: null,
+    hasMore: false,
+  };
+}
+
+function handleClosedHistoryStore<T>(fallback: T, error: unknown): T {
+  if (error instanceof Error && error.message === "History store is closed") {
+    return fallback;
+  }
+  throw error;
+}
+
 function firstString(record: Record<string, unknown> | undefined, keys: string[]): string | undefined {
   if (!record) return undefined;
   for (const key of keys) {
@@ -245,18 +260,19 @@ export function registerHistoryIpcHandlers(options: RegisterHistoryIpcHandlersOp
   const failOnceSessionId = process.env.CODEPAL_E2E_HISTORY_FAIL_ONCE_SESSION?.trim() || "";
   const failedSessionIds = new Set<string>();
 
-  options.ipcMain.handle("codepal:get-history-diagnostics", () =>
-    options.historyStore
-      ? toHistoryDiagnostics(options.historyStore, options.getPersistenceEnabled())
-      : disabledHistoryDiagnostics(),
-  );
+  options.ipcMain.handle("codepal:get-history-diagnostics", () => {
+    if (!options.historyStore) {
+      return disabledHistoryDiagnostics();
+    }
+    try {
+      return toHistoryDiagnostics(options.historyStore, options.getPersistenceEnabled());
+    } catch (error) {
+      return handleClosedHistoryStore(disabledHistoryDiagnostics(), error);
+    }
+  });
   options.ipcMain.handle("codepal:get-session-history-page", (_event, payload: unknown) => {
     if (!options.historyStore) {
-      return {
-        items: [],
-        nextCursor: null,
-        hasMore: false,
-      };
+      return closedHistoryPage();
     }
     const request = payload as SessionHistoryPageRequest;
     if (
@@ -268,25 +284,37 @@ export function registerHistoryIpcHandlers(options: RegisterHistoryIpcHandlersOp
       failedSessionIds.add(request.sessionId);
       throw new Error("e2e first history load fails");
     }
-    return options.historyStore.getSessionHistoryPage(request);
+    try {
+      return options.historyStore.getSessionHistoryPage(request);
+    } catch (error) {
+      return handleClosedHistoryStore(closedHistoryPage(), error);
+    }
   });
   options.ipcMain.handle("codepal:get-session-history-summaries", (_event, payload: unknown) => {
     if (!options.historyStore) {
       return [];
     }
     const request = (payload ?? {}) as SessionHistorySummaryRequest;
-    return options.historyStore
-      .getRecentSessions({
-        maxAgeMs: normalizeSummaryMaxAgeMs(request.maxAgeMs),
-        limit: normalizeSummaryLimit(request.limit),
-      })
-      .map(toSessionHistorySummary);
+    try {
+      return options.historyStore
+        .getRecentSessions({
+          maxAgeMs: normalizeSummaryMaxAgeMs(request.maxAgeMs),
+          limit: normalizeSummaryLimit(request.limit),
+        })
+        .map(toSessionHistorySummary);
+    } catch (error) {
+      return handleClosedHistoryStore([], error);
+    }
   });
   options.ipcMain.handle("codepal:clear-history-store", () => {
     if (!options.historyStore) {
       return disabledHistoryDiagnostics();
     }
-    options.historyStore.clearAll();
-    return toHistoryDiagnostics(options.historyStore, options.getPersistenceEnabled());
+    try {
+      options.historyStore.clearAll();
+      return toHistoryDiagnostics(options.historyStore, options.getPersistenceEnabled());
+    } catch (error) {
+      return handleClosedHistoryStore(disabledHistoryDiagnostics(), error);
+    }
   });
 }

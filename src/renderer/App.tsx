@@ -15,8 +15,14 @@ import type {
 } from "../shared/integrationTypes";
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { ModelPricing, UsageOverview } from "../shared/usageTypes";
+import type {
+  CodeBuddyQuotaConnectResult,
+  CodeBuddyQuotaDiagnostics,
+  CodeBuddyQuotaStatus,
+} from "../shared/codebuddyQuotaTypes";
 import type { ProviderGatewayStatus } from "../shared/providerGatewayTypes";
 import type { ProviderGatewayClientSetupTarget } from "../shared/providerGatewayTypes";
+import { CodeBuddyQuotaPanel } from "./components/CodeBuddyQuotaPanel";
 import { DisplayPreferencesPanel } from "./components/DisplayPreferencesPanel";
 import { HistorySettingsPanel } from "./components/HistorySettingsPanel";
 import { IntegrationPanel } from "./components/IntegrationPanel";
@@ -142,6 +148,9 @@ export function App() {
     useState<ProviderGatewayClientSetupTarget | null>(null);
   const [providerGatewayFeedback, setProviderGatewayFeedback] = useState<string | null>(null);
   const [providerGatewayError, setProviderGatewayError] = useState<string | null>(null);
+  const [codeBuddyQuotaStatus, setCodeBuddyQuotaStatus] = useState<CodeBuddyQuotaStatus | null>(null);
+  const [codeBuddyQuotaBusyEndpoint, setCodeBuddyQuotaBusyEndpoint] =
+    useState<"code" | "enterprise" | null>(null);
   const [historyDiagnostics, setHistoryDiagnostics] = useState<HistoryDiagnostics | null>(null);
   const [historyStoreClearing, setHistoryStoreClearing] = useState(false);
   const [historyStoreVersion, setHistoryStoreVersion] = useState(0);
@@ -435,10 +444,64 @@ export function App() {
       });
   }
 
+  function refreshCodeBuddyQuotaStatus() {
+    void window.codepal.getCodeBuddyQuotaStatus().then((status) => {
+      setCodeBuddyQuotaStatus(status);
+    });
+  }
+
+  function runCodeBuddyQuotaAction(
+    endpoint: "code" | "enterprise",
+    action: (
+      endpoint: "code" | "enterprise",
+    ) => Promise<CodeBuddyQuotaConnectResult | CodeBuddyQuotaDiagnostics | null>,
+  ) {
+    setCodeBuddyQuotaBusyEndpoint(endpoint);
+    void action(endpoint)
+      .then((result) => {
+        const diagnostics =
+          result && "diagnostics" in result ? result.diagnostics : result;
+        if (diagnostics) {
+          setCodeBuddyQuotaStatus((current) => {
+            const emptyDiagnostics: CodeBuddyQuotaDiagnostics = {
+              state: "not_connected",
+              message: "",
+              endpoint: "",
+            };
+            if (!current) {
+              return endpoint === "code"
+                ? { code: diagnostics, enterprise: emptyDiagnostics }
+                : { code: emptyDiagnostics, enterprise: diagnostics };
+            }
+            return {
+              ...current,
+              [endpoint]: diagnostics,
+            };
+          });
+        }
+        return window.codepal.getUsageOverview().catch((error: unknown) => {
+          console.error("[CodePal CodeBuddy Quota] failed to refresh usage overview:", error);
+          return null;
+        });
+      })
+      .then((overview) => {
+        if (overview) {
+          setUsageOverview(overview);
+        }
+      })
+      .catch((error: unknown) => {
+        console.error("[CodePal CodeBuddy Quota] action failed:", error);
+      })
+      .finally(() => {
+        setCodeBuddyQuotaBusyEndpoint(null);
+      });
+  }
+
   function refreshSettingsOverview() {
     refreshIntegrations();
     void loadProviderGatewayStatus();
     void loadHistoryDiagnostics(appSettings.history.persistenceEnabled);
+    refreshCodeBuddyQuotaStatus();
   }
 
   function applyIntegrationMutation(
@@ -668,6 +731,18 @@ export function App() {
 
   useEffect(() => {
     let active = true;
+    void window.codepal.getCodeBuddyQuotaStatus().then((status) => {
+      if (active) {
+        setCodeBuddyQuotaStatus(status);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     const unsub = window.codepal.onUpdateState((nextState) => {
       setUpdateState(nextState);
       if (
@@ -865,7 +940,10 @@ export function App() {
           />
         </>
       ) : activeView === "analytics" ? (
-        <AnalyticsPage />
+        <AnalyticsPage
+          usageOverview={usageOverview}
+          usageDisplaySettings={appSettings.display}
+        />
       ) : (
         <WorkReviewPage
           sessions={rows}
@@ -1018,6 +1096,36 @@ export function App() {
               ) : null}
               {activeSettingsSection === "preferences" ? (
                 <div className="settings-stack">
+                  <CodeBuddyQuotaPanel
+                    settings={appSettings.codebuddy}
+                    status={codeBuddyQuotaStatus}
+                    busyEndpoint={codeBuddyQuotaBusyEndpoint}
+                    onLogin={(endpoint) =>
+                      runCodeBuddyQuotaAction(endpoint, window.codepal.connectCodeBuddyQuota)
+                    }
+                    onRefresh={(endpoint) =>
+                      runCodeBuddyQuotaAction(endpoint, window.codepal.refreshCodeBuddyQuota)
+                    }
+                    onClear={(endpoint) =>
+                      runCodeBuddyQuotaAction(endpoint, window.codepal.clearCodeBuddyQuotaAuth)
+                    }
+                    onSaveConfig={(patch) => {
+                      const { refreshIntervalMinutes, ...codePatch } = patch;
+                      void updateAppSettings({
+                        codebuddy: {
+                          refreshIntervalMinutes,
+                          code: codePatch,
+                          enterprise: {
+                            enabled: false,
+                            loginUrl: "",
+                            quotaEndpoint: "",
+                          },
+                        },
+                      }).then(() => {
+                        refreshCodeBuddyQuotaStatus();
+                      });
+                    }}
+                  />
                   <DisplayPreferencesPanel
                     showHeader={false}
                     settings={appSettings.display}

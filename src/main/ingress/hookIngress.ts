@@ -33,6 +33,20 @@ const CODEBUDDY_HOOK_EVENT_NAMES = new Set([
   "unstable_Checkpoint",
 ]);
 
+const CURSOR_BRIDGE_HOOK_EVENT_NAMES = new Set([
+  "beforeSubmitPrompt",
+  "beforeReadFile",
+  "beforeMCPExecution",
+  "beforeShellExecution",
+  "afterAgentResponse",
+  "afterAgentThought",
+  "afterFileEdit",
+  "afterMCPExecution",
+  "afterShellExecution",
+  "preToolUse",
+  "postToolUse",
+]);
+
 /**
  * Cursor/CodeBuddy 等非规范信封路径：仅当根上存在 `pendingAction` 键时才解释该字段。
  * - 缺键：不碰 session 里已有 pending（返回 undefined，事件不携带 pendingAction）。
@@ -105,6 +119,37 @@ function isCursorRawPayload(o: Record<string, unknown>): boolean {
   return o.hook_event_name === "StatusChange";
 }
 
+function metaRecord(o: Record<string, unknown>): Record<string, unknown> | undefined {
+  const meta = o.meta;
+  return meta && typeof meta === "object" && !Array.isArray(meta)
+    ? (meta as Record<string, unknown>)
+    : undefined;
+}
+
+function cursorBridgeHookEventName(o: Record<string, unknown>): string | undefined {
+  return firstString(o, ["hook_event_name"]) ?? firstString(metaRecord(o) ?? {}, ["hook_event_name"]);
+}
+
+function isCursorBridgeCanonicalPayload(o: Record<string, unknown>): boolean {
+  if (o.source === "cursor") return true;
+  const meta = metaRecord(o);
+  if (meta?.source === "cursor") return true;
+  const hookEventName = cursorBridgeHookEventName(o);
+  return Boolean(hookEventName && CURSOR_BRIDGE_HOOK_EVENT_NAMES.has(hookEventName));
+}
+
+function cursorPayloadFromCanonical(o: Record<string, unknown>): Record<string, unknown> {
+  const meta = metaRecord(o) ?? {};
+  const hookEventName = cursorBridgeHookEventName(o);
+  return {
+    ...meta,
+    ...o,
+    ...(hookEventName ? { hook_event_name: hookEventName } : {}),
+    tool: "cursor",
+    source: "cursor",
+  };
+}
+
 function looksLikeCanonicalStatusChange(o: Record<string, unknown>): boolean {
   return (
     o.type === "status_change" &&
@@ -148,16 +193,22 @@ function firstNumber(payload: Record<string, unknown>, keys: readonly string[]):
   return undefined;
 }
 
-function nestedNumber(
+function nestedFirstNumber(
   payload: Record<string, unknown> | undefined,
-  parentKey: string,
-  childKey: string,
+  parentKeys: readonly string[],
+  childKeys: readonly string[],
 ): number | undefined {
-  const parent = payload?.[parentKey];
-  if (!parent || typeof parent !== "object") {
-    return undefined;
+  for (const parentKey of parentKeys) {
+    const parent = payload?.[parentKey];
+    if (!parent || typeof parent !== "object") {
+      continue;
+    }
+    const value = firstNumber(parent as Record<string, unknown>, childKeys);
+    if (value !== undefined) {
+      return value;
+    }
   }
-  return firstNumber(parent as Record<string, unknown>, [childKey]);
+  return undefined;
 }
 
 function pickRawSessionId(payload: Record<string, unknown>): string | undefined {
@@ -191,27 +242,51 @@ function usageSnapshotFromRecord(payload: Record<string, unknown>): UsageSnapsho
   const rateLimits = firstRecord(payload, ["rate_limits", "rateLimits"]);
   const context = firstRecord(payload, ["context", "context_window"]);
   const meta = firstRecord(payload, ["meta"]);
+  const model =
+    firstString(payload, ["model", "model_id", "modelId", "model_name", "modelName"]) ??
+    firstString(meta ?? {}, ["model", "model_id", "modelId", "model_name", "modelName"]) ??
+    firstString(usage ?? {}, ["model", "model_id", "modelId", "model_name", "modelName"]);
 
   const tokenSource = usage ?? meta;
-  const total = firstNumber(payload, ["total_tokens"]) ?? firstNumber(tokenSource ?? {}, ["total", "total_tokens"]);
+  const total =
+    firstNumber(payload, ["total_tokens", "totalTokens"]) ??
+    firstNumber(tokenSource ?? {}, ["total", "total_tokens", "totalTokens"]);
   const nestedCachedInput =
-    nestedNumber(tokenSource, "prompt_tokens_details", "cached_tokens") ??
-    nestedNumber(tokenSource, "input_tokens_details", "cached_tokens");
+    nestedFirstNumber(
+      tokenSource,
+      ["prompt_tokens_details", "promptTokensDetails", "input_tokens_details", "inputTokensDetails"],
+      ["cached_tokens", "cachedTokens"],
+    );
   const promptCacheMissTokens =
-    firstNumber(payload, ["prompt_cache_miss_tokens"]) ??
-    firstNumber(tokenSource ?? {}, ["prompt_cache_miss_tokens"]);
+    firstNumber(payload, ["prompt_cache_miss_tokens", "promptCacheMissTokens"]) ??
+    firstNumber(tokenSource ?? {}, ["prompt_cache_miss_tokens", "promptCacheMissTokens"]);
   const promptTokens =
-    firstNumber(payload, ["prompt_tokens"]) ??
+    firstNumber(payload, ["prompt_tokens", "promptTokens"]) ??
     firstNumber(tokenSource ?? {}, ["promptTokens", "prompt_tokens"]);
   const rawInput =
-    firstNumber(payload, ["input_tokens"]) ??
-    firstNumber(tokenSource ?? {}, ["input", "input_tokens"]);
+    firstNumber(payload, ["input_tokens", "inputTokens"]) ??
+    firstNumber(tokenSource ?? {}, ["input", "input_tokens", "inputTokens"]);
   const cachedInput =
-    firstNumber(payload, ["cache_read_input_tokens", "cached_input_tokens", "prompt_cache_hit_tokens"]) ??
+    firstNumber(payload, [
+      "cacheReadTokens",
+      "cache_read_tokens",
+      "cacheReadInputTokens",
+      "cache_read_input_tokens",
+      "cachedInput",
+      "cachedInputTokens",
+      "cached_input_tokens",
+      "promptCacheHitTokens",
+      "prompt_cache_hit_tokens",
+    ]) ??
     firstNumber(tokenSource ?? {}, [
+      "cacheReadTokens",
+      "cache_read_tokens",
+      "cacheReadInputTokens",
+      "cachedInputTokens",
       "cachedInput",
       "cache_read_input_tokens",
       "cached_input_tokens",
+      "promptCacheHitTokens",
       "prompt_cache_hit_tokens",
     ]) ??
     nestedCachedInput;
@@ -219,28 +294,79 @@ function usageSnapshotFromRecord(payload: Record<string, unknown>): UsageSnapsho
     promptCacheMissTokens ??
     (promptTokens !== undefined && nestedCachedInput !== undefined
       ? Math.max(0, promptTokens - nestedCachedInput)
-      : rawInput !== undefined && nestedNumber(tokenSource, "input_tokens_details", "cached_tokens") !== undefined
+      : rawInput !== undefined && nestedFirstNumber(
+          tokenSource,
+          ["input_tokens_details", "inputTokensDetails"],
+          ["cached_tokens", "cachedTokens"],
+        ) !== undefined
         ? Math.max(0, rawInput - (cachedInput ?? 0))
         : rawInput);
   const output =
-    firstNumber(payload, ["output_tokens", "completion_tokens"]) ??
-    firstNumber(tokenSource ?? {}, ["output", "output_tokens", "completion_tokens"]);
+    firstNumber(payload, ["output_tokens", "outputTokens", "completion_tokens", "completionTokens"]) ??
+    firstNumber(tokenSource ?? {}, [
+      "output",
+      "output_tokens",
+      "outputTokens",
+      "completion_tokens",
+      "completionTokens",
+    ]);
   const reasoningOutput =
-    firstNumber(payload, ["reasoning_output_tokens"]) ??
-    firstNumber(tokenSource ?? {}, ["reasoningOutput", "reasoning_output_tokens"]) ??
-    nestedNumber(tokenSource, "completion_tokens_details", "reasoning_tokens") ??
-    nestedNumber(tokenSource, "output_tokens_details", "reasoning_tokens");
+    firstNumber(payload, ["reasoning_output_tokens", "reasoningOutputTokens", "reasoningTokens"]) ??
+    firstNumber(tokenSource ?? {}, [
+      "reasoningOutput",
+      "reasoning_output_tokens",
+      "reasoningOutputTokens",
+      "reasoningTokens",
+    ]) ??
+    nestedFirstNumber(
+      tokenSource,
+      ["completion_tokens_details", "completionTokensDetails", "output_tokens_details", "outputTokensDetails"],
+      ["reasoning_tokens", "reasoningTokens"],
+    );
 
   const contextUsed =
-    firstNumber(context ?? {}, ["used"]) ??
-    firstNumber(payload, ["context_used"]) ??
+    firstNumber(context ?? {}, [
+      "used",
+      "usedTokens",
+      "contextUsed",
+      "context_used",
+      "contextTokens",
+      "context_tokens",
+      "contextUsedTokens",
+      "context_used_tokens",
+    ]) ??
+    firstNumber(payload, [
+      "context_used",
+      "contextUsed",
+      "contextTokens",
+      "context_tokens",
+      "contextUsedTokens",
+      "context_used_tokens",
+    ]) ??
     total;
   const contextMax =
-    firstNumber(context ?? {}, ["max"]) ??
-    firstNumber(payload, ["context_max", "context_window"]) ??
-    firstNumber(meta ?? {}, ["model_context_window"]);
+    firstNumber(context ?? {}, [
+      "max",
+      "maxTokens",
+      "contextMax",
+      "context_max",
+      "contextWindow",
+      "context_window",
+      "maxContextTokens",
+      "max_context_tokens",
+    ]) ??
+    firstNumber(payload, [
+      "context_max",
+      "contextMax",
+      "context_window",
+      "contextWindow",
+      "maxContextTokens",
+      "max_context_tokens",
+    ]) ??
+    firstNumber(meta ?? {}, ["model_context_window", "modelContextWindow"]);
   const contextPercent =
-    firstNumber(context ?? {}, ["percent", "used_percent"]) ??
+    firstNumber(context ?? {}, ["percent", "used_percent", "usedPercent", "contextPercent", "context_percent"]) ??
+    firstNumber(payload, ["context_percent", "contextPercent", "context_used_percent", "contextUsedPercent"]) ??
     (contextUsed !== undefined && contextMax !== undefined && contextMax > 0
       ? (contextUsed / contextMax) * 100
       : undefined);
@@ -279,6 +405,7 @@ function usageSnapshotFromRecord(payload: Record<string, unknown>): UsageSnapsho
     source: "session-derived",
     updatedAt: pickRawTimestamp(payload),
     title: firstString(payload, ["task", "title"]),
+    ...(model ? { meta: { model } } : {}),
     tokens:
       input !== undefined ||
       output !== undefined ||
@@ -338,7 +465,9 @@ export function lineToSessionEvent(line: string): SessionEvent | null {
 
   let normalized = null;
   if (isStatusChangeUpstreamEvent(parsed)) {
-    normalized = parsed;
+    normalized = isCursorBridgeCanonicalPayload(o)
+      ? normalizeCursorEvent(cursorPayloadFromCanonical(o))
+      : parsed;
   } else if (isCursorRawPayload(o)) {
     normalized = normalizeCursorEvent(o);
   } else if (isCodeBuddyRawPayload(o)) {
@@ -422,12 +551,18 @@ export function lineToUsageSnapshot(line: string): UsageSnapshot | null {
   if (isStatusChangeUpstreamEvent(parsed)) {
     const canonical = parsed as Record<string, unknown>;
     const meta = canonical.meta && typeof canonical.meta === "object" ? (canonical.meta as Record<string, unknown>) : {};
+    const sourceRecord = isCursorBridgeCanonicalPayload(canonical)
+      ? cursorPayloadFromCanonical(canonical)
+      : {
+          ...meta,
+          tool: canonical.tool,
+          sessionId: canonical.sessionId,
+          timestamp: canonical.timestamp,
+          task: canonical.task,
+        };
     return usageSnapshotFromRecord({
       ...meta,
-      tool: canonical.tool,
-      sessionId: canonical.sessionId,
-      timestamp: canonical.timestamp,
-      task: canonical.task,
+      ...sourceRecord,
     });
   }
 

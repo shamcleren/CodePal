@@ -142,6 +142,8 @@ export function startSessionWatchers(options: StartSessionWatchersOptions) {
           options.onSessionEventAccepted,
           event,
         ),
+      onUsageSnapshot: (snapshot) =>
+        routeUsageSnapshot(options.usageStore, options.broadcastUsageOverview, snapshot),
       onTokenUsage: options.writeTokenUsage,
     }),
     jetbrains: jetBrainsLogRoot

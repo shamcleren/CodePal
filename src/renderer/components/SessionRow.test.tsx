@@ -105,6 +105,23 @@ describe("SessionRow pending action", () => {
     );
   });
 
+  it("lets long model labels flow inline with the title", () => {
+    const html = renderRow(
+      baseRow({
+        tool: "codebuddy",
+        model: "Claude-Opus-4.8 (1M context)",
+        titleLabel: "clear",
+      }),
+    );
+
+    expect(html).toContain("session-row__headline");
+    expect(html).toContain("Claude-Opus-4.8 (1M context)");
+    expect(html).toContain("clear");
+    expect(html.indexOf("Claude-Opus-4.8 (1M context)")).toBeLessThan(
+      html.indexOf("clear"),
+    );
+  });
+
   it("renders pending action as read-only when pendingActions has one item", () => {
     const html = renderRow(
       baseRow({

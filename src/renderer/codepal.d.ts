@@ -18,6 +18,11 @@ import type { SessionActionType, SessionCapabilityManifest } from "../shared/cap
 import type { AppUpdateState } from "../shared/updateTypes";
 import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry, SessionTokenUsageResult } from "../shared/usageTypes";
 import type {
+  CodeBuddyQuotaConnectResult,
+  CodeBuddyQuotaDiagnostics,
+  CodeBuddyQuotaStatus,
+} from "../shared/codebuddyQuotaTypes";
+import type {
   ProviderGatewayClientSetupUpdateResult,
   ProviderGatewayClientSetupTarget,
   ProviderGatewayProviderUpdateResult,
@@ -55,6 +60,10 @@ export type CodePalApi = {
   ) => Promise<string>;
   generateLlmReport: (startMs: number, endMs: number, options?: { model?: string; redaction?: { redactSessionTitles?: boolean; redactModelNames?: boolean } }) => Promise<{ ok: boolean; report?: string; error?: string; model: string; estimatedInputTokens: number }>;
   getModelPricing: () => Promise<ModelPricing[]>;
+  getCodeBuddyQuotaStatus: () => Promise<CodeBuddyQuotaStatus | null>;
+  refreshCodeBuddyQuota: (endpoint: "code" | "enterprise") => Promise<CodeBuddyQuotaConnectResult | null>;
+  connectCodeBuddyQuota: (endpoint: "code" | "enterprise") => Promise<CodeBuddyQuotaConnectResult | null>;
+  clearCodeBuddyQuotaAuth: (endpoint: "code" | "enterprise") => Promise<CodeBuddyQuotaDiagnostics | null>;
   upsertModelPricing: (pricing: ModelPricing) => Promise<void>;
   getAppSettings: () => Promise<AppSettings>;
   getHomeDir: () => Promise<string>;

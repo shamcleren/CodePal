@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { StatusChangeUpstreamEvent } from "../shared/eventEnvelope";
 import type { ActivityItem } from "../../shared/sessionTypes";
+import { normalizeToolInvocationText } from "../shared/toolInvocationText";
 
 function parseLine(line: string): Record<string, unknown> | null {
   try {
@@ -332,7 +333,7 @@ export function normalizeCodexLogEvent(
         break;
       }
       case "function_call": {
-        const toolName =
+        const rawToolName =
           (typeof payload.name === "string" && payload.name.trim()) ||
           (typeof payload.tool_name === "string" && payload.tool_name.trim()) ||
           "Tool";
@@ -340,7 +341,12 @@ export function normalizeCodexLogEvent(
           (typeof payload.call_id === "string" && payload.call_id.trim()) ||
           (typeof payload.callId === "string" && payload.callId.trim()) ||
           undefined;
-        const argumentsText = stringifyValue(payload.arguments) ?? stringifyValue(payload.input) ?? toolName;
+        const rawArgumentsText =
+          stringifyValue(payload.arguments) ?? stringifyValue(payload.input) ?? rawToolName;
+        const { toolName, body: argumentsText } = normalizeToolInvocationText(
+          rawToolName,
+          rawArgumentsText,
+        );
         status = "running";
         task = toolName;
         activityItems = [

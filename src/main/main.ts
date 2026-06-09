@@ -2,7 +2,7 @@ import { BrowserWindow, Tray, app, clipboard, dialog, ipcMain, shell } from "ele
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { defaultProviderGatewaySettings, type AppSettingsPatch, type ProviderGatewayConfig } from "../shared/appSettings";
+import { defaultProviderGatewaySettings, type AppSettings, type AppSettingsPatch, type ProviderGatewayConfig } from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
 import { generateHtmlReport } from "./report/generateHtmlReport";
 import { buildReportFacts } from "../shared/reportFacts";
@@ -33,6 +33,7 @@ import { createIpcHub } from "./ipc/ipcHub";
 import { startTcpListener } from "./ipc/startTcpListener";
 import { createSessionBroadcastScheduler } from "./session/createSessionBroadcastScheduler";
 import { createSettingsService } from "./settings/settingsService";
+import { resolveTemplateSettingsPath, resolveWritableSettingsPath } from "./settings/settingsPath";
 import { createSessionStore } from "./session/sessionStore";
 import { startSessionWatchers } from "./sessionWatchersBootstrap";
 import { createTray } from "./tray/createTray";
@@ -53,6 +54,8 @@ import {
   type ProviderGatewayHealthCheckSummary,
 } from "../shared/providerGatewayTypes";
 import { createUsageSnapshotCache, hydrateUsageStoreFromCache } from "./usage/usageSnapshotCache";
+import { tokenUsageWriteFromUsageSnapshot } from "./usage/usageSnapshotTokenUsage";
+import { createCodeBuddyQuotaRuntime } from "./usage/codebuddyQuotaRuntime";
 import { createUsageStore } from "./usage/usageStore";
 import { createUpdateService } from "./update/updateService";
 import {
@@ -106,6 +109,7 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let pendingExpirySweepTimer: ReturnType<typeof setInterval> | null = null;
 let sessionWatchers: ReturnType<typeof startSessionWatchers> | null = null;
+let codeBuddyQuotaRuntime: ReturnType<typeof createCodeBuddyQuotaRuntime> | null = null;
 let historyStore: ReturnType<typeof createAppHistoryStore> | null = null;
 let historyWriter: ReturnType<typeof createDeferredHistoryWriter> | null = null;
 let usageBackfillAbortController: AbortController | null = null;
@@ -165,11 +169,22 @@ const sessionBroadcastScheduler = createSessionBroadcastScheduler(broadcastSessi
 function broadcastUsageOverview() {
   const win = mainWindow;
   if (!win || win.isDestroyed()) return;
-  const payload: UsageOverview = usageStore.getOverview();
-  if (historyStore) {
-    payload.pricing = historyStore.getModelPricing();
-  }
+  const payload = usageOverviewForRenderer(historyStore);
   win.webContents.send("codepal:usage-overview", payload);
+}
+
+function usageOverviewForRenderer(currentHistoryStore: ReturnType<typeof createAppHistoryStore> | null) {
+  const payload: UsageOverview = usageStore.getOverview();
+  if (currentHistoryStore) {
+    try {
+      payload.pricing = currentHistoryStore.getModelPricing();
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "History store is closed") {
+        throw error;
+      }
+    }
+  }
+  return payload;
 }
 
 function broadcastUpdateState(state: AppUpdateState) {
@@ -269,6 +284,20 @@ function resolveReportLocale(setting: AppLocale, systemLocale: string | undefine
   return systemLocale?.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
 }
 
+function applyHistorySettingsAtRuntimeSafely(
+  currentHistoryStore: ReturnType<typeof createAppHistoryStore>,
+  settings: Pick<AppSettings, "history">,
+) {
+  try {
+    applyHistorySettingsAtRuntime(currentHistoryStore, settings);
+  } catch (error) {
+    console.error(
+      "[CodePal History] failed to apply runtime settings:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 function wireActionResponseIpc(
   settingsService: ReturnType<typeof createSettingsService>,
   gatewaySecretStore: GatewaySecretStore,
@@ -295,7 +324,7 @@ function wireActionResponseIpc(
     return sessions;
   });
   ipcMain.handle("codepal:get-usage-overview", () => {
-    return usageStore.getOverview();
+    return usageOverviewForRenderer(currentHistoryStore);
   });
   ipcMain.handle("codepal:get-token-stats", (_event, startMs: number, endMs: number, agent?: string) => {
     if (!currentHistoryStore) {
@@ -499,8 +528,9 @@ function wireActionResponseIpc(
   ipcMain.handle("codepal:reload-app-settings", () => {
     const settings = settingsService.reloadSettings();
     if (currentHistoryStore) {
-      applyHistorySettingsAtRuntime(currentHistoryStore, settings);
+      applyHistorySettingsAtRuntimeSafely(currentHistoryStore, settings);
     }
+    codeBuddyQuotaRuntime?.updateSettings(settings.codebuddy);
     return settings;
   });
   ipcMain.handle("codepal:get-app-settings-path", () => settingsService.filePath);
@@ -511,9 +541,31 @@ function wireActionResponseIpc(
       currentHistoryStore &&
       shouldApplyHistorySettingsAtRuntime(previousSettings, settings)
     ) {
-      applyHistorySettingsAtRuntime(currentHistoryStore, settings);
+      applyHistorySettingsAtRuntimeSafely(currentHistoryStore, settings);
     }
+    codeBuddyQuotaRuntime?.updateSettings(settings.codebuddy);
     return settings;
+  });
+  ipcMain.handle("codepal:get-codebuddy-quota-status", async () => {
+    return codeBuddyQuotaRuntime?.getStatus() ?? null;
+  });
+  ipcMain.handle("codepal:refresh-codebuddy-quota", async (_event, endpoint: unknown) => {
+    if (endpoint !== "code" && endpoint !== "enterprise") {
+      throw new Error("invalid CodeBuddy quota endpoint");
+    }
+    return codeBuddyQuotaRuntime?.refreshUsage(endpoint) ?? null;
+  });
+  ipcMain.handle("codepal:connect-codebuddy-quota", async (_event, endpoint: unknown) => {
+    if (endpoint !== "code" && endpoint !== "enterprise") {
+      throw new Error("invalid CodeBuddy quota endpoint");
+    }
+    return codeBuddyQuotaRuntime?.connectAndSync(endpoint) ?? null;
+  });
+  ipcMain.handle("codepal:clear-codebuddy-quota-auth", async (_event, endpoint: unknown) => {
+    if (endpoint !== "code" && endpoint !== "enterprise") {
+      throw new Error("invalid CodeBuddy quota endpoint");
+    }
+    return codeBuddyQuotaRuntime?.clearAuth(endpoint) ?? null;
   });
   ipcMain.handle("codepal:get-provider-gateway-status", () => {
     return providerGatewayStatusForRenderer(settingsService, gatewaySecretStore, homeDir);
@@ -1007,6 +1059,14 @@ async function wireIpcHub(
       const usageSnapshot = lineToUsageSnapshot(line);
       if (usageSnapshot) {
         usageStore.applySnapshot(usageSnapshot);
+        const tokenUsage = tokenUsageWriteFromUsageSnapshot(usageSnapshot);
+        if (tokenUsage && currentHistoryStore) {
+          try {
+            currentHistoryStore.writeTokenUsage(tokenUsage);
+          } catch (error) {
+            console.error("[CodePal] Failed to persist token usage:", (error as Error).message);
+          }
+        }
         if (
           usageSnapshot.agent === "claude" &&
           usageSnapshot.source === "statusline-derived" &&
@@ -1464,6 +1524,8 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         pendingExpirySweepTimer = null;
       }
       sessionBroadcastScheduler.cancel();
+      codeBuddyQuotaRuntime?.stop();
+      codeBuddyQuotaRuntime = null;
       sessionWatchers?.stop();
       sessionWatchers = null;
       historyWriter?.close();
@@ -1488,15 +1550,11 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
     void app.whenReady().then(async () => {
       applySilentE2EWindowPolicy();
       const homeDir = process.env.CODEPAL_HOME_DIR?.trim() || app.getPath("home");
-      const templateSettingsPath = app.isPackaged
-        ? path.join(app.getAppPath(), "config", "settings.template.yaml")
-        : path.join(app.getAppPath(), "config", "settings.template.yaml");
-      const settingsPathOverride = process.env.CODEPAL_SETTINGS_PATH?.trim();
-      const writableSettingsPath = settingsPathOverride
-        ? settingsPathOverride
-        : app.isPackaged
-        ? path.join(app.getPath("userData"), "settings.yaml")
-        : path.join(app.getAppPath(), "config", "settings-dev.yaml");
+      const templateSettingsPath = resolveTemplateSettingsPath(app.getAppPath());
+      const writableSettingsPath = resolveWritableSettingsPath({
+        override: process.env.CODEPAL_SETTINGS_PATH,
+        userDataPath: app.getPath("userData"),
+      });
       const settingsService = createSettingsService({
         writablePath: writableSettingsPath,
         templatePath: templateSettingsPath,
@@ -1576,6 +1634,12 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         filePath: path.join(app.getPath("userData"), "usage-snapshot-cache.json"),
       });
       hydrateUsageStoreFromCache(usageSnapshotCache, usageStore);
+      codeBuddyQuotaRuntime = createCodeBuddyQuotaRuntime({
+        settings: appSettings.codebuddy,
+        onUsageSnapshot: (snapshot) => usageStore.applySnapshot(snapshot),
+        broadcastUsageOverview,
+      });
+      codeBuddyQuotaRuntime.start();
       const resolvedAppPath = normalizeAppPath(app.getAppPath()) ?? app.getAppPath();
       const integrationService = createIntegrationService({
         homeDir,

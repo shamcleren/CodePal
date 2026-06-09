@@ -116,6 +116,41 @@ describe("normalizeCodeBuddyEvent", () => {
     });
   });
 
+  it("unwraps XML invoke text from generic PreToolUse calls", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-31T12:00:00.000Z"));
+
+    const event = normalizeCodeBuddyEvent({
+      session_id: "cb-session-xml-call",
+      hook_event_name: "PreToolUse",
+      tool_name: "call",
+      tool_input: [
+        "call",
+        "<invoke name=\"Read\">",
+        "<parameter name=\"path\">/Users/example/project/src/autochunk.py</parameter>",
+        "</invoke>",
+      ].join("\n"),
+    });
+
+    expect(event).toMatchObject({
+      sessionId: "cb-session-xml-call",
+      tool: "codebuddy",
+      status: "running",
+      task: "Read",
+      activityItems: [
+        expect.objectContaining({
+          kind: "tool",
+          source: "tool",
+          title: "Read",
+          body: "/Users/example/project/src/autochunk.py",
+          toolName: "Read",
+          toolPhase: "call",
+        }),
+      ],
+      timestamp: Date.parse("2026-03-31T12:00:00.000Z"),
+    });
+  });
+
   it("maps PostToolUse with nested response.result.output to a readable tool result body", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-31T12:00:00.000Z"));

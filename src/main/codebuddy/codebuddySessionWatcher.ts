@@ -7,7 +7,7 @@ import {
 } from "../../adapters/codebuddy/normalizeCodeBuddyUiMessage";
 import { isSessionStatus, type ActivityItem } from "../../shared/sessionTypes";
 import type { ProjectAttribution } from "../../shared/projectAttribution";
-import type { TokenUsageWrite } from "../../shared/usageTypes";
+import type { TokenUsageWrite, UsageContext, UsageSnapshot } from "../../shared/usageTypes";
 import { ACTIVE_SESSION_STALENESS_MS, type SessionEvent } from "../session/sessionStore";
 import { createAdaptivePollScheduler } from "../session/createAdaptivePollScheduler";
 import { resolveProjectAttribution } from "../history/projectAttribution";
@@ -17,6 +17,7 @@ type CodeBuddySessionWatcherOptions = {
   appTasksRoot?: string;
   appHistoryRoot?: string;
   onEvent: (event: SessionEvent) => void;
+  onUsageSnapshot?: (snapshot: UsageSnapshot) => void;
   onTokenUsage?: (entry: TokenUsageWrite) => void;
   pollIntervalMs?: number;
   initialBootstrapLookbackMs?: number;
@@ -204,13 +205,34 @@ function firstNumberValue(
   return undefined;
 }
 
-function nestedNumber(
+function firstRecord(
   record: Record<string, unknown> | null,
-  parentKey: string,
-  childKey: string,
+  keys: readonly string[],
+): Record<string, unknown> | null {
+  if (!record) return null;
+  for (const key of keys) {
+    const value = record[key];
+    const candidate = asRecord(value);
+    if (candidate) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function nestedFirstNumber(
+  record: Record<string, unknown> | null,
+  parentKeys: readonly string[],
+  childKeys: readonly string[],
 ): number | undefined {
-  const parent = asRecord(record?.[parentKey]);
-  return firstNumberValue(parent, [childKey]);
+  for (const parentKey of parentKeys) {
+    const parent = asRecord(record?.[parentKey]);
+    const value = firstNumberValue(parent, childKeys);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 function extractCacheReadTokens(usage: Record<string, unknown>): number {
@@ -218,19 +240,28 @@ function extractCacheReadTokens(usage: Record<string, unknown>): number {
     firstNumberValue(usage, [
       "cacheReadTokens",
       "cache_read_tokens",
+      "cacheReadInputTokens",
       "cache_read_input_tokens",
+      "cachedInput",
       "cachedInputTokens",
       "cached_input_tokens",
+      "promptCacheHitTokens",
       "prompt_cache_hit_tokens",
     ]) ??
-    nestedNumber(usage, "prompt_tokens_details", "cached_tokens") ??
-    nestedNumber(usage, "input_tokens_details", "cached_tokens") ??
+    nestedFirstNumber(
+      usage,
+      ["prompt_tokens_details", "promptTokensDetails", "input_tokens_details", "inputTokensDetails"],
+      ["cached_tokens", "cachedTokens"],
+    ) ??
     0
   );
 }
 
 function extractInputTokens(usage: Record<string, unknown>, cacheReadTokens: number): number {
-  const promptCacheMissTokens = firstNumberValue(usage, ["prompt_cache_miss_tokens"]);
+  const promptCacheMissTokens = firstNumberValue(usage, [
+    "prompt_cache_miss_tokens",
+    "promptCacheMissTokens",
+  ]);
   if (promptCacheMissTokens !== undefined) {
     return promptCacheMissTokens;
   }
@@ -238,8 +269,11 @@ function extractInputTokens(usage: Record<string, unknown>, cacheReadTokens: num
   const promptTokens = firstNumberValue(usage, ["promptTokens", "prompt_tokens"]);
   if (
     promptTokens !== undefined &&
-    (nestedNumber(usage, "prompt_tokens_details", "cached_tokens") !== undefined ||
-      nestedNumber(usage, "input_tokens_details", "cached_tokens") !== undefined)
+    nestedFirstNumber(
+      usage,
+      ["prompt_tokens_details", "promptTokensDetails", "input_tokens_details", "inputTokensDetails"],
+      ["cached_tokens", "cachedTokens"],
+    ) !== undefined
   ) {
     return Math.max(0, promptTokens - cacheReadTokens);
   }
@@ -251,7 +285,11 @@ function extractInputTokens(usage: Record<string, unknown>, cacheReadTokens: num
   ]);
   if (
     inputTokens !== undefined &&
-    nestedNumber(usage, "input_tokens_details", "cached_tokens") !== undefined
+    nestedFirstNumber(
+      usage,
+      ["input_tokens_details", "inputTokensDetails"],
+      ["cached_tokens", "cachedTokens"],
+    ) !== undefined
   ) {
     return Math.max(0, inputTokens - cacheReadTokens);
   }
@@ -259,10 +297,101 @@ function extractInputTokens(usage: Record<string, unknown>, cacheReadTokens: num
   return inputTokens ?? 0;
 }
 
+function extractUsageContext(usage: Record<string, unknown>): UsageContext | undefined {
+  const context = firstRecord(usage, ["context", "context_window", "contextWindow"]);
+  const used =
+    firstNumberValue(context, [
+      "used",
+      "usedTokens",
+      "contextUsed",
+      "context_used",
+      "contextTokens",
+      "context_tokens",
+      "contextUsedTokens",
+      "context_used_tokens",
+    ]) ??
+    firstNumberValue(usage, [
+      "contextUsed",
+      "context_used",
+      "contextTokens",
+      "context_tokens",
+      "contextUsedTokens",
+      "context_used_tokens",
+      "lastTokens",
+      "last_tokens",
+    ]);
+  const max =
+    firstNumberValue(context, [
+      "max",
+      "maxTokens",
+      "contextMax",
+      "context_max",
+      "contextWindow",
+      "context_window",
+      "maxContextTokens",
+      "max_context_tokens",
+    ]) ??
+    firstNumberValue(usage, [
+      "contextMax",
+      "context_max",
+      "contextWindow",
+      "context_window",
+      "maxContextTokens",
+      "max_context_tokens",
+    ]);
+  const percent =
+    firstNumberValue(context, ["percent", "usedPercent", "used_percent", "contextPercent", "context_percent"]) ??
+    firstNumberValue(usage, ["contextPercent", "context_percent", "contextUsedPercent", "context_used_percent"]) ??
+    (used !== undefined && max !== undefined && max > 0 ? (used / max) * 100 : undefined);
+
+  if (used === undefined && max === undefined && percent === undefined) {
+    return undefined;
+  }
+  return { used, max, percent };
+}
+
 function projectFields(project: ProjectAttribution | null | undefined) {
   return project
     ? { projectPath: project.projectPath, projectName: project.projectName }
     : {};
+}
+
+function usageSnapshotFromTokenUsage(
+  sessionId: string,
+  timestamp: number,
+  tokenUsage: Omit<
+    TokenUsageWrite,
+    "sessionId" | "agent" | "timestamp" | "sourceKind" | "sourceKey"
+  > & { context?: UsageContext },
+): UsageSnapshot {
+  const input = tokenUsage.inputTokens ?? 0;
+  const output = tokenUsage.outputTokens ?? 0;
+  const cachedInput = tokenUsage.cacheReadTokens ?? 0;
+  const cacheCreation = tokenUsage.cacheCreationTokens ?? 0;
+  const reasoningOutput = tokenUsage.reasoningTokens ?? 0;
+  return {
+    agent: "codebuddy",
+    sessionId,
+    source: "session-derived",
+    updatedAt: timestamp,
+    tokens: {
+      input,
+      output,
+      total: input + output + cachedInput + cacheCreation,
+      cachedInput,
+      reasoningOutput,
+    },
+    ...(tokenUsage.context ? { context: tokenUsage.context } : {}),
+    ...(tokenUsage.model ? { meta: { model: tokenUsage.model } } : {}),
+  };
+}
+
+function tokenUsageWithoutContext<T extends { context?: UsageContext }>(
+  tokenUsage: T,
+): Omit<T, "context"> {
+  const persisted = { ...tokenUsage };
+  delete persisted.context;
+  return persisted;
 }
 
 function extractWorkspacePathFromText(text: string | undefined): string | undefined {
@@ -274,7 +403,7 @@ function extractWorkspacePathFromText(text: string | undefined): string | undefi
 function extractCodeBuddyTokenUsage(entry: Record<string, unknown>): Omit<
   TokenUsageWrite,
   "sessionId" | "agent" | "timestamp" | "sourceKind" | "sourceKey"
-> | null {
+> & { context?: UsageContext } | null {
   const providerData = asRecord(entry.providerData);
   const candidates = [
     asRecord(entry.usage),
@@ -303,19 +432,28 @@ function extractCodeBuddyTokenUsage(entry: Record<string, unknown>): Omit<
       "cacheCreationInputTokens",
       "cache_creation_tokens",
       "cache_creation_input_tokens",
+      "promptCacheWriteTokens",
       "prompt_cache_write_tokens",
     ]) ??
-    nestedNumber(usage, "prompt_tokens_details", "cache_creation_tokens") ??
-    nestedNumber(usage, "input_tokens_details", "cache_creation_tokens") ??
+    nestedFirstNumber(
+      usage,
+      ["prompt_tokens_details", "promptTokensDetails", "input_tokens_details", "inputTokensDetails"],
+      ["cache_creation_tokens", "cacheCreationTokens"],
+    ) ??
     0;
   const reasoningTokens =
     firstNumberValue(usage, [
       "reasoningTokens",
       "reasoning_tokens",
+      "reasoningOutputTokens",
+      "reasoning_output_tokens",
       "completion_thinking_tokens",
     ]) ??
-    nestedNumber(usage, "completion_tokens_details", "reasoning_tokens") ??
-    nestedNumber(usage, "output_tokens_details", "reasoning_tokens") ??
+    nestedFirstNumber(
+      usage,
+      ["completion_tokens_details", "completionTokensDetails", "output_tokens_details", "outputTokensDetails"],
+      ["reasoning_tokens", "reasoningTokens"],
+    ) ??
     0;
 
   if (inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens + reasoningTokens <= 0) {
@@ -326,6 +464,7 @@ function extractCodeBuddyTokenUsage(entry: Record<string, unknown>): Omit<
     firstString(entry, ["model", "modelId", "modelName"]) ??
     firstString(usage, ["model", "modelId", "modelName"]) ??
     firstString(providerData, ["model", "modelId", "modelName"]);
+  const context = extractUsageContext(usage);
   return {
     ...(model ? { model } : {}),
     inputTokens,
@@ -333,6 +472,7 @@ function extractCodeBuddyTokenUsage(entry: Record<string, unknown>): Omit<
     cacheReadTokens,
     cacheCreationTokens,
     reasoningTokens,
+    ...(context ? { context } : {}),
   };
 }
 
@@ -534,14 +674,18 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
       });
 
       const tokenUsage = rawEntry ? extractCodeBuddyTokenUsage(rawEntry) : null;
-      if (options.onTokenUsage && tokenUsage) {
+      if (tokenUsage) {
         const entryId = firstString(rawEntry, ["id", "requestId", "messageId"]);
         const entryType = firstString(rawEntry, ["type"]) ?? "entry";
-        options.onTokenUsage({
+        const persistedTokenUsage = tokenUsageWithoutContext(tokenUsage);
+        options.onUsageSnapshot?.(
+          usageSnapshotFromTokenUsage(normalized.sessionId, normalized.timestamp, tokenUsage),
+        );
+        options.onTokenUsage?.({
           sessionId: normalized.sessionId,
           agent: "codebuddy",
           timestamp: normalized.timestamp,
-          ...tokenUsage,
+          ...persistedTokenUsage,
           sourceKind: "codebuddy-jsonl",
           sourceKey: entryId
             ? `${normalized.sessionId}:${entryId}`
@@ -807,13 +951,20 @@ export function createCodeBuddySessionWatcher(options: CodeBuddySessionWatcherOp
           ...(relatedWorkspacePath ? { workspacePath: relatedWorkspacePath } : {}),
         },
       });
-      if (options.onTokenUsage && tokenUsage) {
-        options.onTokenUsage({
+      if (tokenUsage) {
+        const enrichedTokenUsage = {
+          ...tokenUsage,
+          ...(relatedModel ? { model: tokenUsage.model ?? relatedModel } : {}),
+        };
+        const persistedTokenUsage = tokenUsageWithoutContext(enrichedTokenUsage);
+        options.onUsageSnapshot?.(
+          usageSnapshotFromTokenUsage(sessionId, timestamp, enrichedTokenUsage),
+        );
+        options.onTokenUsage?.({
           sessionId,
           agent: "codebuddy",
           timestamp,
-          ...tokenUsage,
-          ...(relatedModel ? { model: tokenUsage.model ?? relatedModel } : {}),
+          ...persistedTokenUsage,
           sourceKind: "codebuddy-history",
           sourceKey: `${sessionId}:${requestId}`,
           ...projectFields(project),

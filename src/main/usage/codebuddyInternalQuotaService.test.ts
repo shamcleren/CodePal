@@ -190,7 +190,7 @@ describe("codebuddyInternalQuotaService", () => {
         label: "CodeBuddy Enterprise",
         state: "error",
         message:
-          "CodeBuddy Enterprise 未检测到登录态，请确认登录已完成，或检查 settings.yaml 中的 loginUrl 是否正确",
+          "CodeBuddy Enterprise 未检测到登录态，请确认登录已完成，或检查设置中的登录地址是否正确",
         messageKey: "codebuddy.message.login_not_established",
         messageParams: { label: "CodeBuddy Enterprise" },
         endpoint: config.quotaEndpoint,

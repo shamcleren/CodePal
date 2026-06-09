@@ -1,5 +1,6 @@
 import type { StatusChangeUpstreamEvent } from "../shared/eventEnvelope";
 import type { ActivityItem, ExternalApprovalState } from "../../shared/sessionTypes";
+import { isGenericToolName, normalizeToolInvocationText } from "../shared/toolInvocationText";
 
 function firstString(
   payload: Record<string, unknown>,
@@ -212,15 +213,19 @@ function buildActivityItems(
   }
 
   if (hookEventName === "PreToolUse" && toolName) {
+    const invocation = normalizeToolInvocationText(
+      toolName,
+      pickToolInvocationBody(payload) ?? task ?? toolName,
+    );
     return [
       {
-        id: `codebuddy:${timestamp}:tool:${toolName}`,
+        id: `codebuddy:${timestamp}:tool:${invocation.toolName}`,
         kind: "tool",
         source: "tool",
-        title: toolName,
-        body: pickToolInvocationBody(payload) ?? task ?? toolName,
+        title: invocation.toolName,
+        body: invocation.body,
         timestamp,
-        toolName,
+        toolName: invocation.toolName,
         toolPhase: "call",
       },
     ];
@@ -295,6 +300,14 @@ function buildActivityItems(
   return undefined;
 }
 
+function normalizeTaskFromToolActivity(
+  task: string | undefined,
+  activityItems: ActivityItem[] | undefined,
+): string | undefined {
+  const toolName = activityItems?.find((item) => item.kind === "tool")?.toolName;
+  return isGenericToolName(task) && toolName ? toolName : task;
+}
+
 function buildExternalApproval(
   payload: Record<string, unknown>,
   sessionId: string,
@@ -343,13 +356,14 @@ export function normalizeCodeBuddyEvent(
   const task = pickTask(payload);
   const timestamp = pickTimestamp(payload);
   const activityItems = buildActivityItems(payload, status, task);
+  const normalizedTask = normalizeTaskFromToolActivity(task, activityItems);
   const externalApproval = buildExternalApproval(payload, sessionId, timestamp);
   return {
     type: "status_change",
     sessionId,
     tool: "codebuddy",
     status,
-    task,
+    task: normalizedTask,
     timestamp,
     meta: pickMeta(payload),
     ...(activityItems ? { activityItems } : {}),

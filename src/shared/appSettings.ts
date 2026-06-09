@@ -30,6 +30,12 @@ export type CodeBuddyEndpointSettings = {
   cookieNames: string[];
 };
 
+export type CodeBuddySettings = {
+  refreshIntervalMinutes: number;
+  code: CodeBuddyEndpointSettings;
+  enterprise: CodeBuddyEndpointSettings;
+};
+
 export const HISTORY_RETENTION_PRESETS = ["30d", "90d", "180d", "365d", "forever"] as const;
 
 export type HistoryRetentionPreset = (typeof HISTORY_RETENTION_PRESETS)[number];
@@ -92,10 +98,7 @@ export type AppSettings = {
   reports: ReportSettings;
   pricing: PricingSettings;
   providerGateway: ProviderGatewaySettings;
-  codebuddy: {
-    code: CodeBuddyEndpointSettings;
-    enterprise: CodeBuddyEndpointSettings;
-  };
+  codebuddy: CodeBuddySettings;
 };
 
 export type AppSettingsPatch = {
@@ -107,7 +110,7 @@ export type AppSettingsPatch = {
   reports?: Partial<ReportSettings>;
   pricing?: Partial<PricingSettings>;
   providerGateway?: Partial<ProviderGatewaySettings>;
-  codebuddy?: {
+  codebuddy?: Partial<Pick<CodeBuddySettings, "refreshIntervalMinutes">> & {
     code?: Partial<CodeBuddyEndpointSettings>;
     enterprise?: Partial<CodeBuddyEndpointSettings>;
   };
@@ -118,13 +121,8 @@ const MIMO_DEFAULT_UPSTREAM_MODEL = "mimo-v2.5";
 const MIMO_LEGACY_HAIKU_UPSTREAM_MODEL = "mimo-v2";
 export const DEFAULT_MODEL_PRICING_REMOTE_URL =
   "https://shamcleren.github.io/CodePal/model-pricing.json";
-const LEGACY_CODEBUDDY_CODE_LOGIN_URL = "https://tencent.sso.codebuddy.cn/profile/usage";
-const LEGACY_CODEBUDDY_CODE_QUOTA_ENDPOINT =
-  "https://tencent.sso.codebuddy.cn/billing/meter/get-enterprise-user-usage";
-const TOKEN_WOA_CODEBUDDY_LOGIN_URL = "https://token.woa.com/";
-const TOKEN_WOA_CODEBUDDY_QUOTA_ENDPOINT =
-  "https://token.woa.com/api/query-quota?platform=codebuddy";
-
+export const DEFAULT_CODEBUDDY_QUOTA_REFRESH_INTERVAL_MINUTES = 5;
+const MAX_CODEBUDDY_QUOTA_REFRESH_INTERVAL_MINUTES = 24 * 60;
 export const DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES = [
   "RIO_TOKEN",
   "RIO_TOKEN_HTTPS",
@@ -342,11 +340,12 @@ export const defaultAppSettings: AppSettings = {
   pricing: { ...defaultPricingSettings },
   providerGateway: defaultProviderGatewaySettings,
   codebuddy: {
+    refreshIntervalMinutes: DEFAULT_CODEBUDDY_QUOTA_REFRESH_INTERVAL_MINUTES,
     code: {
       enabled: true,
       label: "CodeBuddy Code",
-      loginUrl: TOKEN_WOA_CODEBUDDY_LOGIN_URL,
-      quotaEndpoint: TOKEN_WOA_CODEBUDDY_QUOTA_ENDPOINT,
+      loginUrl: "",
+      quotaEndpoint: "",
       cookieNames: [...DEFAULT_CODEBUDDY_AUTH_COOKIE_NAMES],
     },
     enterprise: {
@@ -393,6 +392,7 @@ export function cloneAppSettings(settings: AppSettings): AppSettings {
       ),
     },
     codebuddy: {
+      refreshIntervalMinutes: settings.codebuddy.refreshIntervalMinutes,
       code: {
         ...settings.codebuddy.code,
         cookieNames: [...settings.codebuddy.code.cookieNames],
@@ -403,6 +403,23 @@ export function cloneAppSettings(settings: AppSettings): AppSettings {
       },
     },
   };
+}
+
+function normalizeCodeBuddyRefreshIntervalMinutes(value: unknown): number {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number(value)
+        : Number.NaN;
+  if (!Number.isFinite(numericValue)) {
+    return DEFAULT_CODEBUDDY_QUOTA_REFRESH_INTERVAL_MINUTES;
+  }
+  const minutes = Math.trunc(numericValue);
+  if (minutes < 1) {
+    return DEFAULT_CODEBUDDY_QUOTA_REFRESH_INTERVAL_MINUTES;
+  }
+  return Math.min(minutes, MAX_CODEBUDDY_QUOTA_REFRESH_INTERVAL_MINUTES);
 }
 
 function isUsageAgentId(value: unknown): value is UsageAgentId {
@@ -779,9 +796,6 @@ export function normalizeCodeBuddyEndpointSettings(
     "quotaEndpoint" in candidate
       ? normalizeHttpsUrl(candidate.quotaEndpoint)
       : defaults.quotaEndpoint;
-  const migrateLegacyCodeEndpoint =
-    defaults.quotaEndpoint === TOKEN_WOA_CODEBUDDY_QUOTA_ENDPOINT &&
-    quotaEndpoint === LEGACY_CODEBUDDY_CODE_QUOTA_ENDPOINT;
 
   return {
     enabled: typeof candidate.enabled === "boolean" ? candidate.enabled : defaults.enabled,
@@ -789,11 +803,8 @@ export function normalizeCodeBuddyEndpointSettings(
       typeof candidate.label === "string" && candidate.label.trim()
         ? candidate.label.trim()
         : defaults.label,
-    loginUrl:
-      migrateLegacyCodeEndpoint && loginUrl === LEGACY_CODEBUDDY_CODE_LOGIN_URL
-        ? TOKEN_WOA_CODEBUDDY_LOGIN_URL
-        : loginUrl,
-    quotaEndpoint: migrateLegacyCodeEndpoint ? TOKEN_WOA_CODEBUDDY_QUOTA_ENDPOINT : quotaEndpoint,
+    loginUrl,
+    quotaEndpoint,
     cookieNames: normalizeCookieNames(candidate.cookieNames, defaults.cookieNames),
   };
 }
@@ -822,6 +833,9 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     pricing,
     providerGateway,
     codebuddy: {
+      refreshIntervalMinutes: normalizeCodeBuddyRefreshIntervalMinutes(
+        codebuddy?.refreshIntervalMinutes,
+      ),
       code: normalizeCodeBuddyEndpointSettings(codebuddy?.code, defaultAppSettings.codebuddy.code),
       enterprise: normalizeCodeBuddyEndpointSettings(
         codebuddy?.enterprise,

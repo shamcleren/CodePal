@@ -70,4 +70,40 @@ describe("normalizeCodeBuddyLogEvent", () => {
       ],
     });
   });
+
+  it("unwraps XML invoke text from generic tool calls", () => {
+    const normalized = normalizeCodeBuddyLogEvent(
+      JSON.stringify({
+        type: "function_call",
+        timestamp: 1_775_000_000_000,
+        name: "call",
+        providerData: {
+          argumentsDisplayText: [
+            "call",
+            "<invoke name=\"Read\">",
+            "<parameter name=\"path\">/Users/example/project/src/autochunk.py</parameter>",
+            "</invoke>",
+          ].join("\n"),
+        },
+      }),
+      fixturePath,
+    );
+
+    expect(normalized).toMatchObject({
+      type: "status_change",
+      sessionId: "transcript-basic",
+      tool: "codebuddy",
+      status: "running",
+      task: "Read",
+      activityItems: [
+        expect.objectContaining({
+          kind: "tool",
+          title: "Read",
+          toolName: "Read",
+          toolPhase: "call",
+          body: "/Users/example/project/src/autochunk.py",
+        }),
+      ],
+    });
+  });
 });

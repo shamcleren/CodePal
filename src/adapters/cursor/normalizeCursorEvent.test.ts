@@ -37,6 +37,24 @@ it("normalizes a status change payload", () => {
   });
 });
 
+it("preserves Cursor model metadata for session rows and usage", () => {
+  const event = normalizeCursorEvent({
+    hook_event_name: "StatusChange",
+    session_id: "cursor-model-1",
+    status: "running",
+    task: "summarize cache",
+    model: "claude-4-sonnet",
+  });
+
+  expect(event).toMatchObject({
+    sessionId: "cursor-model-1",
+    tool: "cursor",
+    meta: {
+      model: "claude-4-sonnet",
+    },
+  });
+});
+
 it("returns null when session_id is absent", () => {
   expect(
     normalizeCursorEvent({
@@ -350,6 +368,36 @@ it("maps beforeReadFile into a tool call activity with the file path from struct
         toolName: "Read",
         toolPhase: "call",
         body: "src/renderer/App.tsx",
+      },
+    ],
+  });
+});
+
+it("unwraps XML invoke text from generic cursor tool calls", () => {
+  expect(
+    normalizeCursorEvent({
+      hook_event_name: "beforeReadFile",
+      session_id: "cursor-raw-6c",
+      tool_name: "call",
+      tool_input: [
+        "call",
+        "<invoke name=\"Read\">",
+        "<parameter name=\"path\">/Users/example/project/src/autochunk.py</parameter>",
+        "</invoke>",
+      ].join("\n"),
+    }),
+  ).toMatchObject({
+    sessionId: "cursor-raw-6c",
+    status: "running",
+    task: "Read",
+    activityItems: [
+      {
+        kind: "tool",
+        source: "tool",
+        title: "Read",
+        toolName: "Read",
+        toolPhase: "call",
+        body: "/Users/example/project/src/autochunk.py",
       },
     ],
   });

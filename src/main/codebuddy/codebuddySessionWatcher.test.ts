@@ -459,15 +459,10 @@ describe("createCodeBuddySessionWatcher", () => {
               state: "complete",
               startedAt: 1775569531215,
               usage: {
-                prompt_tokens: 1240,
-                completion_tokens: 320,
-                prompt_tokens_details: {
-                  cached_tokens: 40,
-                  cache_creation_tokens: 12,
-                },
-                completion_tokens_details: {
-                  reasoning_tokens: 9,
-                },
+                inputTokens: 157067,
+                outputTokens: 1326,
+                totalTokens: 158393,
+                lastTokens: 48042,
               },
             },
           ],
@@ -502,11 +497,13 @@ describe("createCodeBuddySessionWatcher", () => {
 
     const onEvent = vi.fn();
     const onTokenUsage = vi.fn();
+    const onUsageSnapshot = vi.fn();
     const watcher = createCodeBuddySessionWatcher({
       projectsRoot: path.join(tmpDir, "projects"),
       appHistoryRoot: historyRoot,
       onEvent,
       onTokenUsage,
+      onUsageSnapshot,
       initialBootstrapLookbackMs: Number.POSITIVE_INFINITY,
     });
 
@@ -549,15 +546,34 @@ describe("createCodeBuddySessionWatcher", () => {
       agent: "codebuddy",
       model: "Hy3 preview",
       timestamp: 1775569531215,
-      inputTokens: 1200,
-      outputTokens: 320,
-      cacheReadTokens: 40,
-      cacheCreationTokens: 12,
-      reasoningTokens: 9,
+      inputTokens: 157067,
+      outputTokens: 1326,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      reasoningTokens: 0,
       sourceKind: "codebuddy-history",
       sourceKey: "usage-session:request-1",
       projectPath: projectDir,
       projectName: "CodeBuddyProject",
+    });
+    expect(onUsageSnapshot).toHaveBeenCalledWith({
+      agent: "codebuddy",
+      sessionId: "usage-session",
+      source: "session-derived",
+      updatedAt: 1775569531215,
+      tokens: {
+        input: 157067,
+        output: 1326,
+        total: 158393,
+        cachedInput: 0,
+        reasoningOutput: 0,
+      },
+      context: {
+        used: 48042,
+      },
+      meta: {
+        model: "Hy3 preview",
+      },
     });
   });
 });

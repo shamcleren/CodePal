@@ -903,6 +903,130 @@ body {
   background: var(--surface-hover);
 }
 
+.codebuddy-quota {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel-bg);
+}
+
+.codebuddy-quota__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.codebuddy-quota__subtitle {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.codebuddy-quota__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-subtle);
+  background: var(--surface-muted-soft);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.codebuddy-quota__status--connected {
+  border-color: color-mix(in srgb, var(--running) 42%, var(--line-subtle));
+  background: color-mix(in srgb, var(--running) 12%, transparent);
+  color: var(--running);
+}
+
+.codebuddy-quota-card {
+  min-height: 0;
+  gap: 12px;
+  padding: 12px;
+  background: linear-gradient(180deg, var(--surface-card), var(--surface-subtle));
+}
+
+.codebuddy-quota-card__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.9fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.codebuddy-quota-card__title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.codebuddy-quota-card__message {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.codebuddy-quota-card__endpoint {
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 7px;
+  background: var(--surface-inset);
+  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.codebuddy-quota-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.codebuddy-quota-config {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(130px, 0.35fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.codebuddy-quota-config__field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.codebuddy-quota-config__field input {
+  min-width: 0;
+  height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 7px;
+  background: var(--surface-inset);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 520;
+  outline: none;
+}
+
+.codebuddy-quota-config__field input:focus {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line-subtle));
+}
+
 .display-panel__summary {
   display: flex;
   flex-wrap: wrap;
@@ -1823,6 +1947,14 @@ body {
   .integration-grid {
     grid-template-columns: 1fr;
   }
+
+  .codebuddy-quota-card__main {
+    grid-template-columns: 1fr;
+  }
+
+  .codebuddy-quota-config {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Session list */
@@ -2172,22 +2304,23 @@ body {
 }
 
 .session-row__topline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
 }
 
-.session-row__title {
+.session-row__headline {
+  display: block;
   min-width: 0;
-  flex: 1;
+  color: var(--text);
   font-size: 13px;
   font-weight: 700;
-  color: var(--text);
   letter-spacing: var(--letter-ui);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.session-row__title {
+  color: var(--text);
 }
 
 .session-row__meta {
@@ -2823,18 +2956,17 @@ body {
 }
 
 .session-row__model-name {
-  display: inline-block;
-  max-width: 132px;
+  display: inline;
   color: var(--muted);
-  font-size: 12px;
+  font-size: inherit;
   font-weight: 700;
-  line-height: 1.2;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-transform: none;
   letter-spacing: 0;
-  vertical-align: baseline;
+}
+
+.session-row__model-name::after,
+.tool-name::after {
+  content: " ";
 }
 
 .tool-name--claude {
@@ -3978,6 +4110,26 @@ body {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.analytics-page__usage-strip {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  box-shadow: var(--shadow-soft);
+}
+
+.analytics-page__usage-strip:empty {
+  display: none;
+}
+
+.analytics-page__usage-strip .usage-strip__agent:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .analytics-page__range-group {

@@ -159,14 +159,18 @@ export const SessionRow = memo(forwardRef<HTMLElement, SessionRowProps>(function
         <span className="session-row__main">
           <span className="session-row__content">
             <span className="session-row__topline">
-              {session.model ? (
-                <span className="session-row__model-name" title={`${meta.label} · ${session.model}`}>
-                  {session.model}
+              <span className="session-row__headline">
+                {session.model ? (
+                  <span className="session-row__model-name" title={`${meta.label} · ${session.model}`}>
+                    {session.model}
+                  </span>
+                ) : (
+                  <span className={`tool-name tool-name--${meta.key}`}>{meta.label}</span>
+                )}
+                <span className="session-row__title">
+                  {session.titleLabel}
                 </span>
-              ) : (
-                <span className={`tool-name tool-name--${meta.key}`}>{meta.label}</span>
-              )}
-              <span className="session-row__title">{session.titleLabel}</span>
+              </span>
             </span>
             <span className="session-row__meta">
               {showCollapsedSummary ? (

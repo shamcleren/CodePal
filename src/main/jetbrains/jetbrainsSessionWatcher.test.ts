@@ -76,8 +76,8 @@ describe("createJetBrainsSessionWatcher", () => {
     fs.appendFileSync(
       filePath,
       [
-        '{"jsonrpc":"2.0","method":"gongfeng/chat-agent-register","params":{"repo":[""],"workspace":["file:///Users/renjinming/go/src/git.woa.com/blueking/helm-charts"],"session_id":"0196e76d-ff55-7aa3-a7da-78c8960af34c","editor_name":"JetBrainsGoLand","app_version":"v1.45.4"},"id":"3"}',
-        '{"id":"3","result":{"code":0,"msg":"success","uuid":"d3e30a21-11f5-2218-996d-8744f5bf7c7c","workspace_uri":"file:///Users/renjinming/go/src/git.woa.com/blueking/helm-charts"},"jsonrpc":"2.0"}',
+        '{"jsonrpc":"2.0","method":"gongfeng/chat-agent-register","params":{"repo":[""],"workspace":["file:///Users/renjinming/go/src/git.example.test/blueking/helm-charts"],"session_id":"0196e76d-ff55-7aa3-a7da-78c8960af34c","editor_name":"JetBrainsGoLand","app_version":"v1.45.4"},"id":"3"}',
+        '{"id":"3","result":{"code":0,"msg":"success","uuid":"d3e30a21-11f5-2218-996d-8744f5bf7c7c","workspace_uri":"file:///Users/renjinming/go/src/git.example.test/blueking/helm-charts"},"jsonrpc":"2.0"}',
         "2025-05-19 15:24:38.263\tINFO\tws/connect.go:96\tuuid from proxy: d3e30a21-11f5-2218-996d-8744f5bf7c7c",
         "2025-05-19 15:24:47.241\tDEBUG\tws/wswrap.go:427\tclose connection to proxy:d3e30a21-11f5-2218-996d-8744f5bf7c7c",
         "2025-05-19 15:25:43.286\tERROR\tws/connect.go:105\tlisten local failed: read tcp 192.168.255.10:63439->21.34.11.236:80: i/o timeout, d3e30a21-11f5-2218-996d-8744f5bf7c7c",
@@ -165,8 +165,8 @@ describe("createJetBrainsSessionWatcher", () => {
   it("reuses the preceding log timestamp for bare chat-agent JSON lines", async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-jetbrains-"));
     const filePath = createLogFile([
-      '{"jsonrpc":"2.0","method":"gongfeng/chat-agent-register","params":{"workspace":["file:///Users/renjinming/code/git.woa.com/bkdevtool/bk-aidev"],"session_id":"019d66a26d8872c28d1704b0b1e15370","editor_name":"JetBrainsPyCharm"},"id":"1"}',
-      '{"id":"1","result":{"code":0,"msg":"success","uuid":"2a113d5c-a014-03bb-c639-bacafaff7d10","workspace_uri":"file:///Users/renjinming/code/git.woa.com/bkdevtool/bk-aidev"},"jsonrpc":"2.0"}',
+      '{"jsonrpc":"2.0","method":"gongfeng/chat-agent-register","params":{"workspace":["file:///Users/renjinming/code/git.example.test/bkdevtool/bk-aidev"],"session_id":"019d66a26d8872c28d1704b0b1e15370","editor_name":"JetBrainsPyCharm"},"id":"1"}',
+      '{"id":"1","result":{"code":0,"msg":"success","uuid":"2a113d5c-a014-03bb-c639-bacafaff7d10","workspace_uri":"file:///Users/renjinming/code/git.example.test/bkdevtool/bk-aidev"},"jsonrpc":"2.0"}',
       "",
     ]);
 
@@ -181,8 +181,8 @@ describe("createJetBrainsSessionWatcher", () => {
     fs.appendFileSync(
       filePath,
       [
-        "2026-04-07 15:04:25.700\tINFO\tws/json_rpc_server.go:1122\tAsk event [chat.agent-client.message.start] - uuid: 2a113d5c-a014-03bb-c639-bacafaff7d10, session_id: 019d66a26d8872c28d1704b0b1e15370, request_id: 019d66c1bb637c0eb0e08db5b30a8a35, platform: jetbrainspycharm, workspace: [file:///Users/renjinming/code/git.woa.com/bkdevtool/bk-aidev]",
-        '{"jsonrpc":"2.0","method":"gongfeng/ask/begin","params":{"message_id":"019d66c1bb637c0eb0e08db5b30a8a35","platform":"jetbrainspycharm","session_id":"019d66a26d8872c28d1704b0b1e15370","uuid":"2a113d5c-a014-03bb-c639-bacafaff7d10","workspace":["file:///Users/renjinming/code/git.woa.com/bkdevtool/bk-aidev"]},"id":"14"}',
+        "2026-04-07 15:04:25.700\tINFO\tws/json_rpc_server.go:1122\tAsk event [chat.agent-client.message.start] - uuid: 2a113d5c-a014-03bb-c639-bacafaff7d10, session_id: 019d66a26d8872c28d1704b0b1e15370, request_id: 019d66c1bb637c0eb0e08db5b30a8a35, platform: jetbrainspycharm, workspace: [file:///Users/renjinming/code/git.example.test/bkdevtool/bk-aidev]",
+        '{"jsonrpc":"2.0","method":"gongfeng/ask/begin","params":{"message_id":"019d66c1bb637c0eb0e08db5b30a8a35","platform":"jetbrainspycharm","session_id":"019d66a26d8872c28d1704b0b1e15370","uuid":"2a113d5c-a014-03bb-c639-bacafaff7d10","workspace":["file:///Users/renjinming/code/git.example.test/bkdevtool/bk-aidev"]},"id":"14"}',
         "",
       ].join("\n"),
     );

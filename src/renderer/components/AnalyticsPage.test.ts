@@ -19,8 +19,9 @@ import {
   loadAnalyticsPageData,
   resolveAnalyticsCurrentRange,
 } from "./AnalyticsPage";
-import type { TokenStatsResult } from "../../shared/usageTypes";
+import type { TokenStatsResult, UsageOverview } from "../../shared/usageTypes";
 import { createI18nValue } from "../i18n";
+import { defaultAppSettings } from "../../shared/appSettings";
 
 const baseStats: TokenStatsResult = {
   daily: [],
@@ -125,6 +126,34 @@ describe("AnalyticsPage helpers", () => {
     expect(html).toContain("Trend metric");
     expect(html).toContain("Trend grouping");
     expect(html).toContain("No trend data");
+  });
+
+  it("keeps live quota status visible at the top of analytics", () => {
+    const overview: UsageOverview = {
+      summary: {
+        rateLimits: [
+          {
+            agent: "codebuddy",
+            remaining: 95,
+            limit: 100,
+            usedPercent: 5,
+            windowLabel: "total",
+          },
+        ],
+        contextMode: "none",
+      },
+      sessions: [],
+    };
+
+    const html = renderToStaticMarkup(
+      createElement(AnalyticsPage, {
+        usageOverview: overview,
+        usageDisplaySettings: defaultAppSettings.display,
+      }),
+    );
+
+    expect(html).toContain("CodeBuddy");
+    expect(html).toContain("total available 95.0%");
   });
 
   it("formats the analytics estimated cost card as a compact whole-dollar value", () => {

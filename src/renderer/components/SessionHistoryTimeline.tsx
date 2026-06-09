@@ -35,7 +35,7 @@ export type SessionFooterUsageSummary = {
   inputTokens: number;
   outputTokens: number;
   cacheTokens: number;
-  context?: UsageContext & { percent: number };
+  context?: UsageContext;
   cost: number | null;
   costKind?: UsageCostKind;
   costCurrency?: string;
@@ -104,14 +104,42 @@ function normalizeFooterContext(
       : typeof context.used === "number" && typeof context.max === "number" && context.max > 0
         ? (context.used / context.max) * 100
         : undefined;
+  const hasUsed = typeof context.used === "number" && Number.isFinite(context.used);
+  const hasMax = typeof context.max === "number" && Number.isFinite(context.max);
   if (typeof derivedPercent !== "number" || !Number.isFinite(derivedPercent)) {
-    return undefined;
+    if (!hasUsed && !hasMax) {
+      return undefined;
+    }
+    return context;
   }
 
   return {
     ...context,
     percent: Math.max(0, Math.round(derivedPercent)),
   };
+}
+
+function contextValue(context: UsageContext | undefined, locale: string): string {
+  if (!context) {
+    return "";
+  }
+  if (typeof context.percent === "number" && Number.isFinite(context.percent)) {
+    return `${context.percent}%`;
+  }
+  if (typeof context.used === "number" && Number.isFinite(context.used)) {
+    return formatUsageTokens(context.used, locale);
+  }
+  if (typeof context.max === "number" && Number.isFinite(context.max)) {
+    return formatUsageTokens(context.max, locale);
+  }
+  return "";
+}
+
+function contextToneFromUsage(context: UsageContext | undefined): "normal" | "notice" | "warning" | "danger" | undefined {
+  if (typeof context?.percent !== "number" || !Number.isFinite(context.percent)) {
+    return undefined;
+  }
+  return contextTone(context.percent);
 }
 
 function contextTone(percent: number): "normal" | "notice" | "warning" | "danger" {
@@ -233,9 +261,9 @@ function SessionFooterUsageStats({
     {
       key: "context",
       label: i18n.t("session.footer.usage.context"),
-      value: summary.context ? `${summary.context.percent}%` : "",
+      value: contextValue(summary.context, i18n.locale),
       show: Boolean(summary.context),
-      tone: summary.context ? contextTone(summary.context.percent) : undefined,
+      tone: contextToneFromUsage(summary.context),
       title: contextTitle,
     },
     {

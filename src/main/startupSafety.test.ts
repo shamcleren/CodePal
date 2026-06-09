@@ -10,6 +10,19 @@ describe("main process startup safety", () => {
     expect(mainSource).not.toContain(".autoInstallMissingSupportedHooks(");
   });
 
+  it("uses the user data settings file in development and packaged builds", () => {
+    const mainSource = fs.readFileSync(path.resolve(process.cwd(), "src/main/main.ts"), "utf8");
+    const startupStart = mainSource.indexOf("void app.whenReady().then(async () => {");
+    const startupSource = mainSource.slice(
+      startupStart,
+      mainSource.indexOf("const settingsService = createSettingsService(", startupStart),
+    );
+
+    expect(startupSource).toContain("resolveWritableSettingsPath({");
+    expect(startupSource).toContain("userDataPath: app.getPath(\"userData\")");
+    expect(startupSource).not.toContain("settings-dev.yaml");
+  });
+
   it("auto-starts the provider gateway during app startup only when it was already enabled", () => {
     const mainSource = fs.readFileSync(path.resolve(process.cwd(), "src/main/main.ts"), "utf8");
     const startupStart = mainSource.indexOf("void app.whenReady().then(async () => {");
@@ -111,5 +124,16 @@ describe("main process startup safety", () => {
     const statusSource = mainSource.slice(statusStart, statusEnd);
 
     expect(statusSource.match(/providerGatewayStatusInput\(/g)?.length ?? 0).toBe(1);
+  });
+
+  it("keeps usage overview IPC available if history pricing has already closed", () => {
+    const mainSource = fs.readFileSync(path.resolve(process.cwd(), "src/main/main.ts"), "utf8");
+    const usageOverviewStart = mainSource.indexOf("function usageOverviewForRenderer(");
+    const usageOverviewEnd = mainSource.indexOf("function broadcastUpdateState(", usageOverviewStart);
+    const usageOverviewSource = mainSource.slice(usageOverviewStart, usageOverviewEnd);
+
+    expect(usageOverviewSource).toContain("currentHistoryStore.getModelPricing()");
+    expect(usageOverviewSource).toContain('error.message !== "History store is closed"');
+    expect(usageOverviewSource).toContain("throw error");
   });
 });

@@ -19,6 +19,11 @@ import type { SessionCapabilityManifest, SessionActionType } from "../../shared/
 import type { AppUpdateState } from "../../shared/updateTypes";
 import type { UsageOverview, TokenStatsResult, ModelPricing, SessionStatsEntry } from "../../shared/usageTypes";
 import type {
+  CodeBuddyQuotaConnectResult,
+  CodeBuddyQuotaDiagnostics,
+  CodeBuddyQuotaStatus,
+} from "../../shared/codebuddyQuotaTypes";
+import type {
   ProviderGatewayClientSetupUpdateResult,
   ProviderGatewayClientSetupTarget,
   ProviderGatewayStatus,
@@ -69,6 +74,18 @@ contextBridge.exposeInMainWorld("codepal", {
   },
   getModelPricing() {
     return ipcRenderer.invoke("codepal:get-model-pricing") as Promise<ModelPricing[]>;
+  },
+  getCodeBuddyQuotaStatus() {
+    return ipcRenderer.invoke("codepal:get-codebuddy-quota-status") as Promise<CodeBuddyQuotaStatus | null>;
+  },
+  refreshCodeBuddyQuota(endpoint: "code" | "enterprise") {
+    return ipcRenderer.invoke("codepal:refresh-codebuddy-quota", endpoint) as Promise<CodeBuddyQuotaConnectResult | null>;
+  },
+  connectCodeBuddyQuota(endpoint: "code" | "enterprise") {
+    return ipcRenderer.invoke("codepal:connect-codebuddy-quota", endpoint) as Promise<CodeBuddyQuotaConnectResult | null>;
+  },
+  clearCodeBuddyQuotaAuth(endpoint: "code" | "enterprise") {
+    return ipcRenderer.invoke("codepal:clear-codebuddy-quota-auth", endpoint) as Promise<CodeBuddyQuotaDiagnostics | null>;
   },
   upsertModelPricing(pricing: ModelPricing) {
     return ipcRenderer.invoke("codepal:upsert-model-pricing", pricing) as Promise<void>;

@@ -297,4 +297,53 @@ describe("historyRuntime", () => {
       lastCleanupAt: null,
     });
   });
+
+  it("keeps history IPC handlers safe after the store has closed", () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    const ipcMain = {
+      handle: vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
+        handlers.set(channel, handler);
+      }),
+    };
+    const closed = () => {
+      throw new Error("History store is closed");
+    };
+    const historyStore = {
+      getDiagnostics: vi.fn(closed),
+      getSessionHistoryPage: vi.fn(closed),
+      getRecentSessions: vi.fn(closed),
+      clearAll: vi.fn(closed),
+    };
+
+    registerHistoryIpcHandlers({
+      ipcMain,
+      historyStore,
+      getPersistenceEnabled: () => true,
+    });
+
+    expect(handlers.get("codepal:get-history-diagnostics")?.()).toEqual({
+      enabled: false,
+      dbPath: "",
+      dbSizeBytes: 0,
+      estimatedSessionCount: 0,
+      estimatedActivityCount: 0,
+      lastCleanupAt: null,
+    });
+    expect(
+      handlers.get("codepal:get-session-history-page")?.({}, { sessionId: "missing" }),
+    ).toEqual({
+      items: [],
+      nextCursor: null,
+      hasMore: false,
+    });
+    expect(handlers.get("codepal:get-session-history-summaries")?.({}, {})).toEqual([]);
+    expect(handlers.get("codepal:clear-history-store")?.()).toEqual({
+      enabled: false,
+      dbPath: "",
+      dbSizeBytes: 0,
+      estimatedSessionCount: 0,
+      estimatedActivityCount: 0,
+      lastCleanupAt: null,
+    });
+  });
 });

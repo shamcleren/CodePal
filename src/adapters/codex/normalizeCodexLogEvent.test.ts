@@ -432,6 +432,41 @@ describe("normalizeCodexLogEvent", () => {
     });
   });
 
+  it("unwraps XML invoke tool calls from generic call response items", () => {
+    const event = normalizeCodexLogEvent(
+      JSON.stringify({
+        timestamp: "2026-04-02T08:13:12.250Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "call",
+          arguments: [
+            "call",
+            "<invoke name=\"Read\">",
+            "<parameter name=\"path\">/Users/example/project/src/autochunk.py</parameter>",
+            "</invoke>",
+          ].join("\n"),
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      status: "running",
+      task: "Read",
+      activityItems: [
+        {
+          kind: "tool",
+          source: "tool",
+          title: "Read",
+          toolName: "Read",
+          toolPhase: "call",
+          body: "/Users/example/project/src/autochunk.py",
+        },
+      ],
+    });
+  });
+
   it("maps response_item function calls with object arguments into tool call activity", () => {
     const event = normalizeCodexLogEvent(
       JSON.stringify({

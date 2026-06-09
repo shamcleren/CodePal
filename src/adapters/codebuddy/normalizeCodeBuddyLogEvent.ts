@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { StatusChangeUpstreamEvent } from "../shared/eventEnvelope";
+import { normalizeToolInvocationText } from "../shared/toolInvocationText";
 
 function parseLine(line: string): Record<string, unknown> | null {
   try {
@@ -158,18 +159,19 @@ function toolCallEvent(
   sourcePath: string,
 ): StatusChangeUpstreamEvent {
   const timestamp = parseTimestamp(entry.timestamp);
-  const toolName = fullText(typeof entry.name === "string" ? entry.name : undefined, "Tool") ?? "Tool";
+  const rawToolName = fullText(typeof entry.name === "string" ? entry.name : undefined, "Tool") ?? "Tool";
   const providerData = asRecord(entry.providerData);
   const callId =
     typeof entry.callId === "string" && entry.callId.trim() ? entry.callId.trim() : undefined;
-  const body =
+  const rawBody =
     fullText(
       typeof providerData?.argumentsDisplayText === "string"
         ? providerData.argumentsDisplayText
         : undefined,
     ) ??
     stringifyValue(entry.arguments) ??
-    toolName;
+    rawToolName;
+  const { toolName, body } = normalizeToolInvocationText(rawToolName, rawBody);
 
   return {
     type: "status_change",

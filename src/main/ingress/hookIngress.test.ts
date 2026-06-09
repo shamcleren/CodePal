@@ -28,6 +28,39 @@ describe("lineToSessionEvent", () => {
     });
   });
 
+  it("normalizes canonical Cursor bridge payloads that carry provider tool names", () => {
+    const ev = lineToSessionEvent(
+      JSON.stringify({
+        type: "status_change",
+        sessionId: "cursor-provider-canonical",
+        tool: "claude",
+        source: "cursor",
+        status: "running",
+        task: "postToolUse",
+        timestamp: 2,
+        meta: {
+          hook_event_name: "postToolUse",
+          cwd: "/Users/demo/project",
+          model: "claude-opus-4-8",
+        },
+      }),
+    );
+
+    expect(ev).toMatchObject({
+      sessionId: "cursor-provider-canonical",
+      tool: "cursor",
+      status: "running",
+      task: "postToolUse",
+      timestamp: 2,
+      meta: {
+        hook_event_name: "postToolUse",
+        cwd: "/Users/demo/project",
+        model: "claude-opus-4-8",
+        cursor_session_id_source: "session",
+      },
+    });
+  });
+
   it("normalizes Cursor StatusChange hook payload", () => {
     const ev = lineToSessionEvent(
       JSON.stringify({
@@ -754,6 +787,118 @@ describe("lineToUsageSnapshot", () => {
         total: undefined,
         cachedInput: 96,
         reasoningOutput: 3,
+      },
+    });
+  });
+
+  it("extracts Cursor camelCase token and cache fields from bridge usage payloads", () => {
+    const snapshot = lineToUsageSnapshot(
+      JSON.stringify({
+        type: "status_change",
+        sessionId: "cursor-camel-cache",
+        tool: "claude",
+        source: "cursor",
+        status: "running",
+        task: "afterAgentResponse",
+        timestamp: 3,
+        meta: {
+          hook_event_name: "afterAgentResponse",
+          modelName: "claude-opus-4-8",
+          usage: {
+            inputTokens: 120,
+            outputTokens: 20,
+            totalTokens: 140,
+            cacheReadTokens: 64,
+            outputTokensDetails: { reasoningTokens: 5 },
+          },
+          context: {
+            usedTokens: 4096,
+            maxTokens: 200000,
+          },
+        },
+      }),
+    );
+
+    expect(snapshot).toMatchObject({
+      agent: "cursor",
+      sessionId: "cursor-camel-cache",
+      meta: {
+        model: "claude-opus-4-8",
+      },
+      tokens: {
+        input: 120,
+        output: 20,
+        total: 140,
+        cachedInput: 64,
+        reasoningOutput: 5,
+      },
+      context: {
+        used: 4096,
+        max: 200000,
+        percent: 2.048,
+      },
+    });
+  });
+
+  it("carries model metadata from generic usage payloads", () => {
+    const snapshot = lineToUsageSnapshot(
+      JSON.stringify({
+        tool: "cursor",
+        session_id: "cursor-model-usage",
+        timestamp: 1,
+        model: "gpt-4.1",
+        usage: {
+          input_tokens: 12,
+          output_tokens: 4,
+        },
+      }),
+    );
+
+    expect(snapshot).toMatchObject({
+      agent: "cursor",
+      sessionId: "cursor-model-usage",
+      meta: {
+        model: "gpt-4.1",
+      },
+      tokens: {
+        input: 12,
+        output: 4,
+      },
+    });
+  });
+
+  it("attributes canonical Cursor bridge usage to Cursor instead of the provider tool", () => {
+    const snapshot = lineToUsageSnapshot(
+      JSON.stringify({
+        type: "status_change",
+        sessionId: "cursor-provider-usage",
+        tool: "claude",
+        source: "cursor",
+        status: "running",
+        task: "postToolUse",
+        timestamp: 2,
+        meta: {
+          hook_event_name: "postToolUse",
+          model: "claude-opus-4-8",
+          usage: {
+            prompt_tokens: 120,
+            prompt_tokens_details: { cached_tokens: 80 },
+            completion_tokens: 20,
+          },
+        },
+      }),
+    );
+
+    expect(snapshot).toMatchObject({
+      agent: "cursor",
+      sessionId: "cursor-provider-usage",
+      meta: {
+        model: "claude-opus-4-8",
+      },
+      tokens: {
+        input: 40,
+        output: 20,
+        cachedInput: 80,
       },
     });
   });

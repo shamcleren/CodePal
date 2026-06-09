@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   APP_THEME_IDS,
@@ -9,6 +11,65 @@ import {
 } from "./appSettings";
 
 describe("appSettings", () => {
+  it("keeps CodeBuddy Code quota endpoints local-settings only by default", () => {
+    const settings = normalizeAppSettings({});
+
+    expect(settings.codebuddy.refreshIntervalMinutes).toBe(5);
+    expect(settings.codebuddy.code).toMatchObject({
+      enabled: true,
+      label: "CodeBuddy Code",
+      loginUrl: "",
+      quotaEndpoint: "",
+    });
+  });
+
+  it("normalizes configurable CodeBuddy quota refresh intervals", () => {
+    expect(
+      normalizeAppSettings({
+        version: 1,
+        codebuddy: {
+          refreshIntervalMinutes: 12,
+        },
+      }).codebuddy.refreshIntervalMinutes,
+    ).toBe(12);
+    expect(
+      normalizeAppSettings({
+        version: 1,
+        codebuddy: {
+          refreshIntervalMinutes: "15",
+        },
+      }).codebuddy.refreshIntervalMinutes,
+    ).toBe(15);
+    expect(
+      normalizeAppSettings({
+        version: 1,
+        codebuddy: {
+          refreshIntervalMinutes: 0,
+        },
+      }).codebuddy.refreshIntervalMinutes,
+    ).toBe(5);
+    expect(
+      normalizeAppSettings({
+        version: 1,
+        codebuddy: {
+          refreshIntervalMinutes: 2880,
+        },
+      }).codebuddy.refreshIntervalMinutes,
+    ).toBe(1440);
+  });
+
+  it("does not expose internal CodeBuddy quota domains in bundled settings files", () => {
+    const checkedInSettings = [
+      path.resolve(__dirname, "../../config/settings.template.yaml"),
+      path.resolve(__dirname, "../../config/settings-dev.yaml"),
+    ]
+      .filter((settingsPath) => fs.existsSync(settingsPath))
+      .map((settingsPath) => fs.readFileSync(settingsPath, "utf8"))
+      .join("\n");
+
+    expect(checkedInSettings).not.toMatch(/woa[.]com/);
+  });
+
   it("preserves explicit empty codebuddy endpoints from settings", () => {
     const settings = normalizeAppSettings({
       version: 1,
@@ -197,22 +258,22 @@ describe("appSettings", () => {
     expect(settings.cookieNames).not.toBe(endpointDefaults.cookieNames);
   });
 
-  it("migrates the legacy CodeBuddy Code quota endpoint to token.woa", () => {
+  it("preserves locally configured CodeBuddy Code quota endpoints", () => {
     const settings = normalizeAppSettings({
       version: 1,
       codebuddy: {
         code: {
           enabled: true,
           label: "CodeBuddy Code",
-          loginUrl: "https://tencent.sso.codebuddy.cn/profile/usage",
-          quotaEndpoint: "https://tencent.sso.codebuddy.cn/billing/meter/get-enterprise-user-usage",
+          loginUrl: "https://codebuddy-login.example.test/",
+          quotaEndpoint: "https://codebuddy-quota.example.test/api/quota",
         },
       },
     });
 
     expect(settings.codebuddy.code).toMatchObject({
-      loginUrl: "https://token.woa.com/",
-      quotaEndpoint: "https://token.woa.com/api/query-quota?platform=codebuddy",
+      loginUrl: "https://codebuddy-login.example.test/",
+      quotaEndpoint: "https://codebuddy-quota.example.test/api/quota",
     });
   });
 

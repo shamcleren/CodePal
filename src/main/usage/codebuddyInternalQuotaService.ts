@@ -197,7 +197,7 @@ function loginNotEstablishedDiagnostics(
     kind: "internal",
     label: config.label,
     state: "error",
-    message: `${config.label} 未检测到登录态，请确认登录已完成，或检查 settings.yaml 中的 loginUrl 是否正确`,
+    message: `${config.label} 未检测到登录态，请确认登录已完成，或检查设置中的登录地址是否正确`,
     messageKey: "codebuddy.message.login_not_established",
     messageParams: { label: config.label },
     endpoint: config.quotaEndpoint,

@@ -203,11 +203,12 @@ describe("renderer layout styles", () => {
     const css = fs.readFileSync(stylesPath, "utf8");
 
     const modelName = cssBlock(css, ".session-row__model-name");
-    expect(modelName).toContain("font-size: 12px;");
-    expect(modelName).toContain("text-overflow: ellipsis;");
+    expect(modelName).toContain("display: inline;");
+    expect(modelName).toContain("font-size: inherit;");
     expect(modelName).not.toContain("border:");
     expect(modelName).not.toContain("background:");
     expect(modelName).not.toContain("padding:");
+    expect(cssBlock(css, ".session-row__headline")).toContain("text-overflow: ellipsis;");
     expect(cssBlock(css, ".session-list__scope")).toContain("flex-wrap: wrap;");
     expect(cssBlock(css, ".session-list__scope span")).toContain("max-width: 100%;");
     expect(cssBlock(css, ".session-list__scope span")).toContain("overflow-wrap: anywhere;");
@@ -248,6 +249,13 @@ describe("renderer layout styles", () => {
     expect(cssBlock(css, ".analytics-page__range-btn--active")).toContain(
       "background: var(--analytics-control-active-bg);",
     );
+    expect(cssBlock(css, ".analytics-page__usage-strip")).toContain(
+      "border: 1px solid var(--line-subtle);",
+    );
+    expect(cssBlock(css, ".analytics-page__usage-strip")).toContain(
+      "background: var(--surface-subtle);",
+    );
+    expect(cssBlock(css, ".analytics-page__usage-strip")).toContain("border-radius: 8px;");
     expect(cssBlock(css, ".analytics-page__date-input")).toContain(
       "color-scheme: var(--native-control-scheme);",
     );

@@ -31,11 +31,12 @@ providerGateway:
         anthropic/MiMo-V2-Pro: mimo-v2-pro
         anthropic/MiMo-V2-Omni: mimo-v2-omni
 codebuddy:
+  refreshIntervalMinutes: 5
   code:
     enabled: true
     label: CodeBuddy Code
-    loginUrl: https://token.woa.com/
-    quotaEndpoint: https://token.woa.com/api/query-quota?platform=codebuddy
+    loginUrl: ""
+    quotaEndpoint: ""
     cookieNames:
       - RIO_TOKEN
       - RIO_TOKEN_HTTPS

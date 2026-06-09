@@ -85,6 +85,36 @@ describe("createSessionStore", () => {
     expect(store.getSession("s1")?.model).toBe("gpt-5.5");
   });
 
+  it("keeps the first tool owner for an existing session id", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "cursor-owner",
+      tool: "cursor",
+      status: "running",
+      task: "Cursor session starts",
+      timestamp: 1,
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "cursor-owner",
+      tool: "claude",
+      status: "completed",
+      task: "Provider completion arrived later",
+      timestamp: 2,
+      meta: { model: "claude-opus-4-8" },
+    });
+
+    expect(store.getSession("cursor-owner")).toMatchObject({
+      id: "cursor-owner",
+      tool: "cursor",
+      status: "completed",
+      task: "Provider completion arrived later",
+      model: "claude-opus-4-8",
+    });
+  });
+
   it("tracks session and running durations independently from the truncated activity preview", () => {
     const store = createSessionStore();
 
@@ -2419,6 +2449,120 @@ describe("createSessionStore", () => {
         timestamp: 2,
       });
 
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("does not complete an active session from a pending action close event", () => {
+      const onChange = vi.fn();
+      const store = createSessionStore({ onStatusChange: onChange });
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "cursor",
+        status: "running",
+        timestamp: 1,
+      });
+      onChange.mockClear();
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "cursor",
+        status: "completed",
+        timestamp: 2,
+        pendingClosed: { actionId: "act-1", reason: "consumed_remote" },
+      });
+
+      expect(store.getSession("s1")!.status).toBe("running");
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("does not complete an active session from a tool result event", () => {
+      const onChange = vi.fn();
+      const store = createSessionStore({ onStatusChange: onChange });
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "codex",
+        status: "running",
+        timestamp: 1,
+      });
+      onChange.mockClear();
+
+      store.applyEvent({
+        sessionId: "s1",
+        tool: "codex",
+        status: "completed",
+        timestamp: 2,
+        activityItems: [
+          {
+            id: "tool-1",
+            kind: "tool",
+            source: "tool",
+            title: "exec_command",
+            body: "PASS",
+            timestamp: 2,
+            toolName: "exec_command",
+            toolPhase: "result",
+          },
+        ],
+      });
+
+      expect(store.getSession("s1")!.status).toBe("running");
+      expect(store.getSession("s1")!.activityItems).toEqual([
+        expect.objectContaining({ kind: "tool", body: "PASS" }),
+        expect.objectContaining({ body: "Running" }),
+      ]);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("does not complete a Codex parent session from a subexecution completion", () => {
+      const onChange = vi.fn();
+      const store = createSessionStore({ onStatusChange: onChange });
+
+      store.applyEvent({
+        sessionId: "codex-user",
+        tool: "codex",
+        status: "running",
+        timestamp: 100,
+        meta: {
+          cwd: "/tmp/codepal",
+          codex_thread_source: "user",
+        },
+      });
+      onChange.mockClear();
+
+      store.applyEvent({
+        sessionId: "codex-subagent",
+        tool: "codex",
+        status: "completed",
+        task: "subagent done",
+        timestamp: 110,
+        meta: {
+          cwd: "/tmp/codepal",
+          codex_thread_source: "subagent",
+          codex_subagent_kind: "guardian",
+          source: "subagent:guardian",
+        },
+        activityItems: [
+          {
+            id: "subagent-result",
+            kind: "tool",
+            source: "tool",
+            title: "guardian",
+            body: "subagent done",
+            timestamp: 110,
+            toolName: "guardian",
+            toolPhase: "result",
+          },
+        ],
+      });
+
+      expect(store.getSessions()).toHaveLength(1);
+      expect(store.getSession("codex-user")!.status).toBe("running");
+      expect(store.getSession("codex-user")!.activityItems).toEqual([
+        expect.objectContaining({ body: "subagent done" }),
+        expect.objectContaining({ body: "Running" }),
+      ]);
       expect(onChange).not.toHaveBeenCalled();
     });
 

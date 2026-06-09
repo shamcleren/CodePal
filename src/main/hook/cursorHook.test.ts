@@ -40,6 +40,29 @@ describe("runCursorHookPipeline", () => {
     expect(runBlockingHookFromRaw).not.toHaveBeenCalled();
   });
 
+  it("forces cursor identity even when upstream payload carries a provider tool name", async () => {
+    await runCursorHookPipeline(
+      JSON.stringify({
+        type: "status_change",
+        sessionId: "cursor-provider-1",
+        tool: "claude",
+        source: "claude",
+        status: "running",
+        timestamp: 123,
+        task: "using Cursor agent mode",
+      }),
+      {},
+    );
+
+    expect(sendEventLine).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(sendEventLine.mock.calls[0][0] as string)).toMatchObject({
+      type: "status_change",
+      sessionId: "cursor-provider-1",
+      tool: "cursor",
+      source: "cursor",
+    });
+  });
+
   it("forwards blocking cursor payloads through runBlockingHookFromRaw", async () => {
     runBlockingHookFromRaw.mockResolvedValue('{"ok":true}');
 

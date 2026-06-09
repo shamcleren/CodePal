@@ -15,12 +15,8 @@ function augmentCursorPayloadJson(trimmed: string): string {
     throw new Error(`cursorHook: invalid JSON: ${message}`);
   }
 
-  if (!("tool" in payload)) {
-    payload.tool = "cursor";
-  }
-  if (!("source" in payload)) {
-    payload.source = "cursor";
-  }
+  payload.tool = "cursor";
+  payload.source = "cursor";
 
   return JSON.stringify(payload);
 }
@@ -39,4 +35,3 @@ export async function runCursorHookPipeline(
   await sendEventLine(outbound, env);
   return undefined;
 }
-

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnalyticsMetric, TokenTrendGranularity, TokenTrendPoint, TokenTrendResult } from "../../shared/analyticsTypes";
-import type { ModelPricing, TokenStatsResult } from "../../shared/usageTypes";
+import type { ModelPricing, TokenStatsResult, UsageOverview } from "../../shared/usageTypes";
 import { UNKNOWN_PROJECT_NAME, UNKNOWN_PROJECT_PATH, isUnknownProjectPath, sortProjectRows } from "../../shared/projectAttribution";
 import { useI18n } from "../i18n";
 import { readAnalyticsPagePreferences, writeAnalyticsPagePreferences } from "../projectViewPreferences";
 import { estimateTokenCost, formatMetricValue, formatUsageCost, formatUsageTokens } from "../usageFormat";
+import type { UsageDisplaySettings } from "../usageDisplaySettings";
 import { AnalyticsLineChart } from "./AnalyticsLineChart";
 import type { TrendGroupMode } from "./AnalyticsLineChart";
+import { UsageStatusStrip } from "./UsageStatusStrip";
 import type { ResolvedLocale } from "../../shared/i18nTypes";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
@@ -353,7 +355,12 @@ function weekAgoStr(): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function AnalyticsPage() {
+type AnalyticsPageProps = {
+  usageOverview?: UsageOverview | null;
+  usageDisplaySettings?: UsageDisplaySettings;
+};
+
+export function AnalyticsPage({ usageOverview, usageDisplaySettings }: AnalyticsPageProps = {}) {
   const i18n = useI18n();
   const initialPreferencesRef = useRef<ReturnType<typeof readAnalyticsPagePreferences> | null>(null);
   if (initialPreferencesRef.current === null) {
@@ -548,6 +555,12 @@ export function AnalyticsPage() {
         <h2 className="analytics-page__title">{i18n.t("nav.analytics")}</h2>
         <p className="analytics-page__subtitle">{i18n.t("tokenStats.subtitle")}</p>
       </div>
+
+      {usageDisplaySettings ? (
+        <div className="analytics-page__usage-strip">
+          <UsageStatusStrip overview={usageOverview ?? null} settings={usageDisplaySettings} />
+        </div>
+      ) : null}
 
       <div className="analytics-page__toolbar">
         <div className="analytics-page__range-group">

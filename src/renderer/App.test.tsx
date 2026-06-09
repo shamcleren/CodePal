@@ -155,4 +155,20 @@ describe("App", () => {
     );
     expect(updateSource).toContain("appSettingsSaveSequence.current === requestId");
   });
+
+  it("saves CodeBuddy quota domain settings and refreshes quota diagnostics", () => {
+    const source = fs.readFileSync(path.join(__dirname, "App.tsx"), "utf8");
+    const panelStart = source.indexOf("<CodeBuddyQuotaPanel");
+    const panelSource = source.slice(panelStart, source.indexOf("<DisplayPreferencesPanel", panelStart));
+
+    expect(panelSource).toContain("onSaveConfig={(patch) =>");
+    expect(panelSource).toContain("const { refreshIntervalMinutes, ...codePatch } = patch");
+    expect(panelSource).toContain("refreshIntervalMinutes,");
+    expect(panelSource).toContain("codebuddy: {");
+    expect(panelSource).toContain("code: codePatch");
+    expect(panelSource).toContain("enterprise: {");
+    expect(panelSource).toContain("enabled: false");
+    expect(panelSource).toContain('quotaEndpoint: ""');
+    expect(panelSource).toContain("refreshCodeBuddyQuotaStatus()");
+  });
 });

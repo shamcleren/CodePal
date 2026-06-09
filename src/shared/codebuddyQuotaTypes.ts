@@ -16,3 +16,8 @@ export interface CodeBuddyQuotaConnectResult {
   diagnostics: CodeBuddyQuotaDiagnostics;
   synced: boolean;
 }
+
+export interface CodeBuddyQuotaStatus {
+  code: CodeBuddyQuotaDiagnostics;
+  enterprise: CodeBuddyQuotaDiagnostics;
+}

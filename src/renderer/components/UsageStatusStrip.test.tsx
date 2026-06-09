@@ -26,11 +26,11 @@ const overview: UsageOverview = {
       { agent: "codex", usedPercent: 63, resetAt: 1775635200, windowLabel: "7 天" },
       {
         agent: "codebuddy",
-        usedPercent: 0.90596,
-        remaining: 99094.04,
-        limit: 100000,
+        usedPercent: 15.22313,
+        remaining: 5934.3809,
+        limit: 7000,
         resetAt: 1777564800,
-        windowLabel: "Code",
+        windowLabel: "total",
         planType: "credits",
       },
       {
@@ -86,17 +86,18 @@ describe("UsageStatusStrip", () => {
 
     expect(html).toContain("usage-strip");
     expect(html).toContain("Claude");
-    expect(html).toContain("5h 78%");
-    expect(html).toContain("7d 39%");
+    expect(html).toContain("5h 可用 78%");
+    expect(html).toContain("7d 可用 39%");
     expect(html).toContain("Codex");
-    expect(html).toContain("5h 68%");
-    expect(html).toContain("7d 37%");
+    expect(html).toContain("5h 可用 68%");
+    expect(html).toContain("7d 可用 37%");
     expect(html).toContain("CodeBuddy");
-    expect(html).toContain("Code 99%");
-    expect(html).toContain("内网 98%");
+    expect(html).toContain("已用 ¥1,065.62 / ¥7,000.00");
+    expect(html).toContain("可用 84.8%");
+    expect(html).toContain("内网 可用 98.3%");
     expect(html).toContain("Cursor");
     expect(html).toContain("$180 / 300");
-    expect(html).toContain("60%");
+    expect(html).toContain("可用 60%");
     expect(html).toContain("cursor-app-icon");
     expect(html).toContain("codex-app-icon");
     expect(html).toContain("codebuddy-app-icon");
@@ -118,20 +119,23 @@ describe("UsageStatusStrip", () => {
       </I18nProvider>,
     );
 
-    expect(html).toContain("usage-strip__value--primary\">5h 68%</span>");
+    expect(html).toContain("usage-strip__value--primary\">5h available 68%</span>");
     expect(html).toContain(`usage-strip__value--secondary">${shortReset}</span>`);
-    expect(html).toContain("usage-strip__value--primary\">5h 78%</span>");
+    expect(html).toContain("usage-strip__value--primary\">5h available 78%</span>");
     expect(html).toContain(`usage-strip__value--secondary">${shortReset}</span>`);
-    expect(html).toContain("usage-strip__value--primary\">7d 39%</span>");
+    expect(html).toContain("usage-strip__value--primary\">7d available 39%</span>");
     expect(html).toContain(`usage-strip__value--secondary">${longReset}</span>`);
-    expect(html).toContain("usage-strip__value--primary\">7d 37%</span>");
+    expect(html).toContain("usage-strip__value--primary\">7d available 37%</span>");
     expect(html).toContain(`usage-strip__value--secondary">${longReset}</span>`);
-    expect(html).toContain("usage-strip__value--primary\">Code 99%</span>");
-    expect(html).toContain("usage-strip__value--primary\">internal 98%</span>");
+    expect(html).toContain("usage-strip__value--primary\">Used ¥1,065.62 / ¥7,000.00</span>");
+    expect(html).toContain("usage-strip__value--primary\">available 84.8%</span>");
+    expect(html).toContain("usage-strip__value--primary\">internal available 98.3%</span>");
     expect(html).toContain(`usage-strip__value--secondary">${codeReset}</span>`);
-    expect(html).toContain("usage-strip__value--primary\">60%</span>");
+    expect(html).toContain("usage-strip__value--primary\">available 60%</span>");
     expect(html).toContain(`title="5h reset ${shortReset} | 7d reset ${longReset}"`);
-    expect(html).toContain(`title="Code reset ${codeReset} | Code remaining 99% | internal remaining 98%"`);
+    expect(html).toContain(
+      `title="total used = total_used 1065.62; total = total_quota 7000.00; available percent = 1 - total_used / total_quota 84.8% | total reset ${codeReset} | internal available 98.3%"`,
+    );
     expect(html).toContain("usage-strip__value--secondary");
   });
 

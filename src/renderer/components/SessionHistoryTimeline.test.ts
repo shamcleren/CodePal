@@ -404,6 +404,30 @@ describe("summarizeSessionFooterUsage", () => {
       cost: null,
     });
   });
+
+  it("keeps live context tokens when a source reports used tokens without a window size", () => {
+    const summary = summarizeSessionFooterUsage({
+      persisted: [],
+      live: {
+        completeness: "partial",
+        context: {
+          used: 48_042,
+        },
+      },
+      pricing: [],
+    });
+
+    expect(summary).toEqual({
+      requestCount: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheTokens: 0,
+      context: {
+        used: 48_042,
+      },
+      cost: null,
+    });
+  });
 });
 
 describe("shouldLoadNextHistoryPage", () => {
