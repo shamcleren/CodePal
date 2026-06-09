@@ -61,7 +61,7 @@
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
 - v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
-- v1.0.3 through v1.3.15 are all shipped. Current shipped baseline is **v1.3.15**.
+- v1.0.3 through v1.3.16 are all shipped. Current shipped baseline is **v1.3.16**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -91,6 +91,7 @@
 - v1.3.13 shipped: verified CodeBuddy Code / IDE quota fetching, configurable quota refresh interval, available-percentage usage strip wording, and clearer cross-agent tool-call labels
 - v1.3.14 shipped: macOS ShipIt install kickstart fallback plus startup self-healing for newer pending updater bundles already staged in the local cache
 - v1.3.15 shipped: CodeBuddy Code login window display/error handling hardened, and the ShipIt install fallback carried forward for real in-app update validation
+- v1.3.16 shipped: CodeBuddy login/quota windows detached from the main panel, session project attribution locked after first valid resolution, and stale ShipIt pending-update cache treated as a quiet no-op
 - v1.3.5 validation covered the Analytics chart-domain refresh regression and report-format alignment follow-up found after v1.3.4:
   - `npm test -- src/renderer/components/AnalyticsPage.test.ts src/renderer/components/AnalyticsLineChart.test.tsx src/renderer/App.test.tsx`
   - `npm test -- src/main/report/generateHtmlReport.test.ts`
@@ -137,6 +138,14 @@
   - `git diff --check`
 - v1.3.15 local validation on 2026-06-09 covers the CodeBuddy Code login window hardening plus the updater verification release target used to validate the fixed in-app install flow from v1.3.14:
   - `npm test -- src/main/usage/codebuddyQuotaService.test.ts`
+  - `npm run lint`
+  - `npm test`
+  - `npm run build`
+  - `npm run test:e2e`
+  - `git diff --check`
+- v1.3.16 local validation on 2026-06-09 covers CodeBuddy login-window detachment, stable session project attribution, and stale ShipIt pending-cache handling:
+  - `npm test -- src/main/update/macShipItKickstart.test.ts`
+  - `npm test -- src/main/session/sessionStore.test.ts src/main/history/historyRuntime.test.ts src/main/usage/codebuddyQuotaService.test.ts src/main/usage/codebuddyQuotaWindow.test.ts`
   - `npm run lint`
   - `npm test`
   - `npm run build`
@@ -417,9 +426,9 @@ npm run dist:mac
 - team sharing, cloud sync, billing, and broader control surfaces until the individual local workflow has proven sustained value
 - any productivity-scoring or team-ranking surface
 
-### v1.1.0-v1.3.15 Release Track
+### v1.1.0-v1.3.16 Release Track
 
-v1.1.0 through v1.3.15 are shipped. See individual release notes for details:
+v1.1.0 through v1.3.16 are shipped. See individual release notes for details:
 
 - `docs/release/notes/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release/notes/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -450,6 +459,7 @@ v1.1.0 through v1.3.15 are shipped. See individual release notes for details:
 - `docs/release/notes/release-notes-v1.3.13.md` — verified CodeBuddy quota display, configurable refresh interval, available-percentage wording, and clearer tool-call labels
 - `docs/release/notes/release-notes-v1.3.14.md` — macOS ShipIt install kickstart fallback and startup self-healing for pending updater bundles
 - `docs/release/notes/release-notes-v1.3.15.md` — CodeBuddy Code login window hardening plus updater verification release target
+- `docs/release/notes/release-notes-v1.3.16.md` — CodeBuddy login-window detachment, stable project attribution, and quiet stale ShipIt cache handling
 
 ## Next Product Direction Handoff
 

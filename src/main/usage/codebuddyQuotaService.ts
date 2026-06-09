@@ -507,7 +507,6 @@ function defaultCreateHiddenQuotaWindow(): BrowserWindow {
 }
 
 function createQuotaBrowserWindow(input: { show: boolean; title: string }): BrowserWindow {
-  const parentWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed());
   return new BrowserWindow({
     width: 1080,
     height: 760,
@@ -516,11 +515,6 @@ function createQuotaBrowserWindow(input: { show: boolean; title: string }): Brow
     skipTaskbar: true,
     title: input.title,
     backgroundColor: "#ffffff",
-    ...(parentWindow
-      ? {
-          parent: parentWindow,
-        }
-      : {}),
     webPreferences: {
       partition: CODEBUDDY_AUTH_PARTITION,
       contextIsolation: true,

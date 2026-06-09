@@ -34,6 +34,7 @@ describe("scheduleMacShipItKickstart", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -154,6 +155,35 @@ describe("scheduleMacShipItKickstart", () => {
     });
 
     expect(scheduled).toBe(false);
+    expect(spawnSyncImpl).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("ignores stale pending ShipIt state when the update app plist is gone", () => {
+    const updateAppPath = path.join(tempDir, "update.MTucFWZ", "CodePal.app");
+    const shipItDir = path.join(tempDir, "ai.shamcleren.codepal.ShipIt");
+    fs.mkdirSync(shipItDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(shipItDir, "ShipItState.plist"),
+      JSON.stringify({ updateBundleURL: `file://${updateAppPath}/` }),
+      "utf8",
+    );
+    const { calls, spawnImpl } = createSpawnMock();
+    const spawnSyncImpl = vi.fn(() => ({ status: 0 }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const scheduled = schedulePendingMacShipItKickstart({
+      platform: "darwin",
+      bundleIdentifier: "ai.shamcleren.codepal",
+      currentVersion: "1.3.16",
+      cacheDir: tempDir,
+      uid: 501,
+      spawnImpl,
+      spawnSyncImpl,
+    });
+
+    expect(scheduled).toBe(false);
+    expect(consoleError).not.toHaveBeenCalled();
     expect(spawnSyncImpl).not.toHaveBeenCalled();
     expect(calls).toHaveLength(0);
   });

@@ -151,9 +151,7 @@ function firstProjectMetaString(record: Record<string, unknown> | undefined, key
 }
 
 function previousProject(prev: InternalSessionRecord | undefined): ProjectAttribution | null {
-  return prev?.projectPath
-    ? { projectPath: prev.projectPath, projectName: prev.projectName ?? prev.projectPath }
-    : null;
+  return normalizeProjectAttribution(prev?.projectPath, prev?.projectName);
 }
 
 function resolveSessionProject(
@@ -163,6 +161,7 @@ function resolveSessionProject(
   meta: Record<string, unknown> | undefined,
 ): ProjectAttribution | null {
   return (
+    previousProject(prev) ??
     normalizeProjectAttribution(event.projectPath, event.projectName) ??
     resolveProjectAttribution({
       workspacePath:
@@ -170,7 +169,7 @@ function resolveSessionProject(
         firstProjectMetaString(event.meta, ["workspacePath", "workspace_path", "projectPath"]) ??
         firstProjectMetaString(meta, ["workspacePath", "workspace_path", "projectPath"]),
       cwd: firstProjectMetaString(event.meta, ["cwd"]) ?? firstProjectMetaString(meta, ["cwd"]),
-    }) ?? previousProject(prev)
+    })
   );
 }
 

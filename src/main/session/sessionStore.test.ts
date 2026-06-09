@@ -85,6 +85,87 @@ describe("createSessionStore", () => {
     expect(store.getSession("s1")?.model).toBe("gpt-5.5");
   });
 
+  it("keeps the first resolved project attribution for an existing session", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      timestamp: 1,
+      projectPath: "/repo/first-project",
+      projectName: "first-project",
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      timestamp: 2,
+      projectPath: "/repo/later-project",
+      projectName: "later-project",
+    });
+
+    expect(store.getSession("s1")).toMatchObject({
+      projectPath: "/repo/first-project",
+      projectName: "first-project",
+    });
+  });
+
+  it("fills project attribution later when the session started without one", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      timestamp: 1,
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      timestamp: 2,
+      projectPath: "/repo/found-project",
+      projectName: "found-project",
+    });
+
+    expect(store.getSession("s1")).toMatchObject({
+      projectPath: "/repo/found-project",
+      projectName: "found-project",
+    });
+  });
+
+  it("fills project attribution later when the restored session only had unknown attribution", () => {
+    const store = createSessionStore();
+
+    store.seedFromHistory({
+      id: "s1",
+      tool: "codex",
+      status: "completed",
+      updatedAt: 1,
+      projectPath: "unknown",
+      projectName: "unknown",
+    });
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "s1",
+      tool: "codex",
+      status: "running",
+      timestamp: 2,
+      projectPath: "/repo/found-project",
+      projectName: "found-project",
+    });
+
+    expect(store.getSession("s1")).toMatchObject({
+      projectPath: "/repo/found-project",
+      projectName: "found-project",
+    });
+  });
+
   it("keeps the first tool owner for an existing session id", () => {
     const store = createSessionStore();
 
