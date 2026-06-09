@@ -57,6 +57,10 @@ import { createUsageSnapshotCache, hydrateUsageStoreFromCache } from "./usage/us
 import { tokenUsageWriteFromUsageSnapshot } from "./usage/usageSnapshotTokenUsage";
 import { createCodeBuddyQuotaRuntime } from "./usage/codebuddyQuotaRuntime";
 import { createUsageStore } from "./usage/usageStore";
+import {
+  scheduleMacShipItKickstart,
+  schedulePendingMacShipItKickstart,
+} from "./update/macShipItKickstart";
 import { createUpdateService } from "./update/updateService";
 import {
   applyHistorySettingsAtRuntime,
@@ -132,6 +136,7 @@ let installingUpdate = false;
 const PROVIDER_GATEWAY_DISABLED_MESSAGE =
   "Provider Gateway is disabled in settings.";
 const PROVIDER_GATEWAY_FEATURE_ENABLED = true;
+const CODEPAL_BUNDLE_IDENTIFIER = "ai.shamcleren.codepal";
 const PROVIDER_GATEWAY_RESUME_STATE_FILE = "provider-gateway-runtime-state.json";
 const PROVIDER_GATEWAY_RESUME_TARGETS = ["claude-desktop", "codex-desktop", "claude-cli"] as const;
 type ProviderGatewayResumeTarget =
@@ -1566,6 +1571,17 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
       });
       providerGatewayRuntime = { settingsService, gatewaySecretStore, homeDir };
       installMainProcessFileLogger(path.join(app.getPath("userData"), "logs"));
+      if (
+        schedulePendingMacShipItKickstart({
+          bundleIdentifier: CODEPAL_BUNDLE_IDENTIFIER,
+          currentVersion: app.getVersion(),
+          cacheDir: app.getPath("cache"),
+        })
+      ) {
+        console.log("[CodePal Update] pending macOS ShipIt install detected; quitting to finish update.");
+        app.quit();
+        return;
+      }
       if (appSettings.providerGateway.enabled) {
         await startClaudeDesktopProviderGateway(settingsService, gatewaySecretStore);
         resumeProviderGatewayClients(
@@ -1663,6 +1679,9 @@ void runHookCli(process.argv, process.stdin, process.stdout, process.stderr, pro
         onStateChange: broadcastUpdateState,
         onBeforeInstall: () => {
           installingUpdate = true;
+          scheduleMacShipItKickstart({
+            bundleIdentifier: CODEPAL_BUNDLE_IDENTIFIER,
+          });
           historyWriter?.close();
           void closeProviderGatewayServer();
         },

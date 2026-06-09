@@ -97,8 +97,14 @@ describe("main process startup safety", () => {
     const updateServiceSource = mainSource.slice(updateServiceStart, updateServiceEnd);
 
     expect(mainSource).toContain("let installingUpdate = false;");
+    expect(mainSource).toContain('const CODEPAL_BUNDLE_IDENTIFIER = "ai.shamcleren.codepal";');
+    expect(mainSource).toContain("schedulePendingMacShipItKickstart({");
+    expect(mainSource).toContain("currentVersion: app.getVersion()");
+    expect(mainSource).toContain("cacheDir: app.getPath(\"cache\")");
     expect(updateServiceSource).toContain("onBeforeInstall: () => {");
     expect(updateServiceSource).toContain("installingUpdate = true;");
+    expect(updateServiceSource).toContain("scheduleMacShipItKickstart({");
+    expect(updateServiceSource).toContain("bundleIdentifier: CODEPAL_BUNDLE_IDENTIFIER");
     expect(updateServiceSource).toContain("void closeProviderGatewayServer();");
     expect(beforeQuitSource).toContain("!installingUpdate");
     expect(beforeQuitSource.indexOf("!installingUpdate")).toBeLessThan(
