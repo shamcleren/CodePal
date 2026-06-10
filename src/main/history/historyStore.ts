@@ -11,11 +11,19 @@ import type {
 } from "../../shared/historyTypes";
 import { computeSessionTiming } from "../../shared/sessionTiming";
 import type { ActivityItem, SessionModelSource } from "../../shared/sessionTypes";
+import {
+  buildPricingHistoryIndex,
+  estimateHistoricalTokenCost,
+  listPricingChangeEvents,
+} from "../../shared/pricingHistory";
+import type { ModelPricingHistoryEntry } from "../../shared/pricingManifest";
+import { PRICING_MANIFEST_HASH_KEY, PRICING_MANIFEST_UPDATED_AT_KEY } from "../pricing/modelPricingSync";
 import type {
   AgentTokenStats,
   DailyTokenStats,
   ModelPricing,
   ModelTokenStats,
+  PricingChangeEvent,
   ProjectTokenStats,
   SessionTokenStats,
   TokenUsageWrite,
@@ -37,6 +45,25 @@ const USAGE_IMPORT_LAST_ERROR_KEY = "usageImport.lastError";
 const CODEX_CACHED_INPUT_NORMALIZED_KEY = "usage.codexCachedInputNormalized.v1";
 const TOKEN_USAGE_SEMANTIC_CLEANUP_KEY = "usage.semanticCleanup.v1";
 const SQLITE_SIDE_FILES = ["", "-wal", "-shm"] as const;
+
+const HISTORICAL_PRICING_JOIN = `
+  LEFT JOIN model_pricing_history mph ON mph.model_id = COALESCE(token_usage.model, 'unknown')
+    AND mph.effective_from = (
+      SELECT MAX(h2.effective_from)
+      FROM model_pricing_history h2
+      WHERE h2.model_id = COALESCE(token_usage.model, 'unknown')
+        AND h2.effective_from <= token_usage.timestamp
+    )
+`;
+
+const HISTORICAL_ROW_COST_SQL = `
+  (
+    (token_usage.input_tokens / 1000000.0) * COALESCE(CAST(mph.input_per_million AS REAL), 0) +
+    (token_usage.output_tokens / 1000000.0) * COALESCE(CAST(mph.output_per_million AS REAL), 0) +
+    (token_usage.cache_read_tokens / 1000000.0) * COALESCE(CAST(mph.cache_read_per_million AS REAL), 0) +
+    (token_usage.cache_creation_tokens / 1000000.0) * COALESCE(CAST(mph.cache_creation_per_million AS REAL), 0)
+  )
+`;
 
 type CleanupRetention = HistoryRetentionPreset | `${number}d`;
 
@@ -304,8 +331,26 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       input_per_million TEXT NOT NULL,
       output_per_million TEXT NOT NULL,
       cache_read_per_million TEXT NOT NULL DEFAULT '0',
-      cache_creation_per_million TEXT NOT NULL DEFAULT '0'
+      cache_creation_per_million TEXT NOT NULL DEFAULT '0',
+      is_current INTEGER NOT NULL DEFAULT 1
     );
+
+    CREATE TABLE IF NOT EXISTS model_pricing_history (
+      model_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      effective_from INTEGER NOT NULL,
+      input_per_million TEXT NOT NULL,
+      output_per_million TEXT NOT NULL,
+      cache_read_per_million TEXT NOT NULL DEFAULT '0',
+      cache_creation_per_million TEXT NOT NULL DEFAULT '0',
+      change_kind TEXT,
+      note TEXT,
+      is_current INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (model_id, effective_from)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_model_pricing_history_model_effective
+      ON model_pricing_history (model_id, effective_from DESC);
   `);
 
   for (const statement of [
@@ -317,6 +362,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     "ALTER TABLE token_usage ADD COLUMN source_key TEXT",
     "ALTER TABLE token_usage ADD COLUMN project_path TEXT",
     "ALTER TABLE token_usage ADD COLUMN project_name TEXT",
+    "ALTER TABLE model_pricing ADD COLUMN is_current INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE model_pricing_history ADD COLUMN is_current INTEGER NOT NULL DEFAULT 0",
   ]) {
     try {
       db.exec(statement);
@@ -541,8 +588,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
   // Seed default model pricing (upsert so user edits survive)
   const seedPricing = db.prepare(`
-    INSERT INTO model_pricing (model_id, display_name, input_per_million, output_per_million, cache_read_per_million, cache_creation_per_million)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO model_pricing (model_id, display_name, input_per_million, output_per_million, cache_read_per_million, cache_creation_per_million, is_current)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
     ON CONFLICT(model_id) DO NOTHING
   `);
   const DEFAULT_PRICING: Array<[string, string, string, string, string, string]> = [
@@ -571,6 +618,18 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   ];
   for (const row of DEFAULT_PRICING) {
     seedPricing.run(...row);
+  }
+
+  const seedPricingHistory = db.prepare(`
+    INSERT INTO model_pricing_history (
+      model_id, display_name, effective_from, input_per_million, output_per_million,
+      cache_read_per_million, cache_creation_per_million, change_kind, is_current
+    )
+    VALUES (?, ?, 0, ?, ?, ?, ?, 'initial', 1)
+    ON CONFLICT(model_id, effective_from) DO NOTHING
+  `);
+  for (const row of DEFAULT_PRICING) {
+    seedPricingHistory.run(...row);
   }
 
   // Backfill: codex rows that predate model tracking have NULL or "unknown" model
@@ -647,7 +706,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       tool = CASE
-        WHEN excluded.updated_at >= sessions.updated_at THEN excluded.tool
+        WHEN sessions.tool IS NULL OR sessions.tool = '' THEN excluded.tool
         ELSE sessions.tool
       END,
       status = CASE
@@ -693,11 +752,11 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         ELSE sessions.has_pending_actions
       END,
       project_path = CASE
-        WHEN excluded.project_path IS NOT NULL THEN excluded.project_path
+        WHEN sessions.project_path IS NULL OR sessions.project_path = '' THEN excluded.project_path
         ELSE sessions.project_path
       END,
       project_name = CASE
-        WHEN excluded.project_name IS NOT NULL THEN excluded.project_name
+        WHEN sessions.project_name IS NULL OR sessions.project_name = '' THEN excluded.project_name
         ELSE sessions.project_name
       END
   `);
@@ -976,33 +1035,37 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
 
   const modelStatsStmt = db.prepare(`
     SELECT
-      COALESCE(model, 'unknown') AS model,
-      agent,
-      SUM(input_tokens) AS inputTokens,
-      SUM(output_tokens) AS outputTokens,
-      SUM(cache_read_tokens) AS cacheReadTokens,
-      SUM(cache_creation_tokens) AS cacheCreationTokens,
-      SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) AS totalTokens,
-      COUNT(*) AS requestCount
+      COALESCE(token_usage.model, 'unknown') AS model,
+      token_usage.agent AS agent,
+      SUM(token_usage.input_tokens) AS inputTokens,
+      SUM(token_usage.output_tokens) AS outputTokens,
+      SUM(token_usage.cache_read_tokens) AS cacheReadTokens,
+      SUM(token_usage.cache_creation_tokens) AS cacheCreationTokens,
+      SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) AS totalTokens,
+      COUNT(*) AS requestCount,
+      SUM(${HISTORICAL_ROW_COST_SQL}) AS estimatedCost
     FROM token_usage
-    WHERE timestamp >= ? AND timestamp < ?
-      AND (? IS NULL OR agent = ?)
+    ${HISTORICAL_PRICING_JOIN}
+    WHERE token_usage.timestamp >= ? AND token_usage.timestamp < ?
+      AND (? IS NULL OR token_usage.agent = ?)
     GROUP BY model, agent
     ORDER BY totalTokens DESC
   `);
 
   const agentStatsStmt = db.prepare(`
     SELECT
-      agent,
-      SUM(input_tokens) AS inputTokens,
-      SUM(output_tokens) AS outputTokens,
-      SUM(cache_read_tokens) AS cacheReadTokens,
-      SUM(cache_creation_tokens) AS cacheCreationTokens,
-      SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) AS totalTokens,
-      COUNT(*) AS requestCount
+      token_usage.agent AS agent,
+      SUM(token_usage.input_tokens) AS inputTokens,
+      SUM(token_usage.output_tokens) AS outputTokens,
+      SUM(token_usage.cache_read_tokens) AS cacheReadTokens,
+      SUM(token_usage.cache_creation_tokens) AS cacheCreationTokens,
+      SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) AS totalTokens,
+      COUNT(*) AS requestCount,
+      SUM(${HISTORICAL_ROW_COST_SQL}) AS estimatedCost
     FROM token_usage
-    WHERE timestamp >= ? AND timestamp < ?
-      AND (? IS NULL OR agent = ?)
+    ${HISTORICAL_PRICING_JOIN}
+    WHERE token_usage.timestamp >= ? AND token_usage.timestamp < ?
+      AND (? IS NULL OR token_usage.agent = ?)
     GROUP BY agent
     ORDER BY totalTokens DESC
   `);
@@ -1025,17 +1088,12 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       SUM(token_usage.cache_creation_tokens) AS cacheCreationTokens,
       SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) AS totalTokens,
       COUNT(*) AS requestCount,
-      SUM(
-        (token_usage.input_tokens / 1000000.0) * COALESCE(CAST(model_pricing.input_per_million AS REAL), 0) +
-        (token_usage.output_tokens / 1000000.0) * COALESCE(CAST(model_pricing.output_per_million AS REAL), 0) +
-        (token_usage.cache_read_tokens / 1000000.0) * COALESCE(CAST(model_pricing.cache_read_per_million AS REAL), 0) +
-        (token_usage.cache_creation_tokens / 1000000.0) * COALESCE(CAST(model_pricing.cache_creation_per_million AS REAL), 0)
-      ) AS estimatedCost,
+      SUM(${HISTORICAL_ROW_COST_SQL}) AS estimatedCost,
       MIN(token_usage.timestamp) AS firstSeenAt,
       MAX(token_usage.timestamp) AS lastSeenAt
     FROM token_usage
     LEFT JOIN sessions ON sessions.id = token_usage.session_id
-    LEFT JOIN model_pricing ON model_pricing.model_id = COALESCE(token_usage.model, 'unknown')
+    ${HISTORICAL_PRICING_JOIN}
     WHERE token_usage.timestamp >= ? AND token_usage.timestamp < ?
       AND (? IS NULL OR token_usage.agent = ?)
     GROUP BY projectPath
@@ -1058,10 +1116,12 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       SUM(token_usage.cache_creation_tokens) AS cacheCreationTokens,
       SUM(token_usage.input_tokens + token_usage.output_tokens + token_usage.cache_read_tokens + token_usage.cache_creation_tokens) AS totalTokens,
       COUNT(*) AS requestCount,
+      SUM(${HISTORICAL_ROW_COST_SQL}) AS estimatedCost,
       MIN(token_usage.timestamp) AS firstSeenAt,
       MAX(token_usage.timestamp) AS lastSeenAt
     FROM token_usage
     LEFT JOIN sessions ON sessions.id = token_usage.session_id
+    ${HISTORICAL_PRICING_JOIN}
     WHERE token_usage.timestamp >= ? AND token_usage.timestamp < ?
       AND (? IS NULL OR token_usage.agent = ?)
     GROUP BY token_usage.session_id, token_usage.agent, token_usage.model, sessions.latest_task, sessions.title
@@ -1100,15 +1160,58 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   `);
 
   const modelPricingStmt = db.prepare(`SELECT * FROM model_pricing ORDER BY model_id ASC`);
+  const modelPricingHistoryStmt = db.prepare(`
+    SELECT *
+    FROM model_pricing_history
+    ORDER BY model_id ASC, effective_from ASC
+  `);
   const upsertModelPricingStmt = db.prepare(`
-    INSERT INTO model_pricing (model_id, display_name, input_per_million, output_per_million, cache_read_per_million, cache_creation_per_million)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO model_pricing (model_id, display_name, input_per_million, output_per_million, cache_read_per_million, cache_creation_per_million, is_current)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(model_id) DO UPDATE SET
       display_name = excluded.display_name,
       input_per_million = excluded.input_per_million,
       output_per_million = excluded.output_per_million,
       cache_read_per_million = excluded.cache_read_per_million,
-      cache_creation_per_million = excluded.cache_creation_per_million
+      cache_creation_per_million = excluded.cache_creation_per_million,
+      is_current = excluded.is_current
+  `);
+  const upsertModelPricingHistoryStmt = db.prepare(`
+    INSERT INTO model_pricing_history (
+      model_id, display_name, effective_from, input_per_million, output_per_million,
+      cache_read_per_million, cache_creation_per_million, change_kind, note, is_current
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(model_id, effective_from) DO UPDATE SET
+      display_name = excluded.display_name,
+      input_per_million = excluded.input_per_million,
+      output_per_million = excluded.output_per_million,
+      cache_read_per_million = excluded.cache_read_per_million,
+      cache_creation_per_million = excluded.cache_creation_per_million,
+      change_kind = excluded.change_kind,
+      note = excluded.note,
+      is_current = excluded.is_current
+  `);
+  const deleteModelPricingStmt = db.prepare(`DELETE FROM model_pricing`);
+  const deleteModelPricingHistoryStmt = db.prepare(`DELETE FROM model_pricing_history`);
+  const getCurrentModelIdsStmt = db.prepare(`
+    SELECT model_id
+    FROM (
+      SELECT NULLIF(TRIM(model), '') AS model_id
+      FROM token_usage
+      UNION
+      SELECT NULLIF(TRIM(model), '') AS model_id
+      FROM sessions
+    )
+    WHERE model_id IS NOT NULL
+      AND LOWER(model_id) != 'unknown'
+    ORDER BY model_id ASC
+  `);
+  const getHistoryMetaStmt = db.prepare(`SELECT value FROM history_meta WHERE key = ?`);
+  const upsertHistoryMetaStmt = db.prepare(`
+    INSERT INTO history_meta (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `);
 
   function getDiagnostics(): HistoryDiagnostics {
@@ -1465,6 +1568,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cacheCreationTokens: number;
       totalTokens: number;
       requestCount: number;
+      estimatedCost: number | null;
     }>;
     return rows.map((row) => ({
       model: row.model,
@@ -1475,6 +1579,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cacheCreationTokens: row.cacheCreationTokens,
       totalTokens: row.totalTokens,
       requestCount: row.requestCount,
+      estimatedCost: row.estimatedCost ?? 0,
     }));
   }
 
@@ -1497,6 +1602,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cacheCreationTokens: number;
       totalTokens: number;
       requestCount: number;
+      estimatedCost: number | null;
     }>;
     return rows.map((row) => ({
       agent: row.agent,
@@ -1506,6 +1612,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cacheCreationTokens: row.cacheCreationTokens,
       totalTokens: row.totalTokens,
       requestCount: row.requestCount,
+      estimatedCost: row.estimatedCost ?? 0,
     }));
   }
 
@@ -1573,6 +1680,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cacheCreationTokens: number;
       totalTokens: number;
       requestCount: number;
+      estimatedCost: number | null;
       firstSeenAt: number;
       lastSeenAt: number;
     }>;
@@ -1587,6 +1695,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       cacheCreationTokens: row.cacheCreationTokens,
       totalTokens: row.totalTokens,
       requestCount: row.requestCount,
+      estimatedCost: row.estimatedCost ?? 0,
       firstSeenAt: row.firstSeenAt,
       lastSeenAt: row.lastSeenAt,
     }));
@@ -1686,6 +1795,8 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     }>;
 
     const buckets = new Map<string, TokenTrendPoint>();
+    const historyIndex = buildPricingHistoryIndex(getModelPricingHistory());
+    const currentPricing = getModelPricing();
     for (const row of rows) {
       const bucketStart = bucketStartFor(row.timestamp, granularity);
       const key = `${bucketStart}\u0000${row.projectPath}\u0000${row.agent}\u0000${row.model}`;
@@ -1702,6 +1813,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         reasoningTokens: 0,
         totalTokens: 0,
         requestCount: 0,
+        estimatedCost: 0,
       };
       existing.inputTokens += row.inputTokens;
       existing.outputTokens += row.outputTokens;
@@ -1714,6 +1826,18 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
         row.cacheReadTokens +
         row.cacheCreationTokens;
       existing.requestCount += 1;
+      existing.estimatedCost =
+        (existing.estimatedCost ?? 0) +
+        estimateHistoricalTokenCost({
+          modelId: row.model,
+          timestamp: row.timestamp,
+          inputTokens: row.inputTokens,
+          outputTokens: row.outputTokens,
+          cacheReadTokens: row.cacheReadTokens,
+          cacheCreationTokens: row.cacheCreationTokens,
+          historyIndex,
+          currentPricing,
+        });
       buckets.set(key, existing);
     }
 
@@ -1779,6 +1903,7 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       output_per_million: string;
       cache_read_per_million: string;
       cache_creation_per_million: string;
+      is_current: number;
     }>;
     return rows.map((row) => ({
       modelId: row.model_id,
@@ -1787,7 +1912,82 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       outputPerMillion: row.output_per_million,
       cacheReadPerMillion: row.cache_read_per_million,
       cacheCreationPerMillion: row.cache_creation_per_million,
+      isCurrent: row.is_current !== 0,
     }));
+  }
+
+  function getModelPricingHistory(): ModelPricingHistoryEntry[] {
+    assertOpen();
+    const rows = modelPricingHistoryStmt.all() as Array<{
+      model_id: string;
+      display_name: string;
+      effective_from: number;
+      input_per_million: string;
+      output_per_million: string;
+      cache_read_per_million: string;
+      cache_creation_per_million: string;
+      change_kind: string | null;
+      note: string | null;
+      is_current: number;
+    }>;
+    return rows.map((row) => ({
+      modelId: row.model_id,
+      displayName: row.display_name,
+      effectiveFrom: row.effective_from,
+      inputPerMillion: row.input_per_million,
+      outputPerMillion: row.output_per_million,
+      cacheReadPerMillion: row.cache_read_per_million,
+      cacheCreationPerMillion: row.cache_creation_per_million,
+      ...(row.change_kind === "initial" ||
+      row.change_kind === "new_model" ||
+      row.change_kind === "price_change"
+        ? { changeKind: row.change_kind }
+        : {}),
+      ...(row.note ? { note: row.note } : {}),
+      isCurrent: row.is_current !== 0,
+    }));
+  }
+
+  function getCurrentModelIds(): string[] {
+    assertOpen();
+    const rows = getCurrentModelIdsStmt.all() as Array<{ model_id: string }>;
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const modelId = row.model_id?.trim();
+      if (!modelId || seen.has(modelId)) {
+        continue;
+      }
+      seen.add(modelId);
+      ids.push(modelId);
+    }
+    return ids;
+  }
+
+  function getPricingChangeEvents(startMs: number, endMs: number): PricingChangeEvent[] {
+    return listPricingChangeEvents(getModelPricingHistory(), { startMs, endMs });
+  }
+
+  function getPricingManifestHash(): string | null {
+    assertOpen();
+    const row = getHistoryMetaStmt.get(PRICING_MANIFEST_HASH_KEY) as { value: string } | undefined;
+    return row?.value?.trim() ? row.value.trim() : null;
+  }
+
+  function setPricingManifestHash(hash: string) {
+    assertOpen();
+    upsertHistoryMetaStmt.run(PRICING_MANIFEST_HASH_KEY, hash);
+  }
+
+  function getPricingManifestUpdatedAt(): string | null {
+    assertOpen();
+    const row = getHistoryMetaStmt.get(PRICING_MANIFEST_UPDATED_AT_KEY) as { value: string } | undefined;
+    return row?.value?.trim() ? row.value.trim() : null;
+  }
+
+  function setPricingManifestUpdatedAt(updatedAt: string) {
+    assertOpen();
+    upsertHistoryMetaStmt.run(PRICING_MANIFEST_UPDATED_AT_KEY, updatedAt);
   }
 
   function upsertModelPricing(pricing: ModelPricing) {
@@ -1799,7 +1999,47 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
       pricing.outputPerMillion,
       pricing.cacheReadPerMillion,
       pricing.cacheCreationPerMillion,
+      pricing.isCurrent === false ? 0 : 1,
     );
+  }
+
+  function upsertModelPricingHistory(pricing: ModelPricingHistoryEntry) {
+    assertOpen();
+    upsertModelPricingHistoryStmt.run(
+      pricing.modelId,
+      pricing.displayName,
+      pricing.effectiveFrom,
+      pricing.inputPerMillion,
+      pricing.outputPerMillion,
+      pricing.cacheReadPerMillion,
+      pricing.cacheCreationPerMillion,
+      pricing.changeKind ?? null,
+      pricing.note ?? null,
+      pricing.isCurrent ? 1 : 0,
+    );
+  }
+
+  function replaceModelPricing(pricing: ModelPricing[]) {
+    assertOpen();
+    db.exec("BEGIN");
+    try {
+      deleteModelPricingStmt.run();
+      for (const row of pricing) {
+        upsertModelPricing(row);
+      }
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  function replaceModelPricingHistory(pricing: ModelPricingHistoryEntry[]) {
+    assertOpen();
+    deleteModelPricingHistoryStmt.run();
+    for (const row of pricing) {
+      upsertModelPricingHistory(row);
+    }
   }
 
   function clearAll(): HistoryDiagnostics {
@@ -1878,6 +2118,16 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     getUsageImportStatus,
     setUsageImportStatus,
     getModelPricing,
+    getModelPricingHistory,
+    getPricingChangeEvents,
+    getCurrentModelIds,
+    getPricingManifestHash,
+    setPricingManifestHash,
+    getPricingManifestUpdatedAt,
+    setPricingManifestUpdatedAt,
     upsertModelPricing,
+    upsertModelPricingHistory,
+    replaceModelPricing,
+    replaceModelPricingHistory,
   };
 }

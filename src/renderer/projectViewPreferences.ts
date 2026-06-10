@@ -4,6 +4,9 @@ export type SessionListPreferences = {
   expandedProjectSessionKeys: string[];
 };
 
+export type AnalyticsPricingSortField = "model" | "input" | "output" | "cacheRead" | "cacheWrite";
+export type AnalyticsPricingSortDirection = "asc" | "desc";
+
 export type AnalyticsPagePreferences = {
   range: "today" | "7d" | "30d" | "custom";
   customStart: string;
@@ -15,6 +18,9 @@ export type AnalyticsPagePreferences = {
   projectFilter?: string;
   agentFilter?: string;
   modelFilter?: string;
+  pricingVendorFilters: string[];
+  pricingSortField: AnalyticsPricingSortField;
+  pricingSortDirection: AnalyticsPricingSortDirection;
 };
 
 export type WorkReviewRangeDays = 7 | 14 | 30;
@@ -44,6 +50,9 @@ const DEFAULT_ANALYTICS_PAGE_PREFERENCES: AnalyticsPagePreferences = {
   projectFilter: undefined,
   agentFilter: undefined,
   modelFilter: undefined,
+  pricingVendorFilters: [],
+  pricingSortField: "model",
+  pricingSortDirection: "asc",
 };
 
 const DEFAULT_WORK_REVIEW_PAGE_PREFERENCES: WorkReviewPagePreferences = {
@@ -132,6 +141,11 @@ export function readAnalyticsPagePreferences(
     projectFilter: optionalString(record.projectFilter),
     agentFilter: optionalString(record.agentFilter),
     modelFilter: optionalString(record.modelFilter),
+    pricingVendorFilters: stringArray(record.pricingVendorFilters).length > 0
+      ? stringArray(record.pricingVendorFilters)
+      : stringArray(record.pricingModelFilters),
+    pricingSortField: oneOf(record.pricingSortField, ["model", "input", "output", "cacheRead", "cacheWrite"] as const, "model"),
+    pricingSortDirection: oneOf(record.pricingSortDirection, ["asc", "desc"] as const, "asc"),
   };
 }
 

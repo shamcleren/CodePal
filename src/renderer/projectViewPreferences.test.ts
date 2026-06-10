@@ -68,6 +68,9 @@ describe("projectViewPreferences", () => {
       projectFilter: "/repo/CodePal",
       agentFilter: "codex",
       modelFilter: "gpt-5",
+      pricingModelFilters: ["claude-opus-4-8", "claude-haiku-4-5"],
+      pricingSortField: "output",
+      pricingSortDirection: "desc",
     }, storage);
 
     expect(readSessionListPreferences(storage).projectOrder).toEqual(["sessions-project"]);
@@ -82,6 +85,9 @@ describe("projectViewPreferences", () => {
       projectFilter: "/repo/CodePal",
       agentFilter: "codex",
       modelFilter: "gpt-5",
+      pricingModelFilters: ["claude-opus-4-8", "claude-haiku-4-5"],
+      pricingSortField: "output",
+      pricingSortDirection: "desc",
     });
   });
 
@@ -98,6 +104,9 @@ describe("projectViewPreferences", () => {
       projectFilter: "",
       agentFilter: "codex",
       modelFilter: 99,
+      pricingModelFilters: ["gpt-5", 3, null],
+      pricingSortField: "bad",
+      pricingSortDirection: "down",
     }));
 
     expect(readAnalyticsPagePreferences(storage)).toEqual({
@@ -111,6 +120,9 @@ describe("projectViewPreferences", () => {
       projectFilter: undefined,
       agentFilter: "codex",
       modelFilter: undefined,
+      pricingModelFilters: ["gpt-5"],
+      pricingSortField: "model",
+      pricingSortDirection: "asc",
     });
   });
 

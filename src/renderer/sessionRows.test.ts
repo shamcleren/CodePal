@@ -500,6 +500,21 @@ describe("sessionRecordToRow", () => {
     expect(row.collapsedSummary).toBe("我已经把副标题更新到最新进展。");
   });
 
+  it("uses the restored first user prompt instead of idle as collapsed preview", () => {
+    const row = sessionRecordToRow({
+      id: "restored-idle-session",
+      tool: "cursor",
+      status: "idle",
+      title: "idle",
+      task: "idle",
+      firstUserPrompt: "检查一下当前 MR 的改动是否符合预期",
+      updatedAt: 1_700_000_000_000,
+    });
+
+    expect(row.titleLabel).toBe("检查一下当前 MR 的改动是否符合预期");
+    expect(row.collapsedSummary).toBe("检查一下当前 MR 的改动是否符合预期");
+  });
+
   it("keeps Codex Chunk ID tool output out of the main title and collapsed summary", () => {
     const chunkOutput = [
       "Chunk ID: ccc62d",

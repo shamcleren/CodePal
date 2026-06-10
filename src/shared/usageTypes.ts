@@ -129,6 +129,7 @@ export interface ModelTokenStats {
   cacheCreationTokens: number;
   totalTokens: number;
   requestCount: number;
+  estimatedCost?: number;
 }
 
 export interface AgentTokenStats {
@@ -139,6 +140,7 @@ export interface AgentTokenStats {
   cacheCreationTokens: number;
   totalTokens: number;
   requestCount: number;
+  estimatedCost?: number;
 }
 
 export interface ProjectTokenStats {
@@ -166,6 +168,7 @@ export interface SessionTokenStats {
   cacheCreationTokens: number;
   totalTokens: number;
   requestCount: number;
+  estimatedCost?: number;
   firstSeenAt: number;
   lastSeenAt: number;
 }
@@ -199,7 +202,11 @@ export interface ModelPricing {
   outputPerMillion: string;
   cacheReadPerMillion: string;
   cacheCreationPerMillion: string;
+  isCurrent?: boolean;
 }
+
+export type { ModelPricingHistoryEntry, PricingChangeKind } from "./pricingManifest";
+export type { PricingChangeEvent } from "./pricingHistory";
 
 export interface TokenStatsRange {
   start: number;
@@ -220,4 +227,7 @@ export interface TokenStatsResult {
   topSessions: SessionTokenStats[];
   importStatus: UsageImportStatus;
   pricing: ModelPricing[];
+  pricingUpdatedAt?: string;
+  pricingHistory?: import("./pricingManifest").ModelPricingHistoryEntry[];
+  pricingChangeEvents?: import("./pricingHistory").PricingChangeEvent[];
 }

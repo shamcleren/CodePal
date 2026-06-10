@@ -49,6 +49,80 @@ describe("createHistoryStore", () => {
     expect(diagnostics.dbSizeBytes).toBeGreaterThan(0);
   });
 
+  it("estimates historical token cost from model_pricing_history effective dates", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath, now: () => 1_000 });
+
+    store.replaceModelPricingHistory([
+      {
+        modelId: "claude-opus-4-8",
+        displayName: "Claude Opus 4.8",
+        effectiveFrom: Date.parse("2026-05-28T00:00:00.000Z"),
+        inputPerMillion: "5",
+        outputPerMillion: "25",
+        cacheReadPerMillion: "0.50",
+        cacheCreationPerMillion: "6.25",
+        changeKind: "new_model",
+      },
+      {
+        modelId: "claude-sonnet-4-6",
+        displayName: "Claude Sonnet 4.6",
+        effectiveFrom: 0,
+        inputPerMillion: "3",
+        outputPerMillion: "15",
+        cacheReadPerMillion: "0.30",
+        cacheCreationPerMillion: "3.75",
+        changeKind: "initial",
+      },
+    ]);
+
+    store.writeTokenUsage({
+      sessionId: "session-before",
+      agent: "claude",
+      model: "claude-opus-4-8",
+      timestamp: Date.parse("2026-05-01T00:00:00.000Z"),
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      sourceKind: "test",
+      sourceKey: "before-opus-48",
+    });
+    store.writeTokenUsage({
+      sessionId: "session-after",
+      agent: "claude",
+      model: "claude-opus-4-8",
+      timestamp: Date.parse("2026-06-01T00:00:00.000Z"),
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      sourceKind: "test",
+      sourceKey: "after-opus-48",
+    });
+    store.writeTokenUsage({
+      sessionId: "session-sonnet",
+      agent: "claude",
+      model: "claude-sonnet-4-6",
+      timestamp: Date.parse("2026-04-01T00:00:00.000Z"),
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      sourceKind: "test",
+      sourceKey: "sonnet",
+    });
+
+    const byModel = store.getTokenUsageByModel(0, Date.parse("2027-01-01T00:00:00.000Z"));
+    const opus = byModel.find((row) => row.model === "claude-opus-4-8");
+    const sonnet = byModel.find((row) => row.model === "claude-sonnet-4-6");
+    expect(opus?.estimatedCost).toBe(5);
+    expect(sonnet?.estimatedCost).toBe(3);
+
+    const trend = store.getTokenUsageTrend(
+      0,
+      Date.parse("2027-01-01T00:00:00.000Z"),
+      "day",
+    );
+    const totalTrendCost = trend.reduce((sum, point) => sum + (point.estimatedCost ?? 0), 0);
+    expect(totalTrendCost).toBe(8);
+  });
+
   it("seeds Claude Opus 4.8 pricing, including fast mode", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
     const dbPath = path.join(tmpDir, "history.sqlite");
@@ -940,6 +1014,61 @@ describe("createHistoryStore", () => {
   });
 
   describe("getRecentSessions", () => {
+    it("preserves the first session tool like project attribution", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      store = createHistoryStore({ dbPath });
+      const baseTime = Date.now();
+
+      store.writeSessionEvent({
+        session: {
+          id: "stable-agent",
+          tool: "cursor",
+          status: "running",
+          title: "Cursor task",
+          latestTask: "Cursor task",
+          updatedAt: baseTime + 100,
+          lastUserMessageAt: baseTime + 90,
+          hasPendingActions: false,
+          projectPath: "/repo/cursor",
+          projectName: "cursor",
+        },
+        activityItems: [
+          makeActivityItem({
+            id: "user-1",
+            source: "user",
+            title: "User",
+            body: "Cursor first prompt",
+            timestamp: baseTime + 90,
+          }),
+        ],
+      });
+      store.writeSessionEvent({
+        session: {
+          id: "stable-agent",
+          tool: "claude",
+          status: "idle",
+          title: "idle",
+          latestTask: "idle",
+          updatedAt: baseTime + 200,
+          lastUserMessageAt: baseTime + 90,
+          hasPendingActions: false,
+          projectPath: "/repo/claude",
+          projectName: "claude",
+        },
+        activityItems: [],
+      });
+
+      const recent = store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 100 });
+
+      expect(recent[0]).toMatchObject({
+        id: "stable-agent",
+        tool: "cursor",
+        projectPath: "/repo/cursor",
+        projectName: "cursor",
+      });
+    });
+
     it("persists and restores the concrete session model", () => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
       const dbPath = path.join(tmpDir, "history.sqlite");

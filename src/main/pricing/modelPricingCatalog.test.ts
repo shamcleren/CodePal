@@ -1,59 +1,39 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { defaultProviderGatewaySettings } from "../../shared/appSettings";
+import {
+  defaultProviderGatewaySettings,
+  resolveConfiguredProviderModelIds,
+} from "../../shared/appSettings";
+import {
+  historyRowsFromManifestPayload,
+  mergeManifestHistory,
+  normalizePricingHistoryRow,
+  rowsFromManifestPayload,
+} from "../../shared/pricingManifest";
 
 type PricingManifest = {
   pricing?: Array<Record<string, unknown>>;
+  pricingHistory?: Array<Record<string, unknown>>;
 };
 
 const repoRoot = path.resolve(__dirname, "../../..");
 const manifestPath = path.join(repoRoot, "docs", "model-pricing.json");
 
-const REQUIRED_MODEL_IDS = [
-  "claude-haiku-4-5",
-  "claude-haiku-4-5-20251001",
-  "claude-opus-4-20250514",
-  "claude-opus-4-5-20251101",
-  "claude-opus-4-6-20260206",
-  "claude-opus-4-7",
-  "claude-opus-4-8",
-  "claude-opus-4-8-fast",
-  "claude-sonnet-4-20250514",
-  "claude-sonnet-4-5-20250929",
-  "claude-sonnet-4-6",
-  "claude-sonnet-4-6-20260217",
-  "codex-default",
-  "codex-mini-latest",
-  "gpt-4.1",
-  "gpt-5",
-  "gpt-5-codex",
-  "gpt-5.3-codex",
-  "gpt-5.4",
-  "gpt-5.5",
-  "Hy3 preview",
-] as const;
+const REQUIRED_MODEL_IDS = resolveConfiguredProviderModelIds(defaultProviderGatewaySettings);
 
 function loadManifest(): PricingManifest {
   return JSON.parse(fs.readFileSync(manifestPath, "utf8")) as PricingManifest;
-}
-
-function defaultGatewayUpstreamModels(): string[] {
-  const models = new Set<string>();
-  for (const provider of Object.values(defaultProviderGatewaySettings.providers)) {
-    for (const upstreamModel of Object.values(provider.modelMappings)) {
-      if (upstreamModel.trim()) {
-        models.add(upstreamModel.trim());
-      }
-    }
-  }
-  return [...models].sort();
 }
 
 function pricingModelIds(manifest: PricingManifest): string[] {
   return (manifest.pricing ?? [])
     .map((entry) => (typeof entry.modelId === "string" ? entry.modelId.trim() : ""))
     .filter(Boolean);
+}
+
+function currentPricingRows(manifest: PricingManifest): Array<Record<string, unknown>> {
+  return (manifest.pricing ?? []).filter((entry) => entry.isCurrent !== false);
 }
 
 describe("model pricing manifest", () => {
@@ -80,9 +60,43 @@ describe("model pricing manifest", () => {
   });
 
   it("covers default agent and Provider Gateway models", () => {
-    const ids = new Set(pricingModelIds(loadManifest()));
-    const required = [...REQUIRED_MODEL_IDS, ...defaultGatewayUpstreamModels()];
+    const manifest = loadManifest();
+    const ids = new Set([
+      ...pricingModelIds(manifest),
+      ...mergeManifestHistory(
+        rowsFromManifestPayload(manifest),
+        historyRowsFromManifestPayload(manifest),
+      ).map((row) => row.modelId),
+    ]);
+    const required = [...REQUIRED_MODEL_IDS];
     const missing = required.filter((modelId) => !ids.has(modelId));
+    expect(missing).toEqual([]);
+  });
+
+  it("has no duplicate current display names", () => {
+    const rows = currentPricingRows(loadManifest());
+    const displayNames = rows
+      .map((entry) => (typeof entry.displayName === "string" ? entry.displayName.trim() : ""))
+      .filter(Boolean);
+    expect(new Set(displayNames).size).toBe(displayNames.length);
+    expect(displayNames).not.toContain("Claude Opus 4");
+  });
+
+  it("has valid pricingHistory rows with unique model/effectiveFrom keys", () => {
+    const manifest = loadManifest();
+    const pricing = rowsFromManifestPayload(manifest);
+    const explicitHistory = historyRowsFromManifestPayload(manifest);
+    expect(pricing.length).toBeGreaterThan(0);
+    for (const entry of manifest.pricingHistory ?? []) {
+      expect(normalizePricingHistoryRow(entry)).not.toBeNull();
+    }
+
+    const merged = mergeManifestHistory(pricing, explicitHistory);
+    const keys = merged.map((row) => `${row.modelId}\u0000${row.effectiveFrom}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    const missing = REQUIRED_MODEL_IDS.filter((modelId) =>
+      merged.every((row) => row.modelId !== modelId),
+    );
     expect(missing).toEqual([]);
   });
 });

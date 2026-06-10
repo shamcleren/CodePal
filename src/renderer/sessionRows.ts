@@ -60,7 +60,7 @@ function isLowSignalSurfaceText(text: string | undefined): boolean {
     return true;
   }
 
-  if (LOW_SIGNAL_SYSTEM_BODIES.has(trimmed)) {
+  if (LOW_SIGNAL_SYSTEM_BODIES.has(trimmed) || LOW_SIGNAL_SYSTEM_BODIES.has(trimmed.toLowerCase())) {
     return true;
   }
 
@@ -267,13 +267,21 @@ function shortSessionId(id: string): string {
 const FILLER_SENTENCES = new Set(["好的", "继续", "嗯", "收到", "ok", "OK"]);
 const LOW_SIGNAL_SYSTEM_BODIES = new Set([
   "Completed",
+  "completed",
   "Running",
+  "running",
   "Waiting",
+  "waiting",
   "Done",
+  "done",
   "Idle",
+  "idle",
   "Offline",
+  "offline",
   "Error",
+  "error",
   "Working",
+  "working",
 ]);
 
 function isLowInformationLoadingState(record: SessionRecord, timelineItems: TimelineItem[]): boolean {
@@ -644,6 +652,9 @@ function buildCollapsedSummary(record: SessionRecord, timelineItems: TimelineIte
     }
     if (record.title?.trim() && !isLowValueSummaryText(record.title)) {
       return record.title.trim();
+    }
+    if (record.firstUserPrompt?.trim() && !isLowValueSummaryText(record.firstUserPrompt)) {
+      return lastMeaningfulSentence(record.firstUserPrompt);
     }
     return record.status;
   }

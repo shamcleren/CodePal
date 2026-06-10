@@ -14,12 +14,14 @@ export interface TokenTrendPoint {
   reasoningTokens: number;
   totalTokens: number;
   requestCount: number;
+  estimatedCost?: number;
 }
 
 export interface TokenTrendResult {
   granularity: TokenTrendGranularity;
   points: TokenTrendPoint[];
   sourcePointCount: number;
+  pricingChangeEvents?: import("./pricingHistory").PricingChangeEvent[];
 }
 
 export type WorkHealthSignalKind =

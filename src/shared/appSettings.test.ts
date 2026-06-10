@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   APP_THEME_IDS,
   DEFAULT_MODEL_PRICING_REMOTE_URL,
+  resolveConfiguredProviderModelIds,
   mergeAppSettings,
   normalizeAppSettings,
   normalizeCodeBuddyEndpointSettings,
@@ -296,8 +297,8 @@ describe("appSettings", () => {
           modelMappings: {
             "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
             "anthropic/MiMo-V2.5": "mimo-v2.5",
-            "anthropic/MiMo-V2-Pro": "mimo-v2-pro",
-            "anthropic/MiMo-V2-Omni": "mimo-v2-omni",
+            "anthropic/MiMo-V2-Pro": "mimo-v2.5-pro",
+            "anthropic/MiMo-V2-Omni": "mimo-v2.5",
             default: "mimo-v2.5",
             sonnet: "mimo-v2.5",
             opus: "mimo-v2.5-pro",
@@ -528,5 +529,61 @@ describe("appSettings", () => {
       "claude-haiku-4-5": "mimo-v2.5",
       "anthropic/Custom": "custom-upstream",
     });
+  });
+
+  it("collects configured model ids from default provider mappings", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      providerGateway: {
+        providers: {
+          mimo: {
+            modelMappings: {
+              default: "mimo-custom-default",
+              sonnet: "mimo-custom-sonnet",
+            },
+          },
+          deepseek: {
+            modelMappings: {
+              opus: "deepseek-custom-opus",
+            },
+          },
+          customVendor: {
+            type: "openai-chat-compatible",
+            displayName: "Custom Vendor",
+            baseUrl: "https://example.invalid",
+            authScheme: "bearer",
+            tokenRef: "custom.api_key",
+            envFallback: "CUSTOM_API_KEY",
+            headers: {},
+            modelMappings: {
+              default: "custom-default",
+            },
+          },
+        },
+      },
+    });
+
+    const resolved = resolveConfiguredProviderModelIds(settings.providerGateway);
+    expect(resolved).toContain("mimo-custom-default");
+    expect(resolved).toContain("mimo-custom-sonnet");
+    expect(resolved).toContain("deepseek-custom-opus");
+    expect(resolved).toContain("custom-default");
+  });
+
+  it("supports legacy provider keys using displayName while resolving configured model ids", () => {
+    const settings = normalizeAppSettings({
+      version: 1,
+      providerGateway: {
+        providers: {
+          "MiMo Gateway": {
+            modelMappings: {
+              default: "legacy-mimo-default",
+            },
+          },
+        },
+      },
+    });
+
+    expect(resolveConfiguredProviderModelIds(settings.providerGateway)).toContain("legacy-mimo-default");
   });
 });

@@ -655,6 +655,9 @@ function seriesForMetric(
 ): Series[] {
   const pricingByModel = new Map(pricing.map((entry) => [entry.modelId, entry]));
   const costForPoint = (point: TokenTrendPoint) => {
+    if (typeof point.estimatedCost === "number" && Number.isFinite(point.estimatedCost)) {
+      return point.estimatedCost;
+    }
     const exactPrice = pricingByModel.get(point.model);
     return exactPrice
       ? estimateTrendPointCost(point, [exactPrice]) ?? 0

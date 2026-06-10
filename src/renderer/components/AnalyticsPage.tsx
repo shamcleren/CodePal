@@ -8,7 +8,9 @@ import { estimateTokenCost, formatMetricValue, formatUsageCost, formatUsageToken
 import type { UsageDisplaySettings } from "../usageDisplaySettings";
 import { AnalyticsLineChart } from "./AnalyticsLineChart";
 import type { TrendGroupMode } from "./AnalyticsLineChart";
+import { ModelPricingTrendChart } from "./ModelPricingTrendChart";
 import { UsageStatusStrip } from "./UsageStatusStrip";
+import { formatPricingChangeNotice } from "../pricingNotice";
 import type { ResolvedLocale } from "../../shared/i18nTypes";
 
 type RangePreset = "today" | "7d" | "30d" | "custom";
@@ -214,17 +216,8 @@ export function buildAnalyticsBreakdownRows(
       cacheReadTokens: m.cacheReadTokens,
       cacheCreationTokens: m.cacheCreationTokens,
       totalTokens: m.totalTokens,
-      cost: estimateCost(m, pricing, m.model),
+      cost: m.estimatedCost ?? estimateCost(m, pricing, m.model),
     }));
-  }
-
-  const costByAgent = new Map<string, number>();
-  for (const modelStats of data?.byModel ?? []) {
-    costByAgent.set(
-      modelStats.agent,
-      (costByAgent.get(modelStats.agent) ?? 0) +
-        estimateCost(modelStats, pricing, modelStats.model),
-    );
   }
 
   return (data?.byAgent ?? []).map((agent) => ({
@@ -237,7 +230,7 @@ export function buildAnalyticsBreakdownRows(
     cacheReadTokens: agent.cacheReadTokens,
     cacheCreationTokens: agent.cacheCreationTokens,
     totalTokens: agent.totalTokens,
-    cost: costByAgent.get(agent.agent) ?? 0,
+    cost: agent.estimatedCost ?? 0,
   }));
 }
 
@@ -293,11 +286,17 @@ export function buildAvailableModels(
 ): string[] {
   const ranks = new Map<string, UsageRank>();
   for (const entry of data?.byModel ?? []) {
+    if (entry.model.trim().toLowerCase() === "unknown") {
+      continue;
+    }
     addUsageRank(ranks, entry.model, entry.requestCount, entry.totalTokens);
   }
 
   const fallbackRanks = new Map<string, UsageRank>();
   for (const point of trendPoints) {
+    if (point.model.trim().toLowerCase() === "unknown") {
+      continue;
+    }
     addUsageRank(fallbackRanks, point.model, point.requestCount, point.totalTokens);
   }
   for (const [model, rank] of fallbackRanks) {
@@ -360,7 +359,10 @@ type AnalyticsPageProps = {
   usageDisplaySettings?: UsageDisplaySettings;
 };
 
-export function AnalyticsPage({ usageOverview, usageDisplaySettings }: AnalyticsPageProps = {}) {
+export function AnalyticsPage({
+  usageOverview,
+  usageDisplaySettings,
+}: AnalyticsPageProps = {}) {
   const i18n = useI18n();
   const initialPreferencesRef = useRef<ReturnType<typeof readAnalyticsPagePreferences> | null>(null);
   if (initialPreferencesRef.current === null) {
@@ -381,6 +383,13 @@ export function AnalyticsPage({ usageOverview, usageDisplaySettings }: Analytics
   const [projectFilter, setProjectFilter] = useState<string | undefined>(initialPreferences.projectFilter);
   const [agentFilter, setAgentFilter] = useState<string | undefined>(initialPreferences.agentFilter);
   const [modelFilter, setModelFilter] = useState<string | undefined>(initialPreferences.modelFilter);
+  const [pricingVendorFilters, setPricingVendorFilters] = useState<string[]>(initialPreferences.pricingVendorFilters);
+  const [pricingSortField, setPricingSortField] = useState<"model" | "input" | "output" | "cacheRead" | "cacheWrite">(
+    initialPreferences.pricingSortField,
+  );
+  const [pricingSortDirection, setPricingSortDirection] = useState<"asc" | "desc">(
+    initialPreferences.pricingSortDirection,
+  );
   const [loading, setLoading] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
 
@@ -396,6 +405,9 @@ export function AnalyticsPage({ usageOverview, usageDisplaySettings }: Analytics
       projectFilter,
       agentFilter,
       modelFilter,
+      pricingVendorFilters,
+      pricingSortField,
+      pricingSortDirection,
     });
   }, [
     range,
@@ -408,6 +420,9 @@ export function AnalyticsPage({ usageOverview, usageDisplaySettings }: Analytics
     projectFilter,
     agentFilter,
     modelFilter,
+    pricingVendorFilters,
+    pricingSortField,
+    pricingSortDirection,
   ]);
 
   const fetchData = useCallback(async (preset: RangePreset) => {
@@ -483,7 +498,10 @@ export function AnalyticsPage({ usageOverview, usageDisplaySettings }: Analytics
   const cacheHitRate = totalCacheRead + totalInput > 0
     ? totalCacheRead / (totalCacheRead + totalInput + totalCacheCreation)
     : 0;
-  const totalCost = (data?.byModel ?? []).reduce((s, m) => s + estimateCost(m, pricing, m.model), 0);
+  const totalCost = (data?.byModel ?? []).reduce(
+    (sum, modelStats) => sum + (modelStats.estimatedCost ?? estimateCost(modelStats, pricing, modelStats.model)),
+    0,
+  );
   const topAgent = data?.byAgent?.[0];
   const topModel = data?.byModel?.[0];
 
@@ -539,6 +557,10 @@ export function AnalyticsPage({ usageOverview, usageDisplaySettings }: Analytics
 
   const breakdownRows = buildAnalyticsBreakdownRows(breakdownMode, data);
   const coverageSummary = buildAnalyticsCoverageSummary(data, trendData, i18n.t);
+  const pricingNotice = formatPricingChangeNotice(
+    trendData?.pricingChangeEvents ?? data?.pricingChangeEvents ?? [],
+    i18n.t,
+  );
   const refreshStatus = lastRefreshedAt
     ? i18n.t("tokenStats.lastRefreshed", {
         time: new Intl.DateTimeFormat(i18n.locale, {
@@ -742,6 +764,11 @@ export function AnalyticsPage({ usageOverview, usageDisplaySettings }: Analytics
             ))}
           </div>
         ) : null}
+        {pricingNotice ? (
+          <div className="analytics-page__pricing-notice" title={pricingNotice}>
+            {pricingNotice}
+          </div>
+        ) : null}
         <AnalyticsLineChart
           points={trendData?.points ?? []}
           metric={metric}
@@ -751,6 +778,25 @@ export function AnalyticsPage({ usageOverview, usageDisplaySettings }: Analytics
           domainEnd={currentRange.endMs}
           pricing={data?.pricing ?? []}
           yFormat={(value, trendMetric) => formatMetricValue(value, trendMetric, i18n.locale)}
+        />
+      </div>
+
+      <div className="analytics-page__section">
+        <ModelPricingTrendChart
+          pricing={data?.pricing ?? []}
+          pricingUpdatedAt={data?.pricingUpdatedAt}
+          pricingHistory={data?.pricingHistory ?? []}
+          pricingChangeEvents={data?.pricingChangeEvents ?? trendData?.pricingChangeEvents ?? []}
+          rangeStartMs={currentRange.startMs}
+          rangeEndMs={currentRange.endMs}
+          selectedVendorIds={pricingVendorFilters}
+          onSelectedVendorIdsChange={setPricingVendorFilters}
+          sortField={pricingSortField}
+          sortDirection={pricingSortDirection}
+          onSortChange={(field, direction) => {
+            setPricingSortField(field);
+            setPricingSortDirection(direction);
+          }}
         />
       </div>
 

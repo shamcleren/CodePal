@@ -2,7 +2,12 @@ import { BrowserWindow, Tray, app, clipboard, dialog, ipcMain, shell } from "ele
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { defaultProviderGatewaySettings, type AppSettings, type AppSettingsPatch, type ProviderGatewayConfig } from "../shared/appSettings";
+import {
+  defaultProviderGatewaySettings,
+  type AppSettings,
+  type AppSettingsPatch,
+  type ProviderGatewayConfig,
+} from "../shared/appSettings";
 import { createActionResponseTransport } from "./actionResponse/createActionResponseTransport";
 import { generateHtmlReport } from "./report/generateHtmlReport";
 import { buildReportFacts } from "../shared/reportFacts";
@@ -118,6 +123,8 @@ let historyStore: ReturnType<typeof createAppHistoryStore> | null = null;
 let historyWriter: ReturnType<typeof createDeferredHistoryWriter> | null = null;
 let usageBackfillAbortController: AbortController | null = null;
 let usageBackfillTimer: ReturnType<typeof setTimeout> | null = null;
+let modelPricingSyncTimer: ReturnType<typeof setInterval> | null = null;
+const MODEL_PRICING_SYNC_INTERVAL_MS = 8 * 60 * 60 * 1000;
 let providerGatewayServer: ReturnType<typeof createClaudeDesktopGatewayServer> | null = null;
 let providerGatewayListener: ProviderGatewayListenerInput = {
   state: "unavailable",
@@ -289,6 +296,19 @@ function resolveReportLocale(setting: AppLocale, systemLocale: string | undefine
   return systemLocale?.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
 }
 
+function formatPricingUpdatedAt(pricingUpdatedAt: string | null, pricingHistory: { effectiveFrom: number }[]): string | undefined {
+  if (typeof pricingUpdatedAt === "string" && pricingUpdatedAt.trim()) {
+    return pricingUpdatedAt;
+  }
+  let latest = 0;
+  for (const row of pricingHistory) {
+    if (row.effectiveFrom > latest) {
+      latest = row.effectiveFrom;
+    }
+  }
+  return latest > 0 ? new Date(latest).toISOString() : undefined;
+}
+
 function applyHistorySettingsAtRuntimeSafely(
   currentHistoryStore: ReturnType<typeof createAppHistoryStore>,
   settings: Pick<AppSettings, "history">,
@@ -348,6 +368,11 @@ function wireActionResponseIpc(
         pricing: [],
       };
     }
+    const pricingHistory = currentHistoryStore.getModelPricingHistory();
+    const pricingUpdatedAt = formatPricingUpdatedAt(
+      currentHistoryStore.getPricingManifestUpdatedAt(),
+      pricingHistory,
+    );
     return {
       daily: currentHistoryStore.getTokenUsageDailyStats(startMs, endMs, agent),
       byProject: currentHistoryStore.getTokenUsageByProject(startMs, endMs, agent),
@@ -356,6 +381,9 @@ function wireActionResponseIpc(
       topSessions: currentHistoryStore.getTopTokenUsageSessions(startMs, endMs, agent, 10),
       importStatus: currentHistoryStore.getUsageImportStatus(),
       pricing: currentHistoryStore.getModelPricing(),
+      pricingUpdatedAt,
+      pricingHistory,
+      pricingChangeEvents: currentHistoryStore.getPricingChangeEvents(startMs, endMs),
     };
   });
   ipcMain.handle(
@@ -380,6 +408,7 @@ function wireActionResponseIpc(
         granularity,
         points,
         sourcePointCount: points.length,
+        pricingChangeEvents: currentHistoryStore.getPricingChangeEvents(startMs, endMs),
       };
     },
   );
@@ -1034,23 +1063,44 @@ function scheduleUsageBackfillAfterStartup(options: {
   }, resolveUsageBackfillDelayMs());
 }
 
-function scheduleModelPricingSync(options: {
+function runModelPricingSync(options: {
   currentHistoryStore: ReturnType<typeof createAppHistoryStore>;
   settingsService: ReturnType<typeof createSettingsService>;
 }) {
-  const remoteUrl = options.settingsService.getSettings().pricing.remoteUrl;
+  const settings = options.settingsService.getSettings();
+  const remoteUrl = settings.pricing.remoteUrl;
   void syncModelPricingFromRemote({
     remoteUrl,
     historyStore: options.currentHistoryStore,
   }).then((result) => {
     if (result.ok) {
-      if (result.imported > 0) {
-        console.log(`[CodePal Pricing] Synced ${result.imported} model pricing row(s)`);
+      if (result.unchanged) {
+        return;
+      }
+      if (result.imported > 0 || result.historyImported > 0) {
+        console.log(
+          `[CodePal Pricing] Synced ${result.imported} current row(s) and ${result.historyImported} history row(s)`,
+        );
+        broadcastUsageOverview();
       }
       return;
     }
     console.error("[CodePal Pricing] remote pricing sync skipped:", result.error);
   });
+}
+
+function scheduleModelPricingSync(options: {
+  currentHistoryStore: ReturnType<typeof createAppHistoryStore>;
+  settingsService: ReturnType<typeof createSettingsService>;
+}) {
+  if (modelPricingSyncTimer) {
+    clearInterval(modelPricingSyncTimer);
+    modelPricingSyncTimer = null;
+  }
+  runModelPricingSync(options);
+  modelPricingSyncTimer = setInterval(() => {
+    runModelPricingSync(options);
+  }, MODEL_PRICING_SYNC_INTERVAL_MS);
 }
 
 async function wireIpcHub(

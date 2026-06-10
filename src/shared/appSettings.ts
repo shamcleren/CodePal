@@ -119,6 +119,71 @@ export type AppSettingsPatch = {
 const CLAUDE_HAIKU_ROUTE_ID = "claude-haiku-4-5";
 const MIMO_DEFAULT_UPSTREAM_MODEL = "mimo-v2.5";
 const MIMO_LEGACY_HAIKU_UPSTREAM_MODEL = "mimo-v2";
+
+function normalizeUpstreamModelId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === "unknown") {
+    return null;
+  }
+  return trimmed;
+}
+
+function resolveProviderConfiguredModelIds(modelMappings: Record<string, string>): string[] {
+  const models: string[] = [];
+  for (const value of Object.values(modelMappings)) {
+    const resolved = normalizeUpstreamModelId(value);
+    if (resolved) {
+      models.push(resolved);
+    }
+  }
+  return models;
+}
+
+export function resolveConfiguredProviderModelIds(
+  providerGatewaySettings: AppSettings["providerGateway"],
+): string[] {
+  const seen = new Set<string>();
+  const defaultProviderEntries = Object.entries(defaultProviderGatewaySettings.providers);
+  const defaultProviderIds = new Set(defaultProviderEntries.map(([providerId]) => providerId));
+
+  for (const [providerId, provider] of defaultProviderEntries) {
+    const configuredById = providerGatewaySettings.providers[providerId] as
+      | ProviderGatewayConfig
+      | undefined;
+    const configuredByDisplayName = providerGatewaySettings.providers[provider.displayName] as
+      | ProviderGatewayConfig
+      | undefined;
+    const modelMappings = {
+      ...provider.modelMappings,
+      ...(configuredById?.modelMappings ?? {}),
+      ...(configuredByDisplayName?.modelMappings ?? {}),
+    };
+
+    for (const modelId of resolveProviderConfiguredModelIds(modelMappings)) {
+      if (seen.has(modelId)) {
+        continue;
+      }
+      seen.add(modelId);
+    }
+  }
+
+  for (const [providerId, provider] of Object.entries(providerGatewaySettings.providers)) {
+    if (!defaultProviderIds.has(providerId)) {
+      for (const modelId of resolveProviderConfiguredModelIds(provider.modelMappings)) {
+        if (seen.has(modelId)) {
+          continue;
+        }
+        seen.add(modelId);
+      }
+    }
+  }
+
+  return Array.from(seen);
+}
+
 export const DEFAULT_MODEL_PRICING_REMOTE_URL =
   "https://shamcleren.github.io/CodePal/model-pricing.json";
 export const DEFAULT_CODEBUDDY_QUOTA_REFRESH_INTERVAL_MINUTES = 5;
@@ -188,8 +253,8 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
       modelMappings: {
         "anthropic/MiMo-V2.5-Pro": "mimo-v2.5-pro",
         "anthropic/MiMo-V2.5": "mimo-v2.5",
-        "anthropic/MiMo-V2-Pro": "mimo-v2-pro",
-        "anthropic/MiMo-V2-Omni": "mimo-v2-omni",
+        "anthropic/MiMo-V2-Pro": "mimo-v2.5-pro",
+        "anthropic/MiMo-V2-Omni": MIMO_DEFAULT_UPSTREAM_MODEL,
         default: MIMO_DEFAULT_UPSTREAM_MODEL,
         sonnet: MIMO_DEFAULT_UPSTREAM_MODEL,
         opus: "mimo-v2.5-pro",
@@ -228,10 +293,10 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         default: "MiniMax-M3",
         sonnet: "MiniMax-M3",
         opus: "MiniMax-M3",
-        haiku: "MiniMax-M2.7-highspeed",
+        haiku: "MiniMax-M3",
         "claude-sonnet-4-6": "MiniMax-M3",
         "claude-opus-4-7": "MiniMax-M3",
-        [CLAUDE_HAIKU_ROUTE_ID]: "MiniMax-M2.7-highspeed",
+        [CLAUDE_HAIKU_ROUTE_ID]: "MiniMax-M3",
       },
     },
     qwen: {
@@ -246,10 +311,10 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         default: "qwen3.7-plus",
         sonnet: "qwen3.7-plus",
         opus: "qwen3.7-plus",
-        haiku: "qwen-plus",
+        haiku: "qwen3.7-plus",
         "claude-sonnet-4-6": "qwen3.7-plus",
         "claude-opus-4-7": "qwen3.7-plus",
-        [CLAUDE_HAIKU_ROUTE_ID]: "qwen-plus",
+        [CLAUDE_HAIKU_ROUTE_ID]: "qwen3.7-plus",
       },
     },
     kimi: {
@@ -264,10 +329,10 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         default: "kimi-k2.6",
         sonnet: "kimi-k2.6",
         opus: "kimi-k2.6",
-        haiku: "moonshot-v1-32k",
+        haiku: "kimi-k2.6",
         "claude-sonnet-4-6": "kimi-k2.6",
         "claude-opus-4-7": "kimi-k2.6",
-        [CLAUDE_HAIKU_ROUTE_ID]: "moonshot-v1-32k",
+        [CLAUDE_HAIKU_ROUTE_ID]: "kimi-k2.6",
       },
     },
     zhipu: {
@@ -282,10 +347,10 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         default: "glm-5.1",
         sonnet: "glm-5.1",
         opus: "glm-5.1",
-        haiku: "glm-4-flash",
+        haiku: "glm-5.1",
         "claude-sonnet-4-6": "glm-5.1",
         "claude-opus-4-7": "glm-5.1",
-        [CLAUDE_HAIKU_ROUTE_ID]: "glm-4-flash",
+        [CLAUDE_HAIKU_ROUTE_ID]: "glm-5.1",
       },
     },
     siliconflow: {
@@ -300,10 +365,10 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         default: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
         sonnet: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
         opus: "deepseek-ai/DeepSeek-V3.2-Exp",
-        haiku: "Qwen/Qwen3-30B-A3B-Instruct",
+        haiku: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
         "claude-sonnet-4-6": "Qwen/Qwen3-Coder-480B-A35B-Instruct",
         "claude-opus-4-7": "deepseek-ai/DeepSeek-V3.2-Exp",
-        [CLAUDE_HAIKU_ROUTE_ID]: "Qwen/Qwen3-30B-A3B-Instruct",
+        [CLAUDE_HAIKU_ROUTE_ID]: "Qwen/Qwen3-Coder-480B-A35B-Instruct",
       },
     },
     openrouter: {
@@ -321,10 +386,10 @@ export const defaultProviderGatewaySettings: ProviderGatewaySettings = {
         default: "deepseek/deepseek-v4-flash",
         sonnet: "deepseek/deepseek-v4-flash",
         opus: "deepseek/deepseek-v4-pro",
-        haiku: "qwen/qwen-plus",
+        haiku: "deepseek/deepseek-v4-flash",
         "claude-sonnet-4-6": "deepseek/deepseek-v4-flash",
         "claude-opus-4-7": "deepseek/deepseek-v4-pro",
-        [CLAUDE_HAIKU_ROUTE_ID]: "qwen/qwen-plus",
+        [CLAUDE_HAIKU_ROUTE_ID]: "deepseek/deepseek-v4-flash",
       },
     },
   },

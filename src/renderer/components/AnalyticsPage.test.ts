@@ -49,6 +49,7 @@ const baseStats: TokenStatsResult = {
       cacheReadTokens: 250_000,
       cacheCreationTokens: 100_000,
       totalTokens: 1_850_000,
+      estimatedCost: 10.95,
       firstSeenAt: 1,
       lastSeenAt: 2,
     },
@@ -61,6 +62,7 @@ const baseStats: TokenStatsResult = {
       cacheReadTokens: 0,
       cacheCreationTokens: 0,
       totalTokens: 750_000,
+      estimatedCost: 3.5,
       firstSeenAt: 3,
       lastSeenAt: 4,
     },
@@ -74,6 +76,7 @@ const baseStats: TokenStatsResult = {
       cacheReadTokens: 250_000,
       cacheCreationTokens: 100_000,
       totalTokens: 2_600_000,
+      estimatedCost: 14.45,
       firstSeenAt: 1,
       lastSeenAt: 4,
     },
@@ -268,7 +271,7 @@ describe("AnalyticsPage helpers", () => {
       i18n.t,
     );
 
-    expect(summary).toBe("来源：本地历史 4 请求 · 趋势 6 点 · 历史补齐 5 条 · 费用：估算");
+    expect(summary).toBe("来源：本地历史 4 请求 · 趋势 6 点 · 历史补齐 5 条 · 费用：按历史价格估算");
   });
 
   it("orders agent and model filters by common usage first", () => {
