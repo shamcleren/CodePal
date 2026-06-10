@@ -375,7 +375,7 @@ export function ModelPricingTrendChart({
       {historyModelId ? (
         <div className="pricing-trend__filter-backdrop" onClick={() => setHistoryModelId(null)}>
           <div className="pricing-trend__history-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="pricing-trend__filter-modal-header">
+            <div className="pricing-trend__filter-modal-header pricing-trend__history-modal-header">
               <div>
                 <div className="pricing-trend__filter-modal-title">
                   {i18n.t("tokenStats.pricingTable.historyTitle")}

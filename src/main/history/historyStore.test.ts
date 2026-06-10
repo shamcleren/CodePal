@@ -123,6 +123,64 @@ describe("createHistoryStore", () => {
     expect(totalTrendCost).toBe(8);
   });
 
+  it("omits non-current models from pricing change events", () => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+    const dbPath = path.join(tmpDir, "history.sqlite");
+    store = createHistoryStore({ dbPath, now: () => 1_000 });
+
+    store.replaceModelPricing([
+      {
+        modelId: "claude-fable-5",
+        displayName: "Claude Fable 5",
+        inputPerMillion: "10",
+        outputPerMillion: "50",
+        cacheReadPerMillion: "1",
+        cacheCreationPerMillion: "12.50",
+        isCurrent: true,
+      },
+      {
+        modelId: "dirty-history-model",
+        displayName: "Dirty History Model",
+        inputPerMillion: "1",
+        outputPerMillion: "2",
+        cacheReadPerMillion: "0.10",
+        cacheCreationPerMillion: "0",
+        isCurrent: false,
+      },
+    ]);
+    store.replaceModelPricingHistory([
+      {
+        modelId: "claude-fable-5",
+        displayName: "Claude Fable 5",
+        effectiveFrom: Date.parse("2026-06-10T00:00:00.000Z"),
+        inputPerMillion: "10",
+        outputPerMillion: "50",
+        cacheReadPerMillion: "1",
+        cacheCreationPerMillion: "12.50",
+        changeKind: "new_model",
+        isCurrent: true,
+      },
+      {
+        modelId: "dirty-history-model",
+        displayName: "Dirty History Model",
+        effectiveFrom: Date.parse("2026-06-10T00:00:00.000Z"),
+        inputPerMillion: "1",
+        outputPerMillion: "2",
+        cacheReadPerMillion: "0.10",
+        cacheCreationPerMillion: "0",
+        changeKind: "new_model",
+        isCurrent: false,
+      },
+    ]);
+
+    const events = store.getPricingChangeEvents(
+      Date.parse("2026-06-01T00:00:00.000Z"),
+      Date.parse("2026-06-30T00:00:00.000Z"),
+    );
+
+    expect(events.map((event) => event.modelId)).toEqual(["claude-fable-5"]);
+  });
+
   it("seeds Claude Opus 4.8 pricing, including fast mode", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
     const dbPath = path.join(tmpDir, "history.sqlite");

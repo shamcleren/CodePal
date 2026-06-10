@@ -1965,7 +1965,14 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
   }
 
   function getPricingChangeEvents(startMs: number, endMs: number): PricingChangeEvent[] {
-    return listPricingChangeEvents(getModelPricingHistory(), { startMs, endMs });
+    const currentModelIds = new Set(
+      getModelPricing()
+        .filter((row) => row.isCurrent !== false)
+        .map((row) => row.modelId),
+    );
+    return listPricingChangeEvents(getModelPricingHistory(), { startMs, endMs }).filter((event) =>
+      currentModelIds.has(event.modelId),
+    );
   }
 
   function getPricingManifestHash(): string | null {

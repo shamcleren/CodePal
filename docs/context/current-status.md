@@ -61,7 +61,7 @@
   - release hook regenerates stale `latest-mac.yml` for the current version and redacts Apple notary secrets from release logs.
 - v1.1.9 hotfix validation on 2026-05-19 covers legacy `history.sqlite` migration from the pre-`source_key` token usage schema and verifies the app can still open with history disabled when persistence startup fails.
 - v1.1.10 patch validation on 2026-05-19 covers inflated analytics totals from duplicated local history imports, repeated Codex token snapshots, and Codex cached-input double counting.
-- v1.0.3 through v1.3.16 are all shipped. Current shipped baseline is **v1.3.16**.
+- v1.0.3 through v1.3.17 are all shipped. Current shipped baseline is **v1.3.17**.
 - v1.1.0 shipped: macOS notifications and sounds, session restore on app update, send-message UI scaffolding, click-to-navigate with `open -a` fallback
 - v1.1.1 shipped: terminal metadata capture at hook time, capability-gated send-message (tmux / Ghostty), per-terminal precise jump dispatch
 - v1.1.2 shipped: blocking-hook TTL fix, handshake for half-alive CodePal
@@ -92,6 +92,7 @@
 - v1.3.14 shipped: macOS ShipIt install kickstart fallback plus startup self-healing for newer pending updater bundles already staged in the local cache
 - v1.3.15 shipped: CodeBuddy Code login window display/error handling hardened, and the ShipIt install fallback carried forward for real in-app update validation
 - v1.3.16 shipped: CodeBuddy login/quota windows detached from the main panel, session project attribution locked after first valid resolution, and stale ShipIt pending-update cache treated as a quiet no-op
+- v1.3.17 shipped: model pricing history modal polish, non-current pricing event filtering, and test alignment for vendor filters / Provider Gateway health checks
 - v1.3.5 validation covered the Analytics chart-domain refresh regression and report-format alignment follow-up found after v1.3.4:
   - `npm test -- src/renderer/components/AnalyticsPage.test.ts src/renderer/components/AnalyticsLineChart.test.tsx src/renderer/App.test.tsx`
   - `npm test -- src/main/report/generateHtmlReport.test.ts`
@@ -150,6 +151,18 @@
   - `npm test`
   - `npm run build`
   - `npm run test:e2e`
+  - `git diff --check`
+- v1.3.17 local validation on 2026-06-10 covers model pricing history modal polish, non-current pricing event filtering, Analytics vendor-filter preference alignment, and Provider Gateway health-check dedupe expectations:
+  - `npm test -- src/main/history/historyStore.test.ts -t "omits non-current models from pricing change events"`
+  - `npm test -- src/main/history/historyStore.test.ts src/shared/pricingHistory.test.ts src/renderer/components/ModelPricingTrendChart.test.tsx`
+  - `npm test -- src/renderer/components/AnalyticsPage.test.ts src/renderer/components/ModelPricingTrendChart.test.tsx`
+  - `npm test -- src/renderer/projectViewPreferences.test.ts src/main/gateway/claudeDesktopGateway.test.ts`
+  - `npm test`
+  - `npm run lint`
+  - `npm run build`
+  - `npm run test:e2e`
+  - `npm run dist:mac`
+  - `node scripts/verify-mac-release-assets.cjs <current 1.3.17 assets>`
   - `git diff --check`
 - v1.3.0 local lint / test / build verification is green on 2026-05-26:
   - `npm run lint`
@@ -426,9 +439,9 @@ npm run dist:mac
 - team sharing, cloud sync, billing, and broader control surfaces until the individual local workflow has proven sustained value
 - any productivity-scoring or team-ranking surface
 
-### v1.1.0-v1.3.16 Release Track
+### v1.1.0-v1.3.17 Release Track
 
-v1.1.0 through v1.3.16 are shipped. See individual release notes for details:
+v1.1.0 through v1.3.17 are shipped. See individual release notes for details:
 
 - `docs/release/notes/release-notes-v1.1.0.md` — macOS notifications, session restore, send-message UI scaffolding, click-to-navigate (open -a)
 - `docs/release/notes/release-notes-v1.1.1.md` — terminal metadata capture, capability-gated send-message (tmux / Ghostty), per-terminal jump dispatch, keep-alive cleanup
@@ -460,6 +473,7 @@ v1.1.0 through v1.3.16 are shipped. See individual release notes for details:
 - `docs/release/notes/release-notes-v1.3.14.md` — macOS ShipIt install kickstart fallback and startup self-healing for pending updater bundles
 - `docs/release/notes/release-notes-v1.3.15.md` — CodeBuddy Code login window hardening plus updater verification release target
 - `docs/release/notes/release-notes-v1.3.16.md` — CodeBuddy login-window detachment, stable project attribution, and quiet stale ShipIt cache handling
+- `docs/release/notes/release-notes-v1.3.17.md` — model pricing history modal polish, non-current pricing event filtering, and vendor-filter / Gateway health-check test alignment
 
 ## Next Product Direction Handoff
 

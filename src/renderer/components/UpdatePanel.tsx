@@ -56,6 +56,9 @@ export function UpdatePanel({
         <div className="display-panel__title">{t("update.title")}</div>
         <div className="display-panel__subtitle">{t("update.subtitle")}</div>
         <div className="update-panel__status">{summary}</div>
+        {phase === "downloaded" ? (
+          <div className="update-panel__hint">{t("update.installHint")}</div>
+        ) : null}
         {releaseNotes ? (
           <div className="update-panel__notes">
             <div className="update-panel__notes-title">{t("update.notes")}</div>

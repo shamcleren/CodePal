@@ -78,6 +78,14 @@ function isFileNotFoundError(error: unknown): boolean {
   return error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }
 
+function clearStaleShipItState(statePath: string): void {
+  try {
+    fs.rmSync(statePath, { force: true });
+  } catch {
+    // Best-effort cleanup only; stale state should not block startup.
+  }
+}
+
 function readPendingShipItVersion(cacheDir: string, bundleIdentifier: string): string | null {
   const statePath = path.join(cacheDir, `${bundleIdentifier}.ShipIt`, "ShipItState.plist");
   if (!fs.existsSync(statePath)) {
@@ -91,11 +99,13 @@ function readPendingShipItVersion(cacheDir: string, bundleIdentifier: string): s
     const updateBundlePath = fileURLToPath(parsed.updateBundleURL);
     const infoPlistPath = path.join(updateBundlePath, "Contents", "Info.plist");
     if (!fs.existsSync(infoPlistPath)) {
+      clearStaleShipItState(statePath);
       return null;
     }
     return readInfoPlistVersion(infoPlistPath);
   } catch (error) {
     if (isFileNotFoundError(error)) {
+      clearStaleShipItState(statePath);
       return null;
     }
     console.error("[CodePal Update] failed to inspect pending ShipIt update:", error);

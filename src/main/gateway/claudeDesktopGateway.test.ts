@@ -869,8 +869,6 @@ describe.runIf(process.env.VITEST_CAN_LISTEN !== "false")("claude desktop gatewa
     expect(calls.map((call) => JSON.parse(String(call.init.body)).model)).toEqual([
       "mimo-v2.5-pro",
       "mimo-v2.5",
-      "mimo-v2-pro",
-      "mimo-v2-omni",
     ]);
   });
 });

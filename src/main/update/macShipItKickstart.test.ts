@@ -186,5 +186,6 @@ describe("scheduleMacShipItKickstart", () => {
     expect(consoleError).not.toHaveBeenCalled();
     expect(spawnSyncImpl).not.toHaveBeenCalled();
     expect(calls).toHaveLength(0);
+    expect(fs.existsSync(path.join(shipItDir, "ShipItState.plist"))).toBe(false);
   });
 });

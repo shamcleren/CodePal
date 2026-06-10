@@ -1394,6 +1394,14 @@ body {
   color: var(--text);
 }
 
+.update-panel__hint {
+  margin-top: 6px;
+  max-width: 560px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .update-panel__notes-title {
   font-size: 11px;
   font-weight: 700;
@@ -4610,11 +4618,13 @@ body {
 }
 
 .pricing-trend__history-modal {
-  width: min(820px, 100%);
-  max-height: min(680px, 90vh);
-  background: var(--analytics-card-bg);
+  width: min(780px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 32px));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 90px),
+    var(--analytics-card-bg);
   border: 1px solid var(--line-subtle);
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: var(--shadow-popover);
   display: flex;
   flex-direction: column;
@@ -4622,8 +4632,9 @@ body {
 }
 
 .pricing-trend__modal-subtitle {
-  margin-top: 3px;
-  font-size: 13px;
+  margin-top: 5px;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text);
 }
 
@@ -4634,6 +4645,12 @@ body {
   gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--line-subtle);
+}
+
+.pricing-trend__history-modal-header {
+  padding: 16px 18px 14px;
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--analytics-subtle-bg) 72%, transparent);
 }
 
 .pricing-trend__filter-modal-title {
@@ -4831,7 +4848,8 @@ body {
 }
 
 .pricing-trend__history-wrap {
-  padding: 10px;
+  min-height: 0;
+  padding: 14px 16px;
   border-top: 1px solid var(--line-subtle);
   overflow: auto;
 }
@@ -4866,29 +4884,55 @@ body {
 
 .pricing-trend__history-table {
   width: 100%;
-  margin-top: 8px;
+  margin-top: 0;
   border-collapse: collapse;
+  font-size: 11px;
 }
 
 .pricing-trend__history-table th,
 .pricing-trend__history-table td {
   text-align: right;
   border-top: 1px solid var(--line-subtle);
-  padding: 7px 8px;
+  padding: 8px 10px;
   white-space: nowrap;
 }
 
 .pricing-trend__history-table th:first-child,
-.pricing-trend__history-table td:first-child {
+.pricing-trend__history-table td:first-child,
+.pricing-trend__history-table th:nth-child(2),
+.pricing-trend__history-table td:nth-child(2) {
   text-align: left;
 }
 
 .pricing-trend__history-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--analytics-card-bg);
   color: var(--analytics-muted-text);
   font-weight: 700;
   letter-spacing: var(--letter-label);
   text-transform: uppercase;
   font-size: 11px;
+}
+
+.pricing-trend__history-table td:nth-child(n + 3):nth-child(-n + 6) {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pricing-trend__history-table tbody tr:hover {
+  background: var(--analytics-row-hover-bg);
+}
+
+.pricing-trend__events--modal {
+  margin: 0 16px 16px;
+  padding: 12px;
+  border: 1px solid var(--line-subtle);
+  border-radius: 12px;
+  background: var(--analytics-subtle-bg);
 }
 
 .pricing-trend__events-list {

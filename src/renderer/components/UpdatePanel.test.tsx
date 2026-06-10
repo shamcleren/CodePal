@@ -71,6 +71,8 @@ describe("UpdatePanel", () => {
     expect(html).toContain("应用更新");
     expect(html).toContain("已准备安装 1.0.2");
     expect(html).toContain("重启安装");
+    expect(html).toContain("安装过程中 CodePal 会退出");
+    expect(html).toContain("如果没有自动重新打开");
   });
 
   it("keeps the check button clickable when updates are unsupported", () => {
