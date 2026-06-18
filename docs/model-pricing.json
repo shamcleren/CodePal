@@ -1,7 +1,7 @@
 {
   "currency": "USD",
   "unit": "per_1m_tokens",
-  "updatedAt": "2026-06-10",
+  "updatedAt": "2026-06-18",
   "pricing": [
     {
       "modelId": "claude-fable-5",
@@ -41,6 +41,30 @@
       "inputPerMillion": "5",
       "outputPerMillion": "30",
       "cacheReadPerMillion": "0.50",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-5.4",
+      "displayName": "GPT-5.4",
+      "inputPerMillion": "2.50",
+      "outputPerMillion": "15",
+      "cacheReadPerMillion": "0.25",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-5.4-mini",
+      "displayName": "GPT-5.4 Mini",
+      "inputPerMillion": "0.75",
+      "outputPerMillion": "4.50",
+      "cacheReadPerMillion": "0.075",
+      "cacheCreationPerMillion": "0"
+    },
+    {
+      "modelId": "gpt-5.4-nano",
+      "displayName": "GPT-5.4 Nano",
+      "inputPerMillion": "0.20",
+      "outputPerMillion": "1.25",
+      "cacheReadPerMillion": "0.02",
       "cacheCreationPerMillion": "0"
     },
     {

@@ -21,6 +21,7 @@ const repoRoot = path.resolve(__dirname, "../../..");
 const manifestPath = path.join(repoRoot, "docs", "model-pricing.json");
 
 const REQUIRED_MODEL_IDS = resolveConfiguredProviderModelIds(defaultProviderGatewaySettings);
+const REQUIRED_OPENAI_GPT_5_4_MODEL_IDS = ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"];
 
 function loadManifest(): PricingManifest {
   return JSON.parse(fs.readFileSync(manifestPath, "utf8")) as PricingManifest;
@@ -71,6 +72,31 @@ describe("model pricing manifest", () => {
     const required = [...REQUIRED_MODEL_IDS];
     const missing = required.filter((modelId) => !ids.has(modelId));
     expect(missing).toEqual([]);
+  });
+
+  it("covers current OpenAI GPT-5.4 models with standard short-context pricing", () => {
+    const rows = currentPricingRows(loadManifest());
+    const byModelId = new Map(rows.map((row) => [row.modelId, row]));
+
+    expect(REQUIRED_OPENAI_GPT_5_4_MODEL_IDS.filter((modelId) => !byModelId.has(modelId))).toEqual([]);
+    expect(byModelId.get("gpt-5.4")).toMatchObject({
+      inputPerMillion: "2.50",
+      outputPerMillion: "15",
+      cacheReadPerMillion: "0.25",
+      cacheCreationPerMillion: "0",
+    });
+    expect(byModelId.get("gpt-5.4-mini")).toMatchObject({
+      inputPerMillion: "0.75",
+      outputPerMillion: "4.50",
+      cacheReadPerMillion: "0.075",
+      cacheCreationPerMillion: "0",
+    });
+    expect(byModelId.get("gpt-5.4-nano")).toMatchObject({
+      inputPerMillion: "0.20",
+      outputPerMillion: "1.25",
+      cacheReadPerMillion: "0.02",
+      cacheCreationPerMillion: "0",
+    });
   });
 
   it("has no duplicate current display names", () => {
