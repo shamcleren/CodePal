@@ -12,6 +12,7 @@ import {
   type SessionRecord,
   type SessionStatus,
   type TerminalContext,
+  CODEX_AUTO_REVIEW_MODEL,
   isSessionStatus,
   isTerminalContext,
 } from "./sessionTypes";
@@ -838,6 +839,13 @@ function hasOnlyLifecycleOrPlaceholderContent(session: InternalSessionRecord): b
 }
 
 function shouldHideNoiseSession(session: InternalSessionRecord): boolean {
+  const isCodexAutoReview =
+    session.tool === "codex" &&
+    firstMetaString(session.meta, "model")?.toLowerCase() === CODEX_AUTO_REVIEW_MODEL;
+  if (isCodexAutoReview) {
+    return true;
+  }
+
   const isJetBrains = isJetBrainsTool(session.tool);
   const isClaude = session.tool === "claude";
   const isCodeBuddy = session.tool === "codebuddy";

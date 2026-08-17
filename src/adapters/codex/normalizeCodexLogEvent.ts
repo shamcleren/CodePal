@@ -104,9 +104,11 @@ function pickSessionId(entry: Record<string, unknown>, sourcePath: string): stri
       ? (entry.payload as Record<string, unknown>)
       : undefined;
 
-  const raw = payload?.id;
-  if (typeof raw === "string" && raw.trim()) {
-    return raw.trim();
+  if (entry.type === "session_meta") {
+    const raw = payload?.id;
+    if (typeof raw === "string" && raw.trim()) {
+      return raw.trim();
+    }
   }
   return sessionIdFromPath(sourcePath);
 }

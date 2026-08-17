@@ -1218,6 +1218,78 @@ describe("createSessionStore", () => {
     ]);
   });
 
+  it("hides Codex auto-review sessions without hiding other unmatched subexecutions", () => {
+    const store = createSessionStore();
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-auto-review-session",
+      tool: "codex",
+      status: "completed",
+      task: '{"outcome":"allow"}',
+      timestamp: 100,
+      meta: {
+        cwd: "/tmp/review-root",
+        model: "codex-auto-review",
+        codex_thread_source: "subagent",
+        codex_subagent_kind: "guardian",
+        source: "subagent:guardian",
+      },
+      activityItems: [
+        {
+          id: "codex-auto-review:user",
+          kind: "message",
+          source: "user",
+          title: "User",
+          body: "The following is the Codex agent history whose request action you are assessing.",
+          timestamp: 99,
+        },
+        {
+          id: "codex-auto-review:assistant",
+          kind: "message",
+          source: "assistant",
+          title: "Assistant",
+          body: '{"outcome":"allow"}',
+          timestamp: 100,
+        },
+      ],
+    });
+
+    store.applyEvent({
+      type: "status_change",
+      sessionId: "codex-unmatched-subexecution",
+      tool: "codex",
+      status: "running",
+      task: "sandbox check",
+      timestamp: 110,
+      meta: {
+        cwd: "/tmp/other-root",
+        source: "subagent:sandbox",
+      },
+    });
+
+    expect(store.getSessions().map((session) => session.id)).toEqual([
+      "codex-unmatched-subexecution",
+    ]);
+    expect(store.getSession("codex-auto-review-session")).not.toBeNull();
+  });
+
+  it("keeps restored Codex auto-review sessions out of the live session list", () => {
+    const restoredStore = createSessionStore();
+    restoredStore.seedFromHistory({
+      id: "restored-codex-auto-review-session",
+      tool: "codex",
+      status: "completed",
+      title: "The following is the Codex agent history whose request action you are assessing.",
+      latestTask: '{"outcome":"allow"}',
+      model: "codex-auto-review",
+      updatedAt: 100,
+      lastUserMessageAt: 99,
+    });
+
+    expect(restoredStore.getSessions()).toEqual([]);
+  });
+
   it("keeps recent activity lines in reverse chronological order", () => {
     const store = createSessionStore();
 
