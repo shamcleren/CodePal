@@ -16,6 +16,7 @@ export const SESSION_STATUSES: readonly SessionStatus[] = [
 ] as const;
 
 export type SessionModelSource = "event-meta" | "history" | "token-usage";
+export const CODEX_AUTO_REVIEW_MODEL = "codex-auto-review";
 
 export function isSessionStatus(value: string): value is SessionStatus {
   return (SESSION_STATUSES as readonly string[]).includes(value);

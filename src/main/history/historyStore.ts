@@ -10,7 +10,11 @@ import type {
   UserPromptSummary,
 } from "../../shared/historyTypes";
 import { computeSessionTiming } from "../../shared/sessionTiming";
-import type { ActivityItem, SessionModelSource } from "../../shared/sessionTypes";
+import {
+  CODEX_AUTO_REVIEW_MODEL,
+  type ActivityItem,
+  type SessionModelSource,
+} from "../../shared/sessionTypes";
 import {
   buildPricingHistoryIndex,
   estimateHistoricalTokenCost,
@@ -812,6 +816,10 @@ export function createHistoryStore(options: { dbPath: string; now?: () => number
     FROM sessions
     WHERE updated_at >= ?
       AND last_user_message_at IS NOT NULL
+      AND NOT (
+        tool = 'codex'
+        AND lower(COALESCE(model, '')) = '${CODEX_AUTO_REVIEW_MODEL}'
+      )
     ORDER BY updated_at DESC
     LIMIT ?
   `);

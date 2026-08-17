@@ -355,6 +355,33 @@ describe("normalizeCodexLogEvent", () => {
     });
   });
 
+  it("keeps the rollout session id when a response item carries its own message id", () => {
+    const event = normalizeCodexLogEvent(
+      JSON.stringify({
+        timestamp: "2026-04-02T08:13:11.250Z",
+        type: "response_item",
+        payload: {
+          id: "msg_01a00d88-5a32-7863-839e-869555ca24ca",
+          type: "message",
+          role: "assistant",
+          content: [
+            {
+              type: "output_text",
+              text: "我先检查一下状态。",
+            },
+          ],
+        },
+      }),
+      sourcePath,
+    );
+
+    expect(event).toMatchObject({
+      sessionId: "019d4c15-8d42-78f1-955e-d57f67061b9e",
+      status: "running",
+      task: "我先检查一下状态。",
+    });
+  });
+
   it("maps response_item assistant messages from nested content structures", () => {
     const event = normalizeCodexLogEvent(
       JSON.stringify({

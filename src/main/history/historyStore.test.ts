@@ -1158,6 +1158,38 @@ describe("createHistoryStore", () => {
       ]);
     });
 
+    it("excludes Codex auto-review sessions from restored and review summaries", () => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
+      const dbPath = path.join(tmpDir, "history.sqlite");
+      const now = () => 100_000_000;
+      store = createHistoryStore({ dbPath, now });
+
+      store.writeSessionEvent({
+        session: {
+          id: "auto-review-session",
+          tool: "codex",
+          status: "completed",
+          title: "The following is the Codex agent history whose request action you are assessing.",
+          latestTask: '{"outcome":"allow"}',
+          model: "codex-auto-review",
+          updatedAt: now() - 1_000,
+          lastUserMessageAt: now() - 2_000,
+          hasPendingActions: false,
+        },
+        activityItems: [
+          makeActivityItem({
+            id: "auto-review:user",
+            source: "user",
+            title: "User",
+            body: "The following is the Codex agent history whose request action you are assessing.",
+            timestamp: now() - 2_000,
+          }),
+        ],
+      });
+
+      expect(store.getRecentSessions({ maxAgeMs: 86_400_000, limit: 100 })).toEqual([]);
+    });
+
     it("backfills legacy session models from token usage on startup", () => {
       tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "codepal-history-"));
       const dbPath = path.join(tmpDir, "history.sqlite");
